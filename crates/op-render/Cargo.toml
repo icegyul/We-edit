@@ -1,0 +1,27 @@
+[package]
+name = "op-render"
+description = "OpenPremier GPU compositor: color conversion, effects, blend modes, transitions, graphics and scopes (wgpu)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+op-media.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+bytemuck.workspace = true
+ab_glyph.workspace = true
+fontdb.workspace = true
+parking_lot.workspace = true
+log.workspace = true
+thiserror.workspace = true
+epaint_default_fonts = "0.36.2"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+op-timeline.workspace = true

@@ -1,0 +1,126 @@
+<p align="center">
+  <img src="assets/branding/openpremier.svg" width="180" alt="Logo de OpenPremier">
+</p>
+
+<h1 align="center">OpenPremier</h1>
+
+<p align="center">
+  Editor de vídeo no lineal, libre y de código abierto, desarrollado principalmente en Rust.
+</p>
+
+<p align="center">
+  <a href="https://github.com/xXKuroiKenshiXx/OpenPremier/actions/workflows/ci_build.yml"><img src="https://github.com/xXKuroiKenshiXx/OpenPremier/actions/workflows/ci_build.yml/badge.svg" alt="Estado de compilación"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue.svg" alt="Licencia GPL-3.0-or-later"></a>
+  <a href="https://github.com/xXKuroiKenshiXx/OpenPremier/releases"><img src="https://img.shields.io/github/v/release/xXKuroiKenshiXx/OpenPremier?include_prereleases&label=versi%C3%B3n" alt="Última versión"></a>
+</p>
+
+OpenPremier busca ofrecer un entorno de edición profesional con una organización y un flujo de
+trabajo familiares para quienes vienen de otros editores no lineales. El proyecto es independiente,
+no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
+
+## Estado actual
+
+La versión `0.1.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
+compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
+en todos los trabajos de producción.
+
+### Funciones disponibles
+
+- Timeline multipista con insert, overwrite, razor, ripple, roll, slip, slide, rate stretch,
+  snapping, nesting, marcadores, transiciones y keyframes.
+- Paneles acoplables para Proyecto, Source, Program, Timeline, Effect Controls, Effects, History,
+  Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics y Tools.
+- Lectura, decodificación y exportación multimedia mediante FFmpeg.
+- Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12 y Metal según la plataforma.
+- Mezclador de audio en punto flotante, medidores, efectos básicos y salida a dispositivos.
+- Formato nativo `.opproj`, intercambio OTIO/FCP XML/EDL e importación parcial de `.prproj`.
+- Interfaz en español e inglés e importación de mapas de teclado `.kys`.
+- Paquete ZIP portátil para Windows y AppImage para Linux.
+
+### Trabajo pendiente
+
+- La importación `.prproj` es parcial y de sólo lectura.
+- Aún faltan OpenFX, scripting Wasm, VST3 y parte del catálogo de efectos.
+- Faltan pruebas más amplias de color, audio envolvente, múltiples monitores y distintos modelos de
+  GPU.
+- Todavía se deben completar las pruebas de compatibilidad y rendimiento para proyectos grandes.
+
+El detalle técnico actualizado se encuentra en
+[docs/implementation-status.md](docs/implementation-status.md).
+
+## Descargar
+
+Los instaladores y paquetes publicados estarán disponibles en
+[GitHub Releases](https://github.com/xXKuroiKenshiXx/OpenPremier/releases).
+
+Cada versión incluye:
+
+- `OpenPremier-<versión>-windows-x64.zip`
+- `OpenPremier-<versión>-x86_64.AppImage`
+- `SHA256SUMS.txt`
+
+## Compilar desde el código fuente
+
+Se necesita Git y Rust `1.98.1` o posterior. El comando `xtask` descarga y configura las
+dependencias nativas necesarias:
+
+```text
+cargo xtask build --release
+cargo xtask test
+cargo xtask lint
+```
+
+Para generar los paquetes de distribución:
+
+```text
+cargo xtask dist
+```
+
+En Windows, la creación del AppImage utiliza la distribución WSL `OpenPremier-Build` y Podman.
+Los resultados se guardan en `dist/`.
+
+## Comprobar un paquete
+
+```text
+OpenPremier.exe --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.1.0-x86_64.AppImage --self-test
+```
+
+La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del
+adaptador gráfico y una operación básica del compositor.
+
+## Estructura del proyecto
+
+| Ruta | Contenido |
+|---|---|
+| `crates/op-core` | Modelo de proyecto, tiempo exacto, parámetros, validación e historial |
+| `crates/op-timeline` | Operaciones y navegación de la Timeline |
+| `crates/op-project` | Formatos de proyecto e intercambio |
+| `crates/op-media` | Lectura, decodificación, caché y codificación con FFmpeg |
+| `crates/op-render` | Compositor GPU, efectos, transiciones, gráficos y scopes |
+| `crates/op-audio` | Mezclador, DSP, medidores y dispositivos de audio |
+| `crates/op-application` | Comandos, reproducción, autosave, preferencias y exportación |
+| `crates/op-ui` | Interfaz, paneles, monitores, Timeline, diálogos e idiomas |
+| `crates/openpremier` | Ejecutable, modo portátil, diagnóstico y self-test |
+| `xtask` | Automatización de compilación, pruebas y paquetes |
+| `docs` | Arquitectura, formatos, compatibilidad y estado técnico |
+
+## Contribuir
+
+Antes de enviar cambios, revisa [CONTRIBUTING.md](CONTRIBUTING.md) y ejecuta:
+
+```text
+cargo xtask lint
+cargo xtask test
+```
+
+Los problemas de seguridad deben comunicarse siguiendo [SECURITY.md](SECURITY.md), no mediante un
+issue público.
+
+## Licencia
+
+OpenPremier se distribuye bajo la licencia
+[GNU General Public License 3.0 o posterior](LICENSE).
+
+Adobe y Premiere Pro son marcas comerciales de Adobe Inc. Su mención describe únicamente objetivos
+de interoperabilidad y flujos de trabajo conocidos; no implica afiliación ni respaldo.

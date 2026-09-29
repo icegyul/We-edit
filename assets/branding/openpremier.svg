@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">OpenPremier</title>
+  <desc id="desc">Original white OP monogram on a flat violet rounded square.</desc>
+  <rect x="40" y="40" width="944" height="944" rx="210" fill="#34106b"/>
+  <path fill="#fff" fill-rule="evenodd" d="M346.5 278C235.2 278 145 382.8 145 512s90.2 234 201.5 234S548 641.2 548 512 457.8 278 346.5 278Zm0 109c48.9 0 88.5 56 88.5 125s-39.6 125-88.5 125-88.5-56-88.5-125 39.6-125 88.5-125Z"/>
+  <path fill="#fff" fill-rule="evenodd" d="M586 278h154c72.9 0 132 62.7 132 140s-59.1 140-132 140h-60v160c0 15.5-12.5 28-28 28h-66c-15.5 0-28-12.5-28-28V306c0-15.5 12.5-28 28-28Zm94 104v84h96c23.2 0 42-18.8 42-42s-18.8-42-42-42h-96Z"/>
+</svg>

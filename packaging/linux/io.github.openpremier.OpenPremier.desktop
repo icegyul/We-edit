@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=OpenPremier
+GenericName=Video Editor
+GenericName[es]=Editor de vídeo
+Comment=Edit video with a professional timeline
+Comment[es]=Edita vídeo con una línea de tiempo profesional
+Exec=openpremier %F
+Icon=io.github.openpremier.OpenPremier
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=video;editor;editing;timeline;nle;premiere;
+Keywords[es]=vídeo;editor;edición;línea de tiempo;nle;premiere;
+MimeType=application/x-openpremierject;
+StartupWMClass=io.github.openpremier.OpenPremier

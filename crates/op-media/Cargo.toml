@@ -1,0 +1,22 @@
+[package]
+name = "op-media"
+description = "OpenPremier media: probing, decoding, audio conform and peaks, thumbnails and encoding through FFmpeg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+ffmpeg-next.workspace = true
+thiserror.workspace = true
+log.workspace = true
+memmap2.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

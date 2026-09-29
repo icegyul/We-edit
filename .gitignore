@@ -1,0 +1,60 @@
+# Build outputs
+/build/
+/target/
+/dist/
+/out/
+/third_party/
+CMakeUserPresets.json
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Local research material and proprietary fixtures
+*.prproj
+*.prfpset
+*.kys
+*.mogrt
+*.look
+Adobe Premiere*/
+research-private/
+
+# Media and generated caches
+*.mp4
+*.mov
+*.mxf
+*.wav
+*.mp3
+*.proxy
+*.cache
+logs/
+*.log
+
+# Local assistant/editor state and private conversations (never project source)
+/.agents
+/.codex
+/.claude
+/.cursor
+/.continue
+/.windsurf
+/.ai
+/.aider*
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/.github/copilot-instructions.md
+/.github/instructions/
+*.chatlog
+
+# Local secrets and coverage/profiling output
+.env
+.env.*
+!.env.example
+coverage/
+*.profraw
+*.profdata

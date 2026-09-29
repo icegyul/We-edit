@@ -1,0 +1,23 @@
+[package]
+name = "op-audio"
+description = "OpenPremier audio: sample-accurate mixer, effects, transitions, meters and device output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+op-media.workspace = true
+cpal.workspace = true
+rtrb.workspace = true
+parking_lot.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+op-timeline.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

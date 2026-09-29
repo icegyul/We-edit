@@ -1,0 +1,5 @@
+#!/bin/sh
+# Starts OpenPremier from the AppImage. The program finds its FFmpeg libraries through its
+# RPATH ($ORIGIN/../lib), so the environment of programs it starts stays untouched.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/openpremier" "$@"

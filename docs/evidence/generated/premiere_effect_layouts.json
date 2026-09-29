@@ -1,0 +1,1663 @@
+{
+ "AE.ADBE Bevel Edges": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Bevel Edges",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "Edge Thickness",
+    "control_type": "2",
+    "default": "0.150000005960",
+    "lower": "0.000000000000",
+    "upper": "0.500000000000"
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Light Angle",
+    "control_type": "3",
+    "default": "-45.000000000000",
+    "lower": "-32768.000000000000",
+    "upper": "32767.000000000000"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "Light Color",
+    "control_type": "5",
+    "default": "18374966859414961920",
+    "lower": "0",
+    "upper": "18446744073709551615"
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "Light Intensity",
+    "control_type": "2",
+    "default": "0.300000011921",
+    "lower": "0.000000000000",
+    "upper": "1.000000000000"
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "AE.ADBE Fast Blur": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Fast Blur",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "Blurriness",
+    "control_type": "2",
+    "default": "0.000000000000",
+    "lower": "0.000000000000",
+    "upper": "32767.000000000000"
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Blur Dimensions",
+    "control_type": "7",
+    "default": "0",
+    "lower": "0",
+    "upper": "2"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "AE.ADBE Mosaic": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Mosaic",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "Horizontal Blocks",
+    "control_type": "1",
+    "default": "1",
+    "lower": "1",
+    "upper": "4000"
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Vertical Blocks",
+    "control_type": "1",
+    "default": "1",
+    "lower": "1",
+    "upper": "4000"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "AE.ADBE Motion": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Motion",
+  "params": [
+   {
+    "index": 1,
+    "class": "PointComponentParam",
+    "name": "Position",
+    "control_type": "6",
+    "default": "0.274305000000000020000000:0.75208299999",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Scale",
+    "control_type": "2",
+    "default": "25.000000000000",
+    "lower": "0.000000000000",
+    "upper": "600.000000000000"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "Scale Width",
+    "control_type": "2",
+    "default": "100.000000000000",
+    "lower": "0.000000000000",
+    "upper": "600.000000000000"
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 5,
+    "class": "VideoComponentParam",
+    "name": "Rotation",
+    "control_type": "3",
+    "default": "0.000000000000",
+    "lower": "-32768.000000000000",
+    "upper": "32767.000000000000"
+   },
+   {
+    "index": 6,
+    "class": "PointComponentParam",
+    "name": "Anchor Point",
+    "control_type": "6",
+    "default": "0.500000000000000000000000:0.50000000000",
+    "lower": null,
+    "upper": null
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "PR.ADBE Solarize": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Solarize",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "Threshold",
+    "control_type": "1",
+    "default": "254",
+    "lower": "0",
+    "upper": "254"
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "AE.ADBE Twirl": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Twirl",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "Angle",
+    "control_type": "3",
+    "default": "0.000000000000",
+    "lower": "-32768.000000000000",
+    "upper": "32767.000000000000"
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Twirl Radius",
+    "control_type": "2",
+    "default": "75.000000000000",
+    "lower": "0.000000000000",
+    "upper": "100.000000000000"
+   },
+   {
+    "index": 3,
+    "class": "PointComponentParam",
+    "name": "Twirl Center",
+    "control_type": "6",
+    "default": "0.500000000000000000000000:0.50000000000",
+    "lower": null,
+    "upper": null
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "PR.ADBE Convolution Kernel New": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Convolution Kernel",
+  "params": [
+   {
+    "index": 1,
+    "class": "VideoComponentParam",
+    "name": "M11",
+    "control_type": "1",
+    "default": "0",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "M12",
+    "control_type": "1",
+    "default": "1",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "M13",
+    "control_type": "1",
+    "default": "0",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "M21",
+    "control_type": "1",
+    "default": "1",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 5,
+    "class": "VideoComponentParam",
+    "name": "M22",
+    "control_type": "1",
+    "default": "2",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 6,
+    "class": "VideoComponentParam",
+    "name": "M23",
+    "control_type": "1",
+    "default": "1",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 7,
+    "class": "VideoComponentParam",
+    "name": "M31",
+    "control_type": "1",
+    "default": "0",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 8,
+    "class": "VideoComponentParam",
+    "name": "M32",
+    "control_type": "1",
+    "default": "1",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 9,
+    "class": "VideoComponentParam",
+    "name": "M33",
+    "control_type": "1",
+    "default": "0",
+    "lower": "-30",
+    "upper": "30"
+   },
+   {
+    "index": 10,
+    "class": "VideoComponentParam",
+    "name": "Offset",
+    "control_type": "1",
+    "default": "0",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 11,
+    "class": "VideoComponentParam",
+    "name": "Scale",
+    "control_type": "1",
+    "default": "6",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 12,
+    "class": "VideoComponentParam",
+    "name": "Process Alpha",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   }
+  ],
+  "source": "Factory Presets.prfpset"
+ },
+ "AE.ADBE Lumetri": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Lumetri Color",
+  "params": [
+   {
+    "index": 1,
+    "class": "ArbVideoComponentParam",
+    "name": "Blob",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "Basic Correction",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 5,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 6,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 7,
+    "class": "VideoComponentParam",
+    "name": "Input LUT",
+    "control_type": "7",
+    "default": "0",
+    "lower": "0",
+    "upper": "998"
+   },
+   {
+    "index": 8,
+    "class": "VideoComponentParam",
+    "name": "HDR White",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "100.",
+    "upper": "1000."
+   },
+   {
+    "index": 9,
+    "class": "VideoComponentParam",
+    "name": "White Balance",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 10,
+    "class": "VideoComponentParam",
+    "name": "WB Selector",
+    "control_type": "5",
+    "default": "18374897589125431296",
+    "lower": "0",
+    "upper": "18446744073709551615"
+   },
+   {
+    "index": 11,
+    "class": "VideoComponentParam",
+    "name": "Temperature",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 12,
+    "class": "VideoComponentParam",
+    "name": "Tint",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 13,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 14,
+    "class": "VideoComponentParam",
+    "name": "Tone",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 15,
+    "class": "VideoComponentParam",
+    "name": "Exposure",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-7.",
+    "upper": "7."
+   },
+   {
+    "index": 16,
+    "class": "VideoComponentParam",
+    "name": "Contrast",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 17,
+    "class": "VideoComponentParam",
+    "name": "Highlights",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 18,
+    "class": "VideoComponentParam",
+    "name": "Shadows",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 19,
+    "class": "VideoComponentParam",
+    "name": "Whites",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 20,
+    "class": "VideoComponentParam",
+    "name": "Blacks",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 21,
+    "class": "VideoComponentParam",
+    "name": "HDR Specular",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 22,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 23,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 24,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 25,
+    "class": "VideoComponentParam",
+    "name": "Saturation",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "0.",
+    "upper": "300."
+   },
+   {
+    "index": 26,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 27,
+    "class": "VideoComponentParam",
+    "name": "Creative",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 28,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 29,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 30,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 31,
+    "class": "VideoComponentParam",
+    "name": "Look",
+    "control_type": "7",
+    "default": "1",
+    "lower": "0",
+    "upper": "998"
+   },
+   {
+    "index": 32,
+    "class": "VideoComponentParam",
+    "name": "Intensity",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "0.",
+    "upper": "200."
+   },
+   {
+    "index": 33,
+    "class": "VideoComponentParam",
+    "name": "Adjustments",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 34,
+    "class": "VideoComponentParam",
+    "name": "Faded Film",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "0.",
+    "upper": "150."
+   },
+   {
+    "index": 35,
+    "class": "VideoComponentParam",
+    "name": "Sharpen",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-100.",
+    "upper": "100."
+   },
+   {
+    "index": 36,
+    "class": "VideoComponentParam",
+    "name": "Vibrance",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-100.",
+    "upper": "100."
+   },
+   {
+    "index": 37,
+    "class": "VideoComponentParam",
+    "name": "Saturation",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "0.",
+    "upper": "300."
+   },
+   {
+    "index": 38,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 39,
+    "class": "VideoComponentParam",
+    "name": "Tint Balance",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 40,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 41,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 42,
+    "class": "VideoComponentParam",
+    "name": "Curves",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 43,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 44,
+    "class": "VideoComponentParam",
+    "name": "RGB Curves",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 45,
+    "class": "VideoComponentParam",
+    "name": "HDR Range",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "100.",
+    "upper": "10000."
+   },
+   {
+    "index": 46,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 47,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 48,
+    "class": "VideoComponentParam",
+    "name": "Hue Saturation Curve",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 49,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 50,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 51,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 52,
+    "class": "VideoComponentParam",
+    "name": "Color Wheels",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 53,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 54,
+    "class": "VideoComponentParam",
+    "name": "HDR White",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "100.",
+    "upper": "1000."
+   },
+   {
+    "index": 55,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 56,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 57,
+    "class": "VideoComponentParam",
+    "name": "HSL Secondary",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 58,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 59,
+    "class": "VideoComponentParam",
+    "name": "Key",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 60,
+    "class": "VideoComponentParam",
+    "name": "Set color",
+    "control_type": "5",
+    "default": "18374686479671623680",
+    "lower": "0",
+    "upper": "18446744073709551615"
+   },
+   {
+    "index": 61,
+    "class": "VideoComponentParam",
+    "name": "Add color",
+    "control_type": "5",
+    "default": "18374686479671623680",
+    "lower": "0",
+    "upper": "18446744073709551615"
+   },
+   {
+    "index": 62,
+    "class": "VideoComponentParam",
+    "name": "Remove color",
+    "control_type": "5",
+    "default": "18374686479671623680",
+    "lower": "0",
+    "upper": "18446744073709551615"
+   },
+   {
+    "index": 63,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 64,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 65,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "7",
+    "default": "0",
+    "lower": "0",
+    "upper": "2"
+   },
+   {
+    "index": 66,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 67,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 68,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 69,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 70,
+    "class": "VideoComponentParam",
+    "name": "Refine",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 71,
+    "class": "VideoComponentParam",
+    "name": "Denoise",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "0.",
+    "upper": "100."
+   },
+   {
+    "index": 72,
+    "class": "VideoComponentParam",
+    "name": "Blur",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "0.",
+    "upper": "1000."
+   },
+   {
+    "index": 73,
+    "class": "VideoComponentParam",
+    "name": "Blur",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 74,
+    "class": "VideoComponentParam",
+    "name": "Correction",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 75,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 76,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 77,
+    "class": "VideoComponentParam",
+    "name": "Temperature",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-300.",
+    "upper": "300."
+   },
+   {
+    "index": 78,
+    "class": "VideoComponentParam",
+    "name": "Tint",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-300.",
+    "upper": "300."
+   },
+   {
+    "index": 79,
+    "class": "VideoComponentParam",
+    "name": "Contrast",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-150.",
+    "upper": "150."
+   },
+   {
+    "index": 80,
+    "class": "VideoComponentParam",
+    "name": "Sharpen",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-100.",
+    "upper": "100."
+   },
+   {
+    "index": 81,
+    "class": "VideoComponentParam",
+    "name": "Saturation",
+    "control_type": "8",
+    "default": "100.",
+    "lower": "0.",
+    "upper": "300."
+   },
+   {
+    "index": 82,
+    "class": "VideoComponentParam",
+    "name": "Saturation",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 83,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 84,
+    "class": "VideoComponentParam",
+    "name": "Vignette",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 85,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 86,
+    "class": "VideoComponentParam",
+    "name": "Amount",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-5.",
+    "upper": "5."
+   },
+   {
+    "index": 87,
+    "class": "VideoComponentParam",
+    "name": "Midpoint",
+    "control_type": "8",
+    "default": "50.",
+    "lower": "0.",
+    "upper": "100."
+   },
+   {
+    "index": 88,
+    "class": "VideoComponentParam",
+    "name": "Roundness",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "-100.",
+    "upper": "100."
+   },
+   {
+    "index": 89,
+    "class": "VideoComponentParam",
+    "name": "Feather",
+    "control_type": "8",
+    "default": "50.",
+    "lower": "0.",
+    "upper": "100."
+   },
+   {
+    "index": 90,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 91,
+    "class": "VideoComponentParam",
+    "name": "SpeedGrade Custom",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 92,
+    "class": "VideoComponentParam",
+    "name": "Custom Layer",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 93,
+    "class": "VideoComponentParam",
+    "name": "unused",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 94,
+    "class": "VideoComponentParam",
+    "name": "unused",
+    "control_type": "16",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 95,
+    "class": "ArbVideoComponentParam",
+    "name": "",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 96,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 97,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 98,
+    "class": "ArbVideoComponentParam",
+    "name": "Embedded LUTs",
+    "control_type": "10",
+    "default": "",
+    "lower": null,
+    "upper": null
+   }
+  ],
+  "source": "Lumetri Presets.prfpset"
+ },
+ "AE.ADBE Text": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Text",
+  "params": [
+   {
+    "index": 1,
+    "class": "ArbVideoComponentParam",
+    "name": "Source Text",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Transform",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 3,
+    "class": "PointComponentParam",
+    "name": "Position",
+    "control_type": "6",
+    "default": "0.5:0.5",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "Scale",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "4000"
+   },
+   {
+    "index": 5,
+    "class": "VideoComponentParam",
+    "name": "Horizontal Scale",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "4000"
+   },
+   {
+    "index": 6,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 7,
+    "class": "VideoComponentParam",
+    "name": "Rotation",
+    "control_type": "3",
+    "default": "0.",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 8,
+    "class": "VideoComponentParam",
+    "name": "Opacity",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "100"
+   },
+   {
+    "index": 9,
+    "class": "PointComponentParam",
+    "name": "Anchor Point",
+    "control_type": "6",
+    "default": "0:0",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 10,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 11,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "0",
+    "upper": "32768"
+   },
+   {
+    "index": 12,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "8",
+    "default": "0.",
+    "lower": "0",
+    "upper": "32768"
+   },
+   {
+    "index": 13,
+    "class": "VideoComponentParam",
+    "name": "start",
+    "control_type": "8",
+    "default": "1.",
+    "lower": "-100",
+    "upper": "1000000000"
+   },
+   {
+    "index": 14,
+    "class": "VideoComponentParam",
+    "name": "end",
+    "control_type": "8",
+    "default": "1.",
+    "lower": "-100",
+    "upper": "1000000000"
+   },
+   {
+    "index": 15,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 16,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 17,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 18,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 19,
+    "class": "VideoComponentParam",
+    "name": "Parent Width",
+    "control_type": "2",
+    "default": "0.",
+    "lower": "0",
+    "upper": "20000"
+   },
+   {
+    "index": 20,
+    "class": "VideoComponentParam",
+    "name": "Parent Height",
+    "control_type": "2",
+    "default": "0.",
+    "lower": "0",
+    "upper": "20000"
+   },
+   {
+    "index": 21,
+    "class": "VideoComponentParam",
+    "name": "Parent Rotation",
+    "control_type": "3",
+    "default": "0.",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 22,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   }
+  ],
+  "source": "Social Media Template Project.prproj"
+ },
+ "AE.ADBE Shape": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Shape",
+  "params": [
+   {
+    "index": 1,
+    "class": "ArbVideoComponentParam",
+    "name": "Path",
+    "control_type": "22",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 2,
+    "class": "ArbVideoComponentParam",
+    "name": "Appearance",
+    "control_type": "9",
+    "default": "",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "Transform",
+    "control_type": "11",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 4,
+    "class": "PointComponentParam",
+    "name": "Position",
+    "control_type": "6",
+    "default": "0.18564815074205399:0.26354166865348816",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 5,
+    "class": "VideoComponentParam",
+    "name": "Scale",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "4000"
+   },
+   {
+    "index": 6,
+    "class": "VideoComponentParam",
+    "name": "Horizontal Scale",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "4000"
+   },
+   {
+    "index": 7,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 8,
+    "class": "VideoComponentParam",
+    "name": "Rotation",
+    "control_type": "3",
+    "default": "0.",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 9,
+    "class": "VideoComponentParam",
+    "name": "Opacity",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "100"
+   },
+   {
+    "index": 10,
+    "class": "PointComponentParam",
+    "name": "Anchor Point",
+    "control_type": "6",
+    "default": "0.1388888888888889:0.052083333333333336",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 11,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "12",
+    "default": "false",
+    "lower": "false",
+    "upper": "false"
+   },
+   {
+    "index": 12,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 13,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 14,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 15,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "false",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 16,
+    "class": "VideoComponentParam",
+    "name": "Parent Width",
+    "control_type": "2",
+    "default": "0.",
+    "lower": "0",
+    "upper": "20000"
+   },
+   {
+    "index": 17,
+    "class": "VideoComponentParam",
+    "name": "Parent Height",
+    "control_type": "2",
+    "default": "0.",
+    "lower": "0",
+    "upper": "20000"
+   },
+   {
+    "index": 18,
+    "class": "VideoComponentParam",
+    "name": "Parent Rotation",
+    "control_type": "3",
+    "default": "0.",
+    "lower": "-32768",
+    "upper": "32767"
+   }
+  ],
+  "source": "Social Media Template Project.prproj"
+ },
+ "AE.ADBE Graphic SubGroup": {
+  "object_class": "VideoFilterComponent",
+  "display_name": "Group",
+  "params": [
+   {
+    "index": 1,
+    "class": "PointComponentParam",
+    "name": "Position",
+    "control_type": "6",
+    "default": "0.5:0.5",
+    "lower": null,
+    "upper": null
+   },
+   {
+    "index": 2,
+    "class": "VideoComponentParam",
+    "name": "Scale",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "10000"
+   },
+   {
+    "index": 3,
+    "class": "VideoComponentParam",
+    "name": "Scale Width",
+    "control_type": "2",
+    "default": "100.",
+    "lower": "0",
+    "upper": "10000"
+   },
+   {
+    "index": 4,
+    "class": "VideoComponentParam",
+    "name": "",
+    "control_type": "4",
+    "default": "true",
+    "lower": "false",
+    "upper": "true"
+   },
+   {
+    "index": 5,
+    "class": "VideoComponentParam",
+    "name": "Rotation",
+    "control_type": "3",
+    "default": "0.",
+    "lower": "-32768",
+    "upper": "32767"
+   },
+   {
+    "index": 6,
+    "class": "PointComponentParam",
+    "name": "Anchor Point",
+    "control_type": "6",
+    "default": "0.5:0.5",
+    "lower": null,
+    "upper": null
+   }
+  ],
+  "source": "Social Media Template Project.prproj"
+ }
+}

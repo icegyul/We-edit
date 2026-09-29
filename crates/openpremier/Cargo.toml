@@ -1,0 +1,27 @@
+[package]
+name = "openpremier"
+description = "OpenPremier: a free and open source video editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "openpremier"
+path = "src/main.rs"
+
+[dependencies]
+op-core.workspace = true
+op-timeline.workspace = true
+op-media.workspace = true
+op-render.workspace = true
+op-application.workspace = true
+op-ui.workspace = true
+log.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[lints]
+workspace = true

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">OpenPremier 0.1.0</title>
+  <desc id="desc">Release banner for the first OpenPremier alpha on Windows and Linux.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#100a1f"/>
+      <stop offset="0.55" stop-color="#241046"/>
+      <stop offset="1" stop-color="#43127b"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#05020c" flood-opacity=".48"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
+  <circle cx="1080" cy="76" r="260" fill="#7d35d8" opacity=".15"/>
+  <circle cx="1040" cy="590" r="330" fill="#bb75ff" opacity=".08"/>
+  <g filter="url(#shadow)">
+    <rect x="92" y="112" width="330" height="330" rx="78" fill="#34106b"/>
+    <path fill="#fff" fill-rule="evenodd" d="M195 188c-57 0-103 54-103 120s46 120 103 120 103-54 103-120-46-120-103-120Zm0 56c25 0 45 29 45 64s-20 64-45 64-45-29-45-64 20-64 45-64Z" transform="translate(45 4)"/>
+    <path fill="#fff" fill-rule="evenodd" d="M276 192h78c39 0 70 33 70 73s-31 73-70 73h-30v76h-62V206c0-8 6-14 14-14Zm48 54v44h48c12 0 22-10 22-22s-10-22-22-22h-48Z" transform="translate(-5 0)"/>
+  </g>
+  <text x="500" y="215" fill="#caa8ff" font-family="Segoe UI,Inter,sans-serif" font-size="28" font-weight="700" letter-spacing="3">PRIMERA VERSIÓN ALFA</text>
+  <text x="496" y="300" fill="#fff" font-family="Segoe UI,Inter,sans-serif" font-size="76" font-weight="750">OpenPremier</text>
+  <text x="500" y="360" fill="#e1d8ee" font-family="Segoe UI,Inter,sans-serif" font-size="34">Versión 0.1.0</text>
+  <g font-family="Segoe UI,Inter,sans-serif" font-size="22" font-weight="600">
+    <rect x="500" y="405" width="238" height="58" rx="29" fill="#6f35b5"/>
+    <text x="535" y="442" fill="#fff">Windows x64 ZIP</text>
+    <rect x="758" y="405" width="300" height="58" rx="29" fill="#6f35b5"/>
+    <text x="790" y="442" fill="#fff">Linux x86-64 AppImage</text>
+  </g>
+  <text x="96" y="548" fill="#bcaecb" font-family="Segoe UI,Inter,sans-serif" font-size="24">Editor de vídeo libre • Rust • FFmpeg • wgpu</text>
+</svg>

@@ -1,0 +1,31 @@
+[package]
+name = "op-ui"
+description = "OpenPremier user interface: dockable panels, monitors, timeline, effect controls (egui)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+op-timeline.workspace = true
+op-project.workspace = true
+op-media.workspace = true
+op-render.workspace = true
+op-audio.workspace = true
+op-application.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+eframe.workspace = true
+egui_dock.workspace = true
+wgpu.workspace = true
+rfd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+sys-locale.workspace = true
+parking_lot.workspace = true
+
+[lints]
+workspace = true

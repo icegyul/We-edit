@@ -1,0 +1,30 @@
+[package]
+name = "op-application"
+description = "OpenPremier application services: editor state, commands, media service, playback, export, autosave, preferences"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+op-timeline.workspace = true
+op-project.workspace = true
+op-media.workspace = true
+op-render.workspace = true
+op-audio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true
+dirs.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

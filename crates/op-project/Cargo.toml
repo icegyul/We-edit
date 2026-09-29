@@ -1,0 +1,24 @@
+[package]
+name = "op-project"
+description = "OpenPremier project files: native format, read-only .prproj import, OTIO, FCP 7 XML and EDL interchange"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+flate2.workspace = true
+quick-xml.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+op-timeline.workspace = true
+
+[lints]
+workspace = true

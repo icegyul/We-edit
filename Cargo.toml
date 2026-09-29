@@ -1,0 +1,68 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/openpremier"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "GPL-3.0-or-later"
+authors = ["OpenPremier contributors"]
+publish = false
+
+[workspace.dependencies]
+op-core = { path = "crates/op-core" }
+op-timeline = { path = "crates/op-timeline" }
+op-project = { path = "crates/op-project" }
+op-media = { path = "crates/op-media" }
+op-render = { path = "crates/op-render" }
+op-audio = { path = "crates/op-audio" }
+op-application = { path = "crates/op-application" }
+op-ui = { path = "crates/op-ui" }
+
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+thiserror = "2"
+log = "0.4"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+flate2 = "1"
+quick-xml = "0.42"
+ffmpeg-next = { version = "9", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling"] }
+wgpu = "30"
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+ab_glyph = "0.2"
+fontdb = "0.24"
+memmap2 = "0.9"
+cpal = "0.18"
+rtrb = "0.4"
+egui = "0.36.2"
+egui-wgpu = "0.36.2"
+eframe = "0.36.2"
+egui_dock = { version = "0.21.1", features = ["serde"] }
+rfd = "0.17"
+dirs = "7"
+sys-locale = "0.3"
+tempfile = "3"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "allow"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+new_without_default = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+debug = "line-tables-only"
+
+# Decoding, rendering and mixing are unusable without optimization, even while developing.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

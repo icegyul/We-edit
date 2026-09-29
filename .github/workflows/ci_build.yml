@@ -1,0 +1,57 @@
+name: Build and test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          components: rustfmt, clippy
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libasound2-dev pkg-config clang libclang-dev
+      - name: Verify documentation inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            docs/index.md
+            docs/compatibility-validation.md
+            docs/architecture.md
+            docs/data-model.md
+            docs/prproj-spec.md
+            docs/keyboard-shortcuts.md
+            docs/effects-catalog.md
+            docs/panel-system-spec.md
+            docs/plugin-api-spec.md
+            docs/timeline-behavior.md
+            docs/implementation-status.md
+          )
+          for file in "${required[@]}"; do
+            test -s "$file"
+          done
+          cargo metadata --format-version 1 --no-deps >/dev/null
+      - name: Lint
+        run: cargo xtask lint
+      - name: Test
+        run: cargo xtask test

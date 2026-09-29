@@ -1,0 +1,7 @@
+[alias]
+# Developer and packaging tasks written in Rust: `cargo xtask help`
+xtask = "run --quiet --package xtask --"
+
+# Windows: link the C runtime statically so the program starts without the Visual C++ Redistributable
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

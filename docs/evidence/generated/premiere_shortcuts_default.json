@@ -1,0 +1,1852 @@
+[
+ {
+  "context": "global",
+  "command": "cmd.caption.add.track",
+  "keys": "Ctrl+Alt+A"
+ },
+ {
+  "context": "global",
+  "command": "cmd.caption.add.trackitem",
+  "keys": "Ctrl+Alt+C"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clear.in",
+  "keys": "Ctrl+Shift+I"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clear.inandout",
+  "keys": "Ctrl+Shift+X"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clear.out",
+  "keys": "Ctrl+Shift+O"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.audiooptions.gain",
+  "keys": "G"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.audiooptions.sourcechannelmappings",
+  "keys": "Shift+G"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.enable",
+  "keys": "Shift+E"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.group",
+  "keys": "Ctrl+G"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.insert",
+  "keys": ","
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.linkaudioandvideo",
+  "keys": "Ctrl+L"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.makesubclip",
+  "keys": "Ctrl+U"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.overlay",
+  "keys": "."
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.speed",
+  "keys": "Ctrl+R"
+ },
+ {
+  "context": "global",
+  "command": "cmd.clip.ungroup",
+  "keys": "Ctrl+Shift+G"
+ },
+ {
+  "context": "global",
+  "command": "cmd.common.setin",
+  "keys": "I"
+ },
+ {
+  "context": "global",
+  "command": "cmd.common.setout",
+  "keys": "O"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.clear",
+  "keys": "Delete"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.copy",
+  "keys": "Ctrl+C"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.cut",
+  "keys": "Ctrl+X"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.deselectall",
+  "keys": "Ctrl+Shift+A"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.duplicate",
+  "keys": "Ctrl+Shift+/"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.editoriginal",
+  "keys": "Ctrl+E"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.find",
+  "keys": "Ctrl+F"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.keyboardshortcuts",
+  "keys": "Ctrl+Alt+K"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.paste",
+  "keys": "Ctrl+V"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.pasteattributes",
+  "keys": "Ctrl+Alt+V"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.pasteinsert",
+  "keys": "Ctrl+Shift+V"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.redo",
+  "keys": "Ctrl+Shift+Z"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.rippledelete",
+  "keys": "Shift+Delete"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.selectall",
+  "keys": "Ctrl+A"
+ },
+ {
+  "context": "global",
+  "command": "cmd.edit.undo",
+  "keys": "Ctrl+Z"
+ },
+ {
+  "context": "global",
+  "command": "cmd.export.frame",
+  "keys": "Ctrl+Shift+E"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.batchcapture",
+  "keys": "F6"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.capture",
+  "keys": "F5"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.close",
+  "keys": "Ctrl+Shift+W"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.closepanel",
+  "keys": "Ctrl+W"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.exit",
+  "keys": "Ctrl+Q"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.export.movie",
+  "keys": "Ctrl+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.export.sendtoqueue",
+  "keys": "Shift+Alt+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.import",
+  "keys": "Ctrl+I"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.importfrombrowser",
+  "keys": "Ctrl+Alt+I"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.new.bin",
+  "keys": "Ctrl+/"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.new.project",
+  "keys": "Ctrl+Alt+N"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.new.sequence",
+  "keys": "Ctrl+N"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.openproject",
+  "keys": "Ctrl+O"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.properties.selection",
+  "keys": "Ctrl+Shift+H"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.save",
+  "keys": "Ctrl+S"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.saveas",
+  "keys": "Ctrl+Shift+S"
+ },
+ {
+  "context": "global",
+  "command": "cmd.file.savecopy",
+  "keys": "Ctrl+Alt+S"
+ },
+ {
+  "context": "global",
+  "command": "cmd.goto.in",
+  "keys": "Shift+I"
+ },
+ {
+  "context": "global",
+  "command": "cmd.goto.out",
+  "keys": "Shift+O"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.add.shape.ellipse",
+  "keys": "Ctrl+Alt+E"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.add.shape.rectangle",
+  "keys": "Ctrl+Alt+R"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.add.text",
+  "keys": "Ctrl+T"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.enter.text.edit",
+  "keys": "Ctrl+Alt+'"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.move.graphic.layer.down",
+  "keys": "Ctrl+["
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.move.graphic.layer.to.bottom",
+  "keys": "Ctrl+Shift+["
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.move.graphic.layer.to.top",
+  "keys": "Ctrl+Shift+]"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.move.graphic.layer.up",
+  "keys": "Ctrl+]"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.select.next.graphic.layer",
+  "keys": "Ctrl+Alt+]"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphics.select.previous.graphic.layer",
+  "keys": "Ctrl+Alt+["
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphicsinspector.aligncenter",
+  "keys": "Ctrl+Shift+C"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphicsinspector.alignleft",
+  "keys": "Ctrl+Shift+L"
+ },
+ {
+  "context": "global",
+  "command": "cmd.graphicsinspector.alignright",
+  "keys": "Ctrl+Shift+R"
+ },
+ {
+  "context": "global",
+  "command": "cmd.help.contents",
+  "keys": "F1"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.clearmarker.all",
+  "keys": "Ctrl+Shift+Alt+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.clearmarker.current",
+  "keys": "Ctrl+Alt+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.gotomarker.next",
+  "keys": "Shift+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.gotomarker.previous",
+  "keys": "Ctrl+Shift+M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.setsequenceinoutmarkeraroundselection.out",
+  "keys": "/"
+ },
+ {
+  "context": "global",
+  "command": "cmd.marker.setsequenceinoutmarkeraroundtargetclip",
+  "keys": "X"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.1",
+  "keys": "Ctrl+1"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.2",
+  "keys": "Ctrl+2"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.3",
+  "keys": "Ctrl+3"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.4",
+  "keys": "Ctrl+4"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.5",
+  "keys": "Ctrl+5"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.6",
+  "keys": "Ctrl+6"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.7",
+  "keys": "Ctrl+7"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choose.camera.8",
+  "keys": "Ctrl+8"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera1",
+  "keys": "1"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera2",
+  "keys": "2"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera3",
+  "keys": "3"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera4",
+  "keys": "4"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera5",
+  "keys": "5"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera6",
+  "keys": "6"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera7",
+  "keys": "7"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera8",
+  "keys": "8"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.choosenocut.camera9",
+  "keys": "9"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.toggle.multicam.view",
+  "keys": "Shift+0"
+ },
+ {
+  "context": "global",
+  "command": "cmd.multicam.toggle.record",
+  "keys": "0"
+ },
+ {
+  "context": "global",
+  "command": "cmd.placeholder",
+  "keys": "Shift+T"
+ },
+ {
+  "context": "global",
+  "command": "cmd.posterframe.clear",
+  "keys": "Ctrl+Shift+P"
+ },
+ {
+  "context": "global",
+  "command": "cmd.posterframe.set",
+  "keys": "Shift+P"
+ },
+ {
+  "context": "global",
+  "command": "cmd.select.find.box",
+  "keys": "Shift+F"
+ },
+ {
+  "context": "global",
+  "command": "cmd.select.next.panel",
+  "keys": "Ctrl+Shift+."
+ },
+ {
+  "context": "global",
+  "command": "cmd.select.previous.panel",
+  "keys": "Ctrl+Shift+,"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.applydefaultaudiotransition",
+  "keys": "Ctrl+Shift+D"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.applydefaulttransitions",
+  "keys": "Shift+D"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.applydefaultvideotransition",
+  "keys": "Ctrl+D"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.decreaseclipvolume",
+  "keys": "["
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.decreaseclipvolumemany",
+  "keys": "Shift+["
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.extendnextedittoplayhead",
+  "keys": "Shift+W"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.extendpreviousedittoplayhead",
+  "keys": "Shift+Q"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.extendselectededittoplayhead",
+  "keys": "E"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.extract",
+  "keys": "'"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.findnextsequencegap",
+  "keys": "Shift+;"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.findprevioussequencegap",
+  "keys": "Ctrl+Shift+;"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.increaseclipvolume",
+  "keys": "]"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.increaseclipvolumemany",
+  "keys": "Shift+]"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.lift",
+  "keys": ";"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.makesubsequence",
+  "keys": "Shift+U"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.matchframe",
+  "keys": "F"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.preview",
+  "keys": "Enter"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.razorateditline",
+  "keys": "Ctrl+K"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.razorateditline.all",
+  "keys": "Ctrl+Shift+K"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.reversematchframe",
+  "keys": "Shift+R"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.rippletrimnextedittoplayhead",
+  "keys": "W"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.rippletrimpreviousedittoplayhead",
+  "keys": "Q"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.snap",
+  "keys": "S"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.toggletrimtype",
+  "keys": "Ctrl+Shift+T"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.trimbackward",
+  "keys": "Ctrl+Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.trimbackwardmany",
+  "keys": "Ctrl+Shift+Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.trimforward",
+  "keys": "Ctrl+Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.sequence.trimforwardmany",
+  "keys": "Ctrl+Shift+Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.set.marker",
+  "keys": "M"
+ },
+ {
+  "context": "global",
+  "command": "cmd.timeline.expand.all.tracks",
+  "keys": "Shift+="
+ },
+ {
+  "context": "global",
+  "command": "cmd.timeline.minimize.all.tracks",
+  "keys": "Shift+-"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.menu.templates",
+  "keys": "Ctrl+J"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.lead.five.dec",
+  "keys": "Shift+Alt+Down"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.lead.five.inc",
+  "keys": "Shift+Alt+Up"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.lead.one.dec",
+  "keys": "Alt+Down"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.lead.one.inc",
+  "keys": "Alt+Up"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.size.five.dec",
+  "keys": "Ctrl+Shift+Alt+Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.size.five.inc",
+  "keys": "Ctrl+Shift+Alt+Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.size.one.dec",
+  "keys": "Ctrl+Alt+Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.titler.misc.size.one.inc",
+  "keys": "Ctrl+Alt+Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.next.edit",
+  "keys": "Down"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.next.edit.any.track",
+  "keys": "Shift+Down"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.prev.edit",
+  "keys": "Up"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.prev.edit.any.track",
+  "keys": "Shift+Up"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.reveal.nested.sequence",
+  "keys": "Ctrl+Shift+F"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.select.clip.at.playhead",
+  "keys": "D"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.select.next.clip",
+  "keys": "Ctrl+Down"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.select.previous.clip",
+  "keys": "Ctrl+Up"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.toggle.all.source.audio",
+  "keys": "Ctrl+Alt+9"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.toggle.all.source.video",
+  "keys": "Ctrl+Alt+0"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.toggle.all.target.audio",
+  "keys": "Ctrl+9"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.toggle.all.target.video",
+  "keys": "Ctrl+0"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.trim.in.to.cti",
+  "keys": "Ctrl+Alt+Q"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.trim.out.to.cti",
+  "keys": "Ctrl+Alt+W"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tlnav.zoomto.sequence",
+  "keys": "\\"
+ },
+ {
+  "context": "global",
+  "command": "cmd.toggle.audio.scrubbing",
+  "keys": "Shift+S"
+ },
+ {
+  "context": "global",
+  "command": "cmd.toggle.fullscreen.monitor",
+  "keys": "Ctrl+`"
+ },
+ {
+  "context": "global",
+  "command": "cmd.toggle.maximize.focused.frame",
+  "keys": "Shift+`"
+ },
+ {
+  "context": "global",
+  "command": "cmd.toggle.maximize.frame",
+  "keys": "`"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.01pointer",
+  "keys": "V"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.02_5trackselectbackward",
+  "keys": "Shift+A"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.02trackselectforward",
+  "keys": "A"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.03ripple",
+  "keys": "B"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.04roll",
+  "keys": "N"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.05ratestretch",
+  "keys": "R"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.06razor",
+  "keys": "C"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.07slip",
+  "keys": "Y"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.08slide",
+  "keys": "U"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.09pen",
+  "keys": "P"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.10hand",
+  "keys": "H"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.11zoom",
+  "keys": "Z"
+ },
+ {
+  "context": "global",
+  "command": "cmd.tools.12text",
+  "keys": "T"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.play.ctitoout",
+  "keys": "Ctrl+Space"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.play.fat",
+  "keys": "Shift+Space"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.playedit",
+  "keys": "Shift+K"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.playintoout",
+  "keys": "Ctrl+Shift+Space"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.selectedclip.end",
+  "keys": "Shift+End"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.selectedclip.start",
+  "keys": "Shift+Home"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.sequence.end",
+  "keys": "End"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.sequence.start",
+  "keys": "Home"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.shuttle.left",
+  "keys": "J"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.shuttle.right",
+  "keys": "L"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.shuttle.slow.left",
+  "keys": "Shift+J"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.shuttle.slow.right",
+  "keys": "Shift+L"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.shuttle.stop",
+  "keys": "K"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.step.back",
+  "keys": "Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.step.back.five",
+  "keys": "Shift+Left"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.step.forward",
+  "keys": "Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.step.forward.five",
+  "keys": "Shift+Right"
+ },
+ {
+  "context": "global",
+  "command": "cmd.transport.toggleplay",
+  "keys": "Space"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.0",
+  "keys": "Shift+Alt+1"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.1",
+  "keys": "Shift+Alt+2"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.2",
+  "keys": "Shift+Alt+3"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.3",
+  "keys": "Shift+Alt+4"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.4",
+  "keys": "Shift+Alt+5"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.5",
+  "keys": "Shift+Alt+6"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.6",
+  "keys": "Shift+Alt+7"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.7",
+  "keys": "Shift+Alt+8"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.user.workspace.8",
+  "keys": "Shift+Alt+9"
+ },
+ {
+  "context": "global",
+  "command": "cmd.window.workspace.revert",
+  "keys": "Shift+Alt+0"
+ },
+ {
+  "context": "global",
+  "command": "cmd.zoom.in",
+  "keys": "="
+ },
+ {
+  "context": "global",
+  "command": "cmd.zoom.out",
+  "keys": "-"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Audio Clip Mixer",
+  "keys": "Shift+9"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Audio Mixers",
+  "keys": "Shift+6"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Effect Controls",
+  "keys": "Shift+5"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Effects",
+  "keys": "Shift+7"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Media Browser",
+  "keys": "Shift+8"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Program Monitors",
+  "keys": "Shift+4"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Projects",
+  "keys": "Shift+1"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Source Monitors",
+  "keys": "Shift+2"
+ },
+ {
+  "context": "global",
+  "command": "uif.window.Timelines",
+  "keys": "Shift+3"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.graphics.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.down.five",
+  "keys": "Ctrl+Shift+Down"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.down.one",
+  "keys": "Ctrl+Down"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.left.five",
+  "keys": "Ctrl+Shift+Left"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.left.one",
+  "keys": "Ctrl+Left"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.right.five",
+  "keys": "Ctrl+Shift+Right"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.right.one",
+  "keys": "Ctrl+Right"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.up.five",
+  "keys": "Ctrl+Shift+Up"
+ },
+ {
+  "context": "Graphics",
+  "command": "cmd.monitor.nudge.up.one",
+  "keys": "Ctrl+Up"
+ },
+ {
+  "context": "audiomixer",
+  "command": "cmd.audiomixer.loop",
+  "keys": "Ctrl+L"
+ },
+ {
+  "context": "audiomixer",
+  "command": "cmd.audiomixer.meterinput",
+  "keys": "Ctrl+Shift+I"
+ },
+ {
+  "context": "audiomixer",
+  "command": "cmd.audiomixer.showhidetracks",
+  "keys": "Ctrl+Alt+T"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.eject",
+  "keys": "E"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.fastforward",
+  "keys": "F"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.fastrewind",
+  "keys": "R"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.goto.inpoint",
+  "keys": "Q"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.goto.outpoint",
+  "keys": "W"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.record",
+  "keys": "G"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.record.audio",
+  "keys": "A"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.record.video",
+  "keys": "V"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.step.back",
+  "keys": "Left"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.step.forward",
+  "keys": "Right"
+ },
+ {
+  "context": "capture",
+  "command": "cmd.capture.stop",
+  "keys": "S"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.caption.edit.merge",
+  "keys": "Alt+M"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.caption.edit.split",
+  "keys": "Alt+S"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.delete",
+  "keys": "Alt+Backspace"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.edit.segment",
+  "keys": "Enter"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.next.line",
+  "keys": "Down"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.next.word",
+  "keys": "Right"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.prev.line",
+  "keys": "Up"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.prev.word",
+  "keys": "Left"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.segment.end",
+  "keys": "End"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.navigate.segment.start",
+  "keys": "Home"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.ripple.delete",
+  "keys": "Backspace"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.next.line",
+  "keys": "Shift+Up"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.next.word",
+  "keys": "Shift+Right"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.prev.line",
+  "keys": "Shift+Down"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.prev.word",
+  "keys": "Shift+Left"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.segment.end",
+  "keys": "Shift+Home"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.text.select.segment.start",
+  "keys": "Shift+End"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.txt.navigate.automonitor",
+  "keys": "Shift+C"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.txt.navigate.programmonitor",
+  "keys": "Shift+X"
+ },
+ {
+  "context": "com.adobe.dva.text",
+  "command": "cmd.txt.navigate.sourcemonitor",
+  "keys": "Shift+Z"
+ },
+ {
+  "context": "effectcontrols",
+  "command": "cmd.edit.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "effectcontrols",
+  "command": "cmd.effectcontrols.loop.audio",
+  "keys": "Ctrl+L"
+ },
+ {
+  "context": "effects",
+  "command": "cmd.edit.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "effects",
+  "command": "cmd.effects.createcustomfolder",
+  "keys": "Ctrl+/"
+ },
+ {
+  "context": "history",
+  "command": "cmd.edit.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "history",
+  "command": "cmd.history.step.backward",
+  "keys": "Left"
+ },
+ {
+  "context": "history",
+  "command": "cmd.history.step.forward",
+  "keys": "Right"
+ },
+ {
+  "context": "mediabrowser",
+  "command": "cmd.mediabrowser.openinsourcemonitor",
+  "keys": "Shift+O"
+ },
+ {
+  "context": "mediabrowser",
+  "command": "cmd.mediabrowser.selectdirectorylist",
+  "keys": "Shift+Left"
+ },
+ {
+  "context": "mediabrowser",
+  "command": "cmd.mediabrowser.selectmedialist",
+  "keys": "Shift+Right"
+ },
+ {
+  "context": "metadata_editor",
+  "command": "cmd.metadataeditor.loop",
+  "keys": "Ctrl+L"
+ },
+ {
+  "context": "metadata_editor",
+  "command": "cmd.metadataeditor.play",
+  "keys": "Space"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.guides",
+  "keys": "Ctrl+;"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.lockguides",
+  "keys": "Ctrl+Shift+Alt+R"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.down.five",
+  "keys": "Ctrl+Shift+Down"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.down.one",
+  "keys": "Ctrl+Down"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.left.five",
+  "keys": "Ctrl+Shift+Left"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.left.one",
+  "keys": "Ctrl+Left"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.right.five",
+  "keys": "Ctrl+Shift+Right"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.right.one",
+  "keys": "Ctrl+Right"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.up.five",
+  "keys": "Ctrl+Shift+Up"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.nudge.up.one",
+  "keys": "Ctrl+Up"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.rulers",
+  "keys": "Ctrl+R"
+ },
+ {
+  "context": "program.monitor",
+  "command": "cmd.monitor.snapping",
+  "keys": "Ctrl+Shift+;"
+ },
+ {
+  "context": "project",
+  "command": "cmd.edit.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "project",
+  "command": "cmd.file.new.bin",
+  "keys": "Ctrl+B"
+ },
+ {
+  "context": "project",
+  "command": "cmd.file.newbinfromselection",
+  "keys": "Shift+B"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.deletewithoptions",
+  "keys": "Ctrl+Delete"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.enablehover",
+  "keys": "Shift+H"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.down",
+  "keys": "Down"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.end",
+  "keys": "End"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.home",
+  "keys": "Home"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.pagedown",
+  "keys": "PageDown"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.pageup",
+  "keys": "PageUp"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.right",
+  "keys": "Right"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.move.up",
+  "keys": "Up"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.moveextend.down",
+  "keys": "Shift+Down"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.moveextend.left",
+  "keys": "Shift+Left"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.moveextend.right",
+  "keys": "Shift+Right"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.moveextend.up",
+  "keys": "Shift+Up"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.movel.eft",
+  "keys": "Left"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.next.thumbnail.size.large",
+  "keys": "Shift+]"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.nextcolumnfield",
+  "keys": "Tab"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.nextrowfield",
+  "keys": "Enter"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.openinsource",
+  "keys": "Shift+O"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.previous.thumbnail.size.large",
+  "keys": "Shift+["
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.previouscolumnfield",
+  "keys": "Shift+Tab"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.previousrowfield",
+  "keys": "Shift+Enter"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.toggle.view",
+  "keys": "Shift+\\"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.wingtip.view.icon",
+  "keys": "Ctrl+PageDown"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.wingtip.view.list",
+  "keys": "Ctrl+PageUp"
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.zoom.in",
+  "keys": "="
+ },
+ {
+  "context": "project",
+  "command": "cmd.project.zoom.out",
+  "keys": "-"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.mediabrowser.newfolder",
+  "keys": "Ctrl+B"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.closeproject",
+  "keys": "Ctrl+Shift+W"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.makeacopy",
+  "keys": "Ctrl+Shift+/"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.move.end",
+  "keys": "End"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.move.home",
+  "keys": "Home"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.move.pagedown",
+  "keys": "PageDown"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.move.pageup",
+  "keys": "PageUp"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.movetotrash",
+  "keys": "Ctrl+Backspace"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.newproject",
+  "keys": "Ctrl+Alt+N"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.openproject",
+  "keys": "Ctrl+O"
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.zoomin",
+  "keys": "="
+ },
+ {
+  "context": "prproduction",
+  "command": "cmd.prproductionfolder.zoomout",
+  "keys": "-"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.edit.clear",
+  "keys": "Backspace"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.decrease.audio.tracks.height",
+  "keys": "Alt+-"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.decrease.video.tracks.height",
+  "keys": "Ctrl+-"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.goto.next.caption.trackitem",
+  "keys": "Ctrl+Alt+Down"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.goto.prev.caption.trackitem",
+  "keys": "Ctrl+Alt+Up"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.increase.audio.tracks.height",
+  "keys": "Alt+="
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.increase.video.tracks.height",
+  "keys": "Ctrl+="
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.down",
+  "keys": "Alt+Down"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.left.one",
+  "keys": "Alt+Left"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.left.several",
+  "keys": "Shift+Alt+Left"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.right.one",
+  "keys": "Alt+Right"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.right.several",
+  "keys": "Shift+Alt+Right"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.nudge.up",
+  "keys": "Alt+Up"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.paste.to.same.track",
+  "keys": "Ctrl+V"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.pasteinsert.to.same.track",
+  "keys": "Ctrl+Shift+V"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.ripple.delete",
+  "keys": "Alt+Backspace"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.show.next.screen",
+  "keys": "PageDown"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.show.previous.screen",
+  "keys": "PageUp"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slide.left.one",
+  "keys": "Alt+,"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slide.left.several",
+  "keys": "Shift+Alt+,"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slide.right.one",
+  "keys": "Alt+."
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slide.right.several",
+  "keys": "Shift+Alt+."
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slip.left.one",
+  "keys": "Ctrl+Alt+Left"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slip.left.several",
+  "keys": "Ctrl+Shift+Alt+Left"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slip.right.one",
+  "keys": "Ctrl+Alt+Right"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.slip.right.several",
+  "keys": "Ctrl+Shift+Alt+Right"
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.workbar.set.in",
+  "keys": "Alt+["
+ },
+ {
+  "context": "timeline",
+  "command": "cmd.timeline.workbar.set.out",
+  "keys": "Alt+]"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.copyright",
+  "keys": "Ctrl+Shift+Alt+C"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.font.bold",
+  "keys": "Ctrl+B"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.font.italic",
+  "keys": "Ctrl+I"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.font.underline",
+  "keys": "Ctrl+U"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.five.down",
+  "keys": "Shift+Down"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.five.left",
+  "keys": "Shift+Left"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.five.right",
+  "keys": "Shift+Right"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.five.up",
+  "keys": "Shift+Up"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.one.down",
+  "keys": "Down"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.one.left",
+  "keys": "Left"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.one.right",
+  "keys": "Right"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.nudge.one.up",
+  "keys": "Up"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.position.bottom.titlesafe",
+  "keys": "Ctrl+Shift+D"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.position.left.titlesafe",
+  "keys": "Ctrl+Shift+F"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.position.top.titlesafe",
+  "keys": "Ctrl+Shift+O"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.registered",
+  "keys": "Ctrl+Shift+Alt+R"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.arc",
+  "keys": "A"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.ellipse",
+  "keys": "E"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.line",
+  "keys": "L"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.pen",
+  "keys": "P"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.rectangle",
+  "keys": "R"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.rotation",
+  "keys": "O"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.select",
+  "keys": "V"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.type",
+  "keys": "T"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.type.vertical",
+  "keys": "C"
+ },
+ {
+  "context": "titler",
+  "command": "cmd.titler.misc.tool.wedge",
+  "keys": "W"
+ }
+]
