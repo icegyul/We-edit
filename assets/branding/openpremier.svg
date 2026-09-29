@@ -2,6 +2,6 @@
   <title id="title">OpenPremier</title>
   <desc id="desc">Original white OP monogram on a flat violet rounded square.</desc>
   <rect x="40" y="40" width="944" height="944" rx="210" fill="#34106b"/>
-  <path fill="#fff" fill-rule="evenodd" d="M346.5 278C235.2 278 145 382.8 145 512s90.2 234 201.5 234S548 641.2 548 512 457.8 278 346.5 278Zm0 109c48.9 0 88.5 56 88.5 125s-39.6 125-88.5 125-88.5-56-88.5-125 39.6-125 88.5-125Z"/>
-  <path fill="#fff" fill-rule="evenodd" d="M586 278h154c72.9 0 132 62.7 132 140s-59.1 140-132 140h-60v160c0 15.5-12.5 28-28 28h-66c-15.5 0-28-12.5-28-28V306c0-15.5 12.5-28 28-28Zm94 104v84h96c23.2 0 42-18.8 42-42s-18.8-42-42-42h-96Z"/>
+  <path fill="#fff" fill-rule="evenodd" d="M335 262C217 262 145 368 145 512s72 250 190 250 190-106 190-250-72-250-190-250Zm0 112c49 0 78 55 78 138s-29 138-78 138-78-55-78-138 29-138 78-138Z"/>
+  <path fill="#fff" fill-rule="evenodd" d="M585 274h157c88 0 147 52 147 132s-59 132-147 132h-50v212H585V274Zm107 98v72h50c25 0 40-13 40-36s-15-36-40-36h-50Z"/>
 </svg>
