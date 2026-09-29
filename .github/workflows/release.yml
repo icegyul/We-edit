@@ -60,7 +60,6 @@ jobs:
             bash /work/src/packaging/linux/build-in-container.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq libasound2t64 || sudo apt-get install -y -qq libasound2
-          chmod +x "dist/OpenPremier-${{ needs.validate-tag.outputs.version }}-x86_64.AppImage"
           APPIMAGE_EXTRACT_AND_RUN=1 \
             "dist/OpenPremier-${{ needs.validate-tag.outputs.version }}-x86_64.AppImage" --version
       - uses: actions/upload-artifact@v7
