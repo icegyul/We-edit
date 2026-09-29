@@ -122,5 +122,10 @@ issue público.
 OpenPremier se distribuye bajo la licencia
 [GNU General Public License 3.0 o posterior](LICENSE).
 
-Adobe y Premiere Pro son marcas comerciales de Adobe Inc. Su mención describe únicamente objetivos
-de interoperabilidad y flujos de trabajo conocidos; no implica afiliación ni respaldo.
+## ⚠️ Aviso Legal / Disclaimer
+
+**OpenPremier** es un proyecto de código abierto desarrollado de forma 100% independiente. Este software **no tiene ninguna relación, afiliación, patrocinio ni respaldo por parte de Adobe Systems Incorporated**. 
+
+No utilizamos, distribuimos ni tenemos acceso a ningún código fuente de Adobe Premiere Pro ni de ningún otro producto de Adobe. OpenPremier ha sido construido desde cero por la comunidad y para la comunidad, sirviendo únicamente como una inspiración basada en los estándares de la industria de la edición de video para ofrecer una alternativa libre y accesible. 
+
+*Los nombres "Adobe" y "Premiere Pro" son marcas registradas de sus respectivos propietarios y se mencionan en este proyecto de manera puramente descriptiva y de referencia.*
