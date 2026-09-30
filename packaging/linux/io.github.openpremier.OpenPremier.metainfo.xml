@@ -29,6 +29,14 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-09-30">
+      <description>
+        <p>
+          Paste images from the clipboard with Ctrl+V straight into the project and the timeline,
+          a regular log window, a slimmer logo and a ripple trim fix for out-of-sync linked clips.
+        </p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-09-30">
       <description>
         <p>

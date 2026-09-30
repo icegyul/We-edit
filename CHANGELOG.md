@@ -2,6 +2,23 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.4.0 - 2026-09-30
+
+### Added
+
+- Paste media from the system clipboard with Ctrl+V: images copied in a web browser or an image editor, media files copied in the file manager, and links or paths to images (links are downloaded in the background). The image is saved to a folder, imported into the project and, while a sequence is edited, placed at the playhead on the first free video track above the material there and selected.
+- The paste dialog shows a preview, the file name and the destination folder, with an "Always save here" option; the folder and the option can be changed later in Preferences (Pasted Images).
+- A randomized test applies thousands of timeline edits (overwrite, insert, razor, delete, ripple delete, lift, extract, trims, moves, transitions and track locks) and checks that the project stays valid and that locked tracks never change.
+
+### Changed
+
+- The log viewer opens as a regular pop-up of a fixed size instead of growing to the full height of the window, and has a Close button.
+- Slimmer OP logo: the bowl of the P is drawn lighter than the stem.
+
+### Fixed
+
+- A ripple trim of a clip whose linked partner had been moved out of sync could cut through the partner and make it overlap its neighbor; each linked clip now gets the added or removed time at its own edge.
+
 ## 0.3.0 - 2026-09-30
 
 ### Added

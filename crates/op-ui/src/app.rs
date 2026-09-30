@@ -61,6 +61,11 @@ pub(crate) struct State {
     pub focus: Focus,
     pub focused_panel: Option<Panel>,
     pub k_down: bool,
+    /// A paste event arrived during the current Ctrl+V press (the release must not paste again).
+    pub paste_seen: bool,
+    /// Pasted images waiting to be saved and imported.
+    pub pastes: Vec<crate::paste::Job>,
+    next_paste: u64,
     pub loop_playback: bool,
     pub workspace: Workspace,
     pub program: monitor::MonitorView,
@@ -227,6 +232,9 @@ impl App {
             focus: Focus::Timeline,
             focused_panel: Some(Panel::Timeline),
             k_down: false,
+            paste_seen: false,
+            pastes: Vec::new(),
+            next_paste: 1,
             loop_playback: false,
             workspace,
             program: monitor::MonitorView::new(Monitor::Program),
@@ -818,6 +826,11 @@ fn view_menu(ui: &mut Ui, s: &mut State) {
 impl State {
     /// Runs a command: UI commands here, editing commands in the editor.
     pub fn command(&mut self, cmd: &str) {
+        // media in the system clipboard (copied images, files, image links) wins over clips
+        // copied inside the program: copying clips replaces the system clipboard with text
+        if cmd == "cmd.edit.paste" && self.paste_media() {
+            return;
+        }
         match cmd {
             "cmd.file.new.project" => self.confirm(Then::NewProject),
             "cmd.file.openproject" => self.confirm(Then::Open(None)),
@@ -1043,6 +1056,122 @@ impl State {
         if to > from {
             self.ed.transport.loop_from = Some(from);
             self.ed.transport.stop_at = Some(to);
+        }
+    }
+
+    /// Pastes media from the system clipboard. Returns false when it holds none.
+    fn paste_media(&mut self) -> bool {
+        use crate::paste::{self, Found, Job, Payload};
+        let Some(found) = paste::read() else {
+            return false;
+        };
+        let place = self.ed.active.is_some()
+            && !matches!(self.focus, Focus::Project | Focus::Source | Focus::Effects);
+        let bin = self.ed.project.root;
+        let (data, name, source) = match found {
+            Found::Files(files) => {
+                log::info!("pasting {} files", files.len());
+                if place {
+                    self.ed.place_after_import.extend(files.iter().cloned());
+                }
+                self.ed.import(files, bin);
+                return true;
+            }
+            Found::Bitmap(b) => {
+                let stamp = op_application::autosave::stamp(std::time::SystemTime::now());
+                (
+                    Arc::new(parking_lot::Mutex::new(Some(Ok(Payload::Bitmap(b))))),
+                    format!("{} {stamp}", t("Pasted Image")),
+                    t("Image from the clipboard").to_string(),
+                )
+            }
+            Found::Url(url) => {
+                let slot = Arc::new(parking_lot::Mutex::new(None));
+                let (s2, u2) = (slot.clone(), url.clone());
+                let _ = std::thread::Builder::new()
+                    .name("paste-download".into())
+                    .spawn(move || {
+                        let r = paste::download(&u2);
+                        if let Err(e) = &r {
+                            log::warn!("pasted link not downloaded: {u2}: {e}");
+                        }
+                        *s2.lock() = Some(r);
+                    });
+                let name = paste::name_from_url(&url).unwrap_or_else(|| t("Pasted Image").into());
+                (slot, name, url)
+            }
+        };
+        let id = self.next_paste;
+        self.next_paste += 1;
+        let folder = self.paste_folder();
+        let auto = self.ed.prefs.paste_always && self.ed.prefs.paste_folder.is_some();
+        self.pastes.push(Job {
+            id,
+            name: name.clone(),
+            source,
+            data,
+            folder: auto.then(|| folder.clone()),
+            place,
+            preview: None,
+        });
+        if !auto {
+            self.dialogs.push(Dialog::PasteMedia {
+                id,
+                folder: folder.display().to_string(),
+                name,
+                always: false,
+            });
+        }
+        true
+    }
+
+    /// Where pasted images go by default: the chosen folder, else next to the project, else
+    /// the user's pictures.
+    pub fn paste_folder(&self) -> PathBuf {
+        if let Some(f) = &self.ed.prefs.paste_folder {
+            return f.clone();
+        }
+        if let Some(dir) = self.ed.path.as_ref().and_then(|p| p.parent()) {
+            return dir.join(t("Pasted Media"));
+        }
+        let home = std::env::var_os("USERPROFILE")
+            .or_else(|| std::env::var_os("HOME"))
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        let pictures = home.join("Pictures");
+        if pictures.is_dir() { pictures } else { home }.join("OpenPremier")
+    }
+
+    /// Saves and imports pasted images whose folder is known and whose data is ready.
+    fn poll_pastes(&mut self) {
+        let mut i = 0;
+        while i < self.pastes.len() {
+            let job = &self.pastes[i];
+            let Some(folder) = job.folder.clone() else {
+                i += 1;
+                continue;
+            };
+            let Some(result) = job.data.lock().take() else {
+                i += 1;
+                continue;
+            };
+            let job = self.pastes.remove(i);
+            match result.and_then(|p| crate::paste::save(&p, &folder, &job.name)) {
+                Ok(path) => {
+                    log::info!("pasted image saved to {}", path.display());
+                    if job.place {
+                        self.ed.place_after_import.push(path.clone());
+                    }
+                    let bin = self.ed.project.root;
+                    self.ed.import(vec![path], bin);
+                }
+                Err(e) => self
+                    .ed
+                    .error(tf("The pasted image could not be saved: {}", &[&e])),
+            }
+        }
+        if !self.pastes.is_empty() {
+            self.ctx.request_repaint_after(Duration::from_millis(200));
         }
     }
 
@@ -1602,6 +1731,7 @@ impl State {
 
     fn begin_frame(&mut self, ctx: &egui::Context) {
         self.poll_opening();
+        self.poll_pastes();
         self.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
         self.tab_rects.clear();
         let busy = self.ed.tick() || self.opening.is_some();

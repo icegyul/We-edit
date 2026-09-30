@@ -17,6 +17,7 @@ pub mod arrange;
 pub mod edit;
 pub mod nav;
 pub mod snap;
+mod stress;
 pub mod transitions;
 pub mod trim;
 

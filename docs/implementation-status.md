@@ -1,7 +1,7 @@
 # Implementation status
 
 **Snapshot:** 2026-09-30<br>
-**Application version:** 0.3.0 technical alpha<br>
+**Application version:** 0.4.0 technical alpha<br>
 **Primary language/UI:** Rust 2024 / egui 0.36<br>
 **Compatibility validation:** in progress; full parity has not been established
 
@@ -16,7 +16,7 @@ flow:
 | Check | Result |
 |---|---|
 | `cargo xtask lint` | rustfmt and Clippy passed with warnings denied |
-| `cargo xtask test` | 126 tests passed; no failures or ignored tests |
+| `cargo xtask test` | 131 tests passed; no failures or ignored tests |
 | Windows release package | final-layout `--self-test` passed |
 | Linux AppImage | WSL `--self-test` passed; startup passed in Ubuntu 22.04 and Fedora 42 containers |
 
@@ -42,8 +42,10 @@ known compositor pixel. It is a startup/integration check, not a performance or 
 1. Complete controlled E4/E5 fixtures for `.prproj` identity scopes, masks, retiming, automation,
    transitions, malformed input, and unknown-node preservation. Do not add `.prproj` writing until
    lossless round-trip evidence exists.
-2. Build an automated timeline behavior matrix covering linked selection, track targeting, sync
-   locks, locked tracks, focus contexts, trim boundaries, and snapping at multiple DPI/zoom values.
+2. Extend the automated timeline behavior matrix. A randomized edit test (op-timeline
+   `stress.rs`) now checks validity and lock safety over thousands of edits across linked selection,
+   track targeting, sync locks, locked tracks and trims; expected-result tables per operation, focus
+   contexts and snapping at multiple DPI/zoom values remain.
 3. Create pixel/audio oracle corpora across bit depths, YUV/RGB formats, color spaces, alpha,
    effects, transitions, audio layouts, and supported GPUs; publish tolerances and performance
    budgets.

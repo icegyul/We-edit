@@ -26,6 +26,12 @@ serde_json.workspace = true
 log.workspace = true
 sys-locale.workspace = true
 parking_lot.workspace = true
+arboard.workspace = true
+image.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -18,9 +18,11 @@ SVG = ROOT / "assets" / "branding" / "openpremier.svg"
 S = 1024
 VIOLET = (52, 16, 107, 255)
 WHITE = (255, 255, 255, 255)
+# stroke of the P's bowl relative to the stem
+BOWL = 0.72
 
 
-def geometry(weight=0.155):
+def geometry(weight=0.155, bowl=BOWL):
     """Shapes in 1024-unit space."""
     cap = 420.0
     top = 512 - cap / 2
@@ -44,7 +46,7 @@ def geometry(weight=0.155):
     }
     px = x + o_w + gap
     r = bowl_h / 2
-    ri = (bowl_h - 2 * sh) / 2
+    ri = (bowl_h - 2 * sh * bowl) / 2
     p = {
         "x0": px,
         "top": top,
@@ -54,20 +56,21 @@ def geometry(weight=0.155):
         "bowl_bottom": top + bowl_h,
         "r": r,
         "ri": ri,
-        "sh": sh,
-        "sv": sv,
+        # the bowl of the P is drawn lighter than the stem, for a slimmer, modern shape
+        "sh": sh * bowl,
+        "sv": sv * bowl,
     }
     return o, p
 
 
-def draw(weight=0.155, scale=4):
+def draw(weight=0.155, scale=4, bowl=BOWL):
     """The icon at 1024 px, drawn at `scale` times the size and reduced for smooth edges."""
     n = S * scale
     k = float(scale)
     img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([40 * k, 40 * k, (S - 40) * k, (S - 40) * k], radius=210 * k, fill=VIOLET)
-    o, p = geometry(weight)
+    o, p = geometry(weight, bowl)
     # O
     d.ellipse([(o["cx"] - o["rx"]) * k, (o["cy"] - o["ry"]) * k, (o["cx"] + o["rx"]) * k, (o["cy"] + o["ry"]) * k], fill=WHITE)
     d.ellipse([(o["cx"] - o["irx"]) * k, (o["cy"] - o["iry"]) * k, (o["cx"] + o["irx"]) * k, (o["cy"] + o["iry"]) * k], fill=VIOLET)

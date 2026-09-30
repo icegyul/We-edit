@@ -1465,4 +1465,32 @@ pub static ES: &[(&str, &str)] = &[
     ("Cinematic Look", "Aspecto cinematográfico"),
     ("Retro VHS", "VHS retro"),
     ("Vintage Film", "Película vintage"),
+    ("Pasted Image", "Imagen pegada"),
+    ("Image from the clipboard", "Imagen del portapapeles"),
+    ("Pasted Media", "Medios pegados"),
+    (
+        "The pasted image could not be saved: {}",
+        "No se pudo guardar la imagen pegada: {}",
+    ),
+    ("Pasted Images", "Imágenes pegadas"),
+    ("Save In", "Guardar en"),
+    ("Next to the project", "Junto al proyecto"),
+    ("Browse...", "Examinar..."),
+    (
+        "Always save here without asking",
+        "Guardar siempre aquí sin preguntar",
+    ),
+    ("Paste Image", "Pegar imagen"),
+    ("Downloading...", "Descargando..."),
+    ("File Name", "Nombre del archivo"),
+    ("Always save here", "Guardar siempre aquí"),
+    (
+        "Pasted images will be saved in this folder without asking. You can change it in Preferences.",
+        "Las imágenes pegadas se guardarán en esta carpeta sin preguntar. Puede cambiarlo en Preferencias.",
+    ),
+    ("Save and Import", "Guardar e importar"),
+    (
+        "Could not get the image: {}",
+        "No se pudo obtener la imagen: {}",
+    ),
 ];

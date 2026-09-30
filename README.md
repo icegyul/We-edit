@@ -23,7 +23,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 </p>
 ## Estado actual
 
-La versión `0.3.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
+La versión `0.4.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -43,6 +43,8 @@ en todos los trabajos de producción.
 - Formato nativo `.opproj`, intercambio OTIO/FCP XML/EDL e importación parcial de `.prproj`; los
   efectos y transiciones que no existen tal cual se sustituyen por el equivalente más cercano.
 - Interfaz en español e inglés e importación de mapas de teclado `.kys`.
+- Pegado de imágenes con Ctrl+V desde el navegador, otros programas o el explorador de archivos:
+  la imagen se guarda, se importa y queda lista en la línea de tiempo.
 - Recuperación automática del proyecto ante fallos y registro de actividad configurable desde
   Preferencias.
 - Paquete ZIP portátil para Windows y AppImage para Linux.
@@ -93,7 +95,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.3.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.4.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

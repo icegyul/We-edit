@@ -1094,6 +1094,48 @@ impl Editor {
 
     /// Adds a graphics clip (text or shape) at the playhead on the lowest free targeted video
     /// track above existing material, five seconds long.
+    /// Places a project item at the playhead on the first free video track above the material
+    /// there, like a new graphic (used for pasted images). Selects the new clip.
+    pub fn place_on_top(&mut self, item: ItemId) -> Option<ClipId> {
+        let sid = self.active?;
+        let spec = SourceClip::from_item(&self.project, item).ok()?;
+        spec.video.as_ref()?;
+        let t = self.playhead();
+        let seq = self.project.sequence(sid)?.clone();
+        let range = SeqRange::with_duration(t, spec.duration());
+        let occupied_top = seq
+            .video
+            .iter()
+            .enumerate()
+            .filter(|(_, tr)| tr.clips_in(range).next().is_some())
+            .map(|(i, _)| i + 1)
+            .max()
+            .unwrap_or(0);
+        let index = (occupied_top..seq.video.len() + 1)
+            .find(|i| {
+                seq.video
+                    .get(*i)
+                    .is_none_or(|tr| tr.clips_in(range).next().is_none() && !tr.locked)
+            })
+            .unwrap_or(seq.video.len());
+        let patch = Patch {
+            video: Some(index),
+            audio: vec![],
+        };
+        let ids = self.seq_edit("Paste Image", |p, sid, opts| {
+            while p.sequence(sid).unwrap().video.len() <= index {
+                let tid = p.ids.track();
+                p.sequence_mut(sid)
+                    .unwrap()
+                    .video
+                    .push(std::sync::Arc::new(Track::new(tid, TrackKind::Video)));
+            }
+            overwrite(p, sid, &spec, t, &patch, opts)
+        })?;
+        self.selection = Selection::only(ids.clone());
+        ids.first().copied()
+    }
+
     pub fn add_graphic(&mut self, effect: &str, shape: Option<u32>) -> Option<ClipId> {
         let sid = self.active?;
         let t = self.playhead();
@@ -1404,6 +1446,42 @@ mod tests {
                 .unwrap()
                 .animated
         );
+    }
+
+    #[test]
+    fn pasted_images_land_on_top_of_the_timeline() {
+        let (mut e, d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        e.load_source(item);
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        e.set_playhead(SeqTime::from_seconds(1.0));
+        // a 1x1 PNG, as the paste feature writes it
+        let png: &[u8] = &[
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0xF0, 0x1F, 0x00, 0x05, 0x00, 0x01, 0xFF, 0x89, 0x99,
+            0x3D, 0x1D, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        let path = d.path().join("Pasted Image.png");
+        std::fs::write(&path, png).unwrap();
+        e.place_after_import.push(path.clone());
+        let root = e.project.root;
+        e.import(vec![path], root);
+        let start = std::time::Instant::now();
+        while (e.importing > 0 || !e.imports.is_empty())
+            && start.elapsed() < std::time::Duration::from_secs(20)
+        {
+            e.tick();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let seq = e.active_seq().unwrap();
+        assert!(seq.video.len() >= 2, "a track above V1");
+        let placed = seq.video[1].clips.first().expect("the image is on V2");
+        assert_eq!(placed.start, SeqTime::from_seconds(1.0));
+        assert_eq!(e.selection.clips, vec![placed.id]);
+        assert!(e.place_after_import.is_empty());
     }
 
     #[test]

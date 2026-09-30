@@ -42,6 +42,10 @@ pub struct Preferences {
     pub effect_controls_split: f32,
     /// Effect Controls shows its keyframe timeline.
     pub effect_controls_timeline: bool,
+    /// Folder for images pasted from the clipboard.
+    pub paste_folder: Option<PathBuf>,
+    /// Save pasted images in `paste_folder` without asking.
+    pub paste_always: bool,
 }
 
 impl Default for Preferences {
@@ -73,6 +77,8 @@ impl Default for Preferences {
             log_level: "info".into(),
             effect_controls_split: 0.62,
             effect_controls_timeline: true,
+            paste_folder: None,
+            paste_always: false,
         }
     }
 }

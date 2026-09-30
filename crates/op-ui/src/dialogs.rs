@@ -107,6 +107,13 @@ pub enum Dialog {
         level: usize,
         filter: String,
     },
+    /// Where to save an image pasted from the clipboard.
+    PasteMedia {
+        id: u64,
+        folder: String,
+        name: String,
+        always: bool,
+    },
     About,
 }
 
@@ -1112,6 +1119,12 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
         Dialog::Shortcuts(f) => shortcuts_dialog(s, ctx, f),
         Dialog::Preferences { scale } => preferences(s, ctx, scale),
         Dialog::Log { level, filter } => log_window(ctx, level, filter),
+        Dialog::PasteMedia {
+            id,
+            folder,
+            name,
+            always,
+        } => paste_dialog(s, ctx, *id, folder, name, always),
         Dialog::About => {
             let mut open = true;
             window(ctx, t("About OpenPremier")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
@@ -2187,6 +2200,42 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                         }
                     });
                     ui.end_row();
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(
+                        RichText::new(t("Pasted Images"))
+                            .strong()
+                            .color(theme::TEXT_BRIGHT),
+                    );
+                    ui.end_row();
+                    ui.label(t("Save In"));
+                    ui.horizontal(|ui| {
+                        let mut text = p
+                            .paste_folder
+                            .as_ref()
+                            .map(|f| f.display().to_string())
+                            .unwrap_or_default();
+                        if ui
+                            .add(
+                                egui::TextEdit::singleline(&mut text)
+                                    .hint_text(t("Next to the project"))
+                                    .desired_width(220.0),
+                            )
+                            .changed()
+                        {
+                            p.paste_folder =
+                                (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
+                        }
+                        if ui.button(t("Browse...")).clicked()
+                            && let Some(dir) = rfd::FileDialog::new().pick_folder()
+                        {
+                            p.paste_folder = Some(dir);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.checkbox(&mut p.paste_always, t("Always save here without asking"));
+                    ui.end_row();
                 });
             if log_changed {
                 op_application::logging::configure(p.logging_enabled, &p.log_level);
@@ -2219,11 +2268,19 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
 /// The program log with a detail filter and a search field.
 fn log_window(ctx: &egui::Context, level: &mut usize, filter: &mut String) -> bool {
     let mut open = true;
+    let mut close = false;
+    // a regular pop-up of a fixed size: the list scrolls inside it instead of the window
+    // growing to the height of the screen
+    let screen = ctx.content_rect().size();
+    let size = egui::vec2(
+        (screen.x * 0.8).clamp(360.0, 860.0),
+        (screen.y * 0.5).clamp(200.0, 420.0),
+    );
     window(ctx, t("Log"))
         .open(&mut open)
-        .resizable(true)
-        .default_size([820.0, 480.0])
+        .resizable(false)
         .show(ctx, |ui| {
+            ui.set_width(size.x);
             let names = [
                 t("Errors"),
                 t("Warnings"),
@@ -2278,6 +2335,8 @@ fn log_window(ctx: &egui::Context, level: &mut usize, filter: &mut String) -> bo
             let row_h = 16.0;
             egui::ScrollArea::both()
                 .auto_shrink(false)
+                .max_height(size.y)
+                .min_scrolled_height(size.y)
                 .stick_to_bottom(true)
                 .show_rows(ui, row_h, lines.len(), |ui, range| {
                     for l in &lines[range] {
@@ -2301,9 +2360,146 @@ fn log_window(ctx: &egui::Context, level: &mut usize, filter: &mut String) -> bo
             if lines.is_empty() {
                 ui.label(RichText::new(t("No messages")).color(theme::TEXT_DIM));
             }
+            ui.separator();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(t("Close")).clicked() {
+                    close = true;
+                }
+            });
         });
     ctx.request_repaint_after(std::time::Duration::from_millis(500));
-    open
+    open && !close
+}
+
+/// Asks where to save a pasted image; "Always save here" skips the question next time.
+fn paste_dialog(
+    s: &mut State,
+    ctx: &egui::Context,
+    id: u64,
+    folder: &mut String,
+    name: &mut String,
+    always: &mut bool,
+) -> bool {
+    let Some(pos) = s.pastes.iter().position(|j| j.id == id) else {
+        return false;
+    };
+    // the preview is made once the data is there (links download in the background)
+    let state = {
+        let data = s.pastes[pos].data.lock();
+        match data.as_ref() {
+            None => None,
+            Some(Ok(p)) => Some(Ok(crate::paste::preview_image(p))),
+            Some(Err(e)) => Some(Err(e.clone())),
+        }
+    };
+    if s.pastes[pos].preview.is_none()
+        && let Some(Ok(Some(img))) = &state
+    {
+        s.pastes[pos].preview = Some(ctx.load_texture(
+            format!("paste-{id}"),
+            img.clone(),
+            egui::TextureOptions::LINEAR,
+        ));
+    }
+    let mut open = true;
+    let mut save = false;
+    let mut cancel = false;
+    let mut browse = false;
+    window(ctx, t("Paste Image"))
+        .open(&mut open)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.set_width(480.0);
+            let job = &s.pastes[pos];
+            if let Some(tex) = &job.preview {
+                let size = tex.size_vec2();
+                let k = (480.0 / size.x).min(240.0 / size.y).min(1.0);
+                ui.vertical_centered(|ui| {
+                    ui.add(egui::Image::new((tex.id(), size * k)));
+                });
+            }
+            ui.label(
+                RichText::new(&job.source)
+                    .size(11.0)
+                    .color(theme::TEXT_DIM),
+            );
+            match &state {
+                None => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(t("Downloading..."));
+                    });
+                }
+                Some(Err(e)) => {
+                    ui.label(RichText::new(tf("Could not get the image: {}", &[e])).color(theme::ERROR));
+                }
+                Some(Ok(_)) => {}
+            }
+            ui.add_space(6.0);
+            egui::Grid::new("paste-grid")
+                .num_columns(2)
+                .spacing([10.0, 8.0])
+                .show(ui, |ui| {
+                    ui.label(t("File Name"));
+                    ui.add(egui::TextEdit::singleline(name).desired_width(340.0));
+                    ui.end_row();
+                    ui.label(t("Save In"));
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(folder).desired_width(260.0));
+                        if ui.button(t("Browse...")).clicked() {
+                            browse = true;
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.checkbox(always, t("Always save here"))
+                        .on_hover_text(t("Pasted images will be saved in this folder without asking. You can change it in Preferences."));
+                    ui.end_row();
+                });
+            let ready = matches!(state, Some(Ok(_)));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(t("Cancel")).clicked() {
+                        cancel = true;
+                    }
+                    if ui
+                        .add_enabled(
+                            ready && !folder.trim().is_empty(),
+                            egui::Button::new(t("Save and Import")),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if browse
+        && let Some(dir) = rfd::FileDialog::new()
+            .set_directory(folder.trim())
+            .pick_folder()
+    {
+        *folder = dir.display().to_string();
+    }
+    let esc = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    if save {
+        let dir = PathBuf::from(folder.trim());
+        s.ed.prefs.paste_folder = Some(dir.clone());
+        if *always {
+            s.ed.prefs.paste_always = true;
+        }
+        let _ = s.ed.prefs.save(&s.ed.dirs);
+        let job = &mut s.pastes[pos];
+        job.folder = Some(dir);
+        job.name = name.trim().to_string();
+        return false;
+    }
+    if cancel || esc || !open {
+        s.pastes.remove(pos);
+        return false;
+    }
+    true
 }
 
 /// The notice shown while a project is read in the background.

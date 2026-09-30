@@ -84,6 +84,8 @@ pub struct Editor {
         crossbeam_channel::Receiver<(PathBuf, Result<MediaAsset, String>)>,
     )>,
     pub importing: usize,
+    /// Files being imported that go onto the timeline as soon as they are ready (pasted media).
+    pub place_after_import: Vec<PathBuf>,
     pub exports: Vec<crate::export::ExportJob>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
@@ -136,6 +138,7 @@ impl Editor {
             status: None,
             imports: Vec::new(),
             importing: 0,
+            place_after_import: Vec::new(),
             exports: Vec::new(),
             last_import_report: None,
             autosave_at: Instant::now(),
@@ -634,6 +637,16 @@ impl Editor {
         }
         let n = added.len();
         self.importing = self.importing.saturating_sub(n);
+        let place: Vec<bool> = added
+            .iter()
+            .map(|(_, a)| {
+                let at = self
+                    .place_after_import
+                    .iter()
+                    .position(|p| Path::new(&a.path) == p.as_path());
+                at.map(|i| self.place_after_import.remove(i)).is_some()
+            })
+            .collect();
         let still = self.prefs.still_seconds;
         let new_items = self.edit("Import", |p| {
             let mut items = Vec::new();
@@ -651,6 +664,11 @@ impl Editor {
             Ok(items)
         });
         if let Some(items) = new_items {
+            for (item, on_timeline) in items.iter().zip(place) {
+                if on_timeline {
+                    self.place_on_top(*item);
+                }
+            }
             self.items = items;
             self.info(format!("Imported {n} files"));
         }

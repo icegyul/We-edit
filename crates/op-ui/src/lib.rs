@@ -11,6 +11,7 @@ mod icons;
 mod keys;
 mod monitor;
 mod panels;
+mod paste;
 mod project_panel;
 mod theme;
 mod timeline;

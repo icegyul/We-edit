@@ -144,6 +144,27 @@ pub fn handle(s: &mut State, ctx: &egui::Context) {
                 if key == Key::K {
                     s.k_down = pressed;
                 }
+                // with only an image (or files) in the clipboard egui sends no paste event;
+                // the release of Ctrl+V is the only trace of the shortcut
+                if key == Key::V && !pressed && modifiers.command && !modifiers.shift && !typing {
+                    if std::mem::take(&mut s.paste_seen) {
+                        continue;
+                    }
+                    let found =
+                        s.ed.keymap
+                            .lookup(s.focus.context(), &Chord::parse("Ctrl+V").unwrap())
+                            .or_else(|| {
+                                s.ed.keymap.lookup(
+                                    op_application::keymap::GLOBAL,
+                                    &Chord::parse("Ctrl+V").unwrap(),
+                                )
+                            })
+                            .map(str::to_string);
+                    if found.as_deref() == Some("cmd.edit.paste") {
+                        s.command("cmd.edit.paste");
+                    }
+                    continue;
+                }
                 if !pressed || typing {
                     continue;
                 }
@@ -187,6 +208,7 @@ pub fn handle(s: &mut State, ctx: &egui::Context) {
             }
             Event::Paste(_) if !typing => {
                 clipboard = true;
+                s.paste_seen = true;
                 let m = ctx.input(|i| i.modifiers);
                 Some(if m.shift {
                     Chord::parse("Ctrl+Shift+V").unwrap()

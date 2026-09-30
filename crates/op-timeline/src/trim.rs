@@ -181,6 +181,23 @@ pub fn ripple_trim(
             Edge::Tail => first.end() - removed.max(Dur::ZERO),
             Edge::Head => first.start,
         };
+        // the first clip's track and the sync-locked tracks follow its edit point; linked
+        // partners that are out of sync follow their own edge, so time is added or removed
+        // next to each clip instead of cutting through it
+        let first_track = own[0];
+        let mut main: Vec<TrackRef> = tracks
+            .iter()
+            .filter(|r| !own.contains(r))
+            .copied()
+            .collect();
+        main.push(first_track);
+        let partners: Vec<(Clip, TrackRef)> = clips
+            .iter()
+            .cloned()
+            .zip(own.iter().copied())
+            .skip(1)
+            .filter(|(_, r)| *r != first_track)
+            .collect();
         if removed.is_positive() {
             // other participating tracks must be free where time disappears
             let mut allowed = removed;
@@ -202,14 +219,27 @@ pub fn ripple_trim(
                 apply_edge(&mut c, edge, d);
                 update(ed, c)?;
             }
-            ed.close_gap(&tracks, at, allowed)?;
+            ed.close_gap(&main, at, allowed)?;
+            for (c, r) in &partners {
+                let at_c = match edge {
+                    Edge::Tail => c.end() - allowed,
+                    Edge::Head => c.start,
+                };
+                let amount = allowed.min(ed.free_after(*r, at_c));
+                if amount.0 > 0 {
+                    ed.shift_after(&[*r], at_c + amount, -amount, false)?;
+                }
+            }
             Ok(d)
         } else if removed.is_negative() {
             let add = -removed;
             match edge {
                 Edge::Tail => {
                     let old_end = first.end();
-                    ed.insert_space(&tracks, old_end, add, true)?;
+                    ed.insert_space(&main, old_end, add, true)?;
+                    for (c, r) in &partners {
+                        ed.insert_space(&[*r], c.end(), add, false)?;
+                    }
                     for c in clips {
                         let mut c = ed.clip(c.id)?.1;
                         apply_edge(&mut c, edge, add);
@@ -217,7 +247,10 @@ pub fn ripple_trim(
                     }
                 }
                 Edge::Head => {
-                    ed.insert_space(&tracks, at, add, true)?;
+                    ed.insert_space(&main, at, add, true)?;
+                    for (c, r) in &partners {
+                        ed.insert_space(&[*r], c.start, add, false)?;
+                    }
                     for c in clips {
                         let mut c = ed.clip(c.id)?.1;
                         apply_edge(&mut c, edge, -add);
@@ -682,6 +715,55 @@ pub fn trim_to_playhead(
 mod tests {
     use super::*;
     use crate::testutil::*;
+
+    /// A linked partner that was slipped out of sync keeps its own edit point in a ripple trim:
+    /// time is added next to it instead of cutting through it (found by the randomized edits).
+    #[test]
+    fn ripple_trim_with_an_out_of_sync_partner() {
+        let mut f = fixture();
+        f.put(0.0, 10.0, 0.0);
+        let ids = f.put(20.0, 28.0, 12.0);
+        let seq = f.seq;
+        let audio = ids
+            .iter()
+            .copied()
+            .find(|c| !f.seq().clip(*c).unwrap().is_video())
+            .unwrap();
+        let video = ids.iter().copied().find(|c| *c != audio).unwrap();
+        let unlinked = EditOptions {
+            linked_selection: false,
+            ..EditOptions::default()
+        };
+        f.apply(|p| {
+            crate::move_clips(
+                p,
+                seq,
+                &crate::MoveSpec {
+                    clips: vec![audio],
+                    delta: d(-1.0),
+                    track_delta: 0,
+                    insert: false,
+                    duplicate: false,
+                },
+                unlinked,
+            )
+        })
+        .unwrap();
+        assert_eq!(
+            f.layout(TrackRef::audio(0)),
+            vec![(0.0, 10.0), (11.0, 19.0)]
+        );
+        f.apply(|p| ripple_trim(p, seq, video, Edge::Head, d(-1.5), EditOptions::default()))
+            .unwrap();
+        assert_eq!(
+            f.layout(TrackRef::video(0)),
+            vec![(0.0, 10.0), (12.0, 21.5)]
+        );
+        assert_eq!(
+            f.layout(TrackRef::audio(0)),
+            vec![(0.0, 10.0), (11.0, 20.5)]
+        );
+    }
 
     #[test]
     fn trim_is_bounded_by_media_and_neighbors() {
