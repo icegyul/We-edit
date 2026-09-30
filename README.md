@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/openpremier.svg" width="180" alt="Logo de OpenPremier">
+  <img src="assets/branding/openpremier.svg" width="300" alt="Logo de OpenPremier">
 </p>
 
 <h1 align="center">OpenPremier</h1>
@@ -19,7 +19,7 @@ trabajo familiares para quienes vienen de otros editores no lineales. El proyect
 no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 <p align="center">
-  <img src="assets/branding/Windows.png" width="80" alt="Logowindows"> <img src="assets/branding/Linux.png" width="80" alt="Logolinux"> <img src="assets/branding/macOS.png" width="80" alt="Logomac">
+  <img src="assets/branding/Windows.png" width="100"  alt="Logowindows"> <img src="assets/branding/Linux.png" width="100" alt="Logolinux"> <img src="assets/branding/macOS.png" width="100" alt="Logomac">
 </p>
 ## Estado actual
 
