@@ -3,6 +3,7 @@
 
 use egui::{RichText, Sense, Ui, vec2};
 use op_core::catalog::{self, EffectDef, EffectKind};
+use op_core::presets::{self, PresetDef};
 
 use crate::app::{Drag, State};
 use crate::i18n::{t, tn};
@@ -40,6 +41,7 @@ pub fn show(s: &mut State, ui: &mut Ui) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
+            presets(s, ui, &q);
             for (kind, title) in GROUPS {
                 let defs: Vec<&'static EffectDef> = catalog::by_kind(kind)
                     .filter(|d| {
@@ -95,6 +97,93 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                     });
             }
         });
+}
+
+/// Animation presets, by category; they are applied like video effects.
+fn presets(s: &mut State, ui: &mut Ui, q: &str) {
+    let list: Vec<&'static PresetDef> = presets::PRESETS
+        .iter()
+        .filter(|p| {
+            q.is_empty()
+                || tn(p.name).to_lowercase().contains(q)
+                || p.name.to_lowercase().contains(q)
+        })
+        .collect();
+    if list.is_empty() {
+        return;
+    }
+    let id = ui.id().with("fx-presets");
+    egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, !q.is_empty())
+        .show_header(ui, |ui| {
+            icons::draw(
+                ui.painter(),
+                egui::Rect::from_min_size(ui.cursor().min, vec2(16.0, 16.0)),
+                Icon::Folder,
+                theme::TEXT_DIM,
+            );
+            ui.add_space(18.0);
+            ui.label(RichText::new(t("Presets")).color(theme::TEXT_BRIGHT));
+        })
+        .body(|ui| {
+            let mut cats: Vec<&str> = Vec::new();
+            for p in &list {
+                if !cats.contains(&p.category) {
+                    cats.push(p.category);
+                }
+            }
+            for cat in cats {
+                let cid = ui.id().with(("fx-preset-cat", cat));
+                egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    cid,
+                    !q.is_empty(),
+                )
+                .show_header(ui, |ui| {
+                    ui.label(RichText::new(tn(cat)).color(theme::TEXT));
+                })
+                .body(|ui| {
+                    for p in list.iter().filter(|p| p.category == cat) {
+                        preset_entry(s, ui, p);
+                    }
+                });
+            }
+        });
+}
+
+fn preset_entry(s: &mut State, ui: &mut Ui, p: &'static PresetDef) {
+    let (r, resp) =
+        ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click_and_drag());
+    if resp.hovered() {
+        ui.painter().rect_filled(r, 2.0, theme::RAISED);
+    }
+    icons::draw(
+        ui.painter(),
+        egui::Rect::from_min_size(r.min + vec2(2.0, 2.0), vec2(16.0, 16.0)),
+        Icon::Stopwatch,
+        theme::TEXT_DIM,
+    );
+    ui.painter().text(
+        r.min + vec2(22.0, 10.0),
+        egui::Align2::LEFT_CENTER,
+        tn(p.name),
+        egui::FontId::proportional(12.0),
+        theme::TEXT,
+    );
+    if resp.drag_started() {
+        s.drag = Some(Drag::Effect(p.id));
+    }
+    if resp.double_clicked() {
+        s.ed.apply_effect(p.id, None);
+    }
+    resp.on_hover_text(t(
+        "Drag onto a clip, or double-click to apply to the selected clips",
+    ))
+    .context_menu(|ui| {
+        if ui.button(t("Apply to Selected Clips")).clicked() {
+            s.ed.apply_effect(p.id, None);
+            ui.close();
+        }
+    });
 }
 
 fn entry(s: &mut State, ui: &mut Ui, d: &'static EffectDef) {

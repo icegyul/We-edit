@@ -29,6 +29,15 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-09-30">
+      <description>
+        <p>
+          New glow, glitch, shake, grain, film and VHS looks, zoom, spin, flash and light-leak
+          transitions, drag-and-drop animation presets, and better Premiere Pro project import:
+          unknown effects and transitions are replaced by the closest equivalent.
+        </p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-09-30">
       <description>
         <p>

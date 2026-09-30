@@ -154,6 +154,19 @@ mod tests {
     }
 
     #[test]
+    fn every_preset_is_translated() {
+        let table: HashMap<&str, &str> = es::ES.iter().copied().collect();
+        for p in op_core::presets::PRESETS {
+            assert!(table.contains_key(p.name), "untranslated preset {}", p.name);
+            assert!(
+                table.contains_key(p.category),
+                "untranslated {}",
+                p.category
+            );
+        }
+    }
+
+    #[test]
     fn formatting() {
         set(Lang::En);
         assert_eq!(tf("{} of {}", &[&1, &2]), "1 of 2");

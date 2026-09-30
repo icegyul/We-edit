@@ -321,3 +321,265 @@ fn fs_tr_flip(in: VOut) -> @location(0) vec4<f32> {
     let lit = vec4<f32>(c.rgb * shade, c.a);
     return lit + fill * (1.0 - c.a);
 }
+
+// ------------------------------------------------------------------ motion and light transitions
+
+fn mirror1(x: f32) -> f32 {
+    let m = abs(x) % 2.0;
+    return select(m, 2.0 - m, m > 1.0);
+}
+
+// Samples with mirrored edges, so zoomed-out or rotated images fill the frame.
+fn am(uv: vec2<f32>) -> vec4<f32> {
+    return textureSampleLevel(tex0, samp, vec2<f32>(mirror1(uv.x), mirror1(uv.y)), 0.0);
+}
+
+fn bm(uv: vec2<f32>) -> vec4<f32> {
+    return textureSampleLevel(tex1, samp, vec2<f32>(mirror1(uv.x), mirror1(uv.y)), 0.0);
+}
+
+fn pick(first: bool, uv: vec2<f32>) -> vec4<f32> {
+    if (first) {
+        return am(uv);
+    }
+    return bm(uv);
+}
+
+fn ease_in3(t: f32) -> f32 {
+    return t * t * t;
+}
+
+fn ease_out3(t: f32) -> f32 {
+    let r = 1.0 - t;
+    return 1.0 - r * r * r;
+}
+
+fn peak(t: f32) -> f32 {
+    return 1.0 - abs(t - 0.5) * 2.0;
+}
+
+// Exact integer hash of a lattice point: float hashes can differ between neighbouring cells on
+// some GPUs and break the continuity of value noise.
+fn lhash(i: vec2<f32>) -> f32 {
+    let x = bitcast<u32>(i32(i.x));
+    let y = bitcast<u32>(i32(i.y));
+    var h = x * 1597334677u ^ y * 3812015801u;
+    h = h * 747796405u + 2891336453u;
+    h = ((h >> ((h >> 28u) + 4u)) ^ h) * 277803737u;
+    h = (h >> 22u) ^ h;
+    return f32(h) * (1.0 / 4294967295.0);
+}
+
+fn tnoise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let w = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(lhash(i), lhash(i + vec2<f32>(1.0, 0.0)), w.x),
+        mix(lhash(i + vec2<f32>(0.0, 1.0)), lhash(i + vec2<f32>(1.0, 1.0)), w.x),
+        w.y,
+    );
+}
+
+fn tfbm(p: vec2<f32>) -> f32 {
+    var sum = 0.0;
+    var amp = 0.5;
+    var q = p;
+    for (var i = 0; i < 5; i = i + 1) {
+        sum = sum + amp * tnoise(q);
+        q = q * 2.03 + vec2<f32>(17.1, 9.2);
+        amp = amp * 0.5;
+    }
+    return sum;
+}
+
+// Zoom through the cut. prm(0) mode (0 zoom in, 1 zoom out), prm(1) zoom factor,
+// prm(2) motion blur 0..1, prm(3..4) center
+@fragment
+fn fs_tr_zoom_motion(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let z = max(prm(1), 1.01);
+    let c = prm2(3);
+    let first = t < 0.5;
+    var s: f32;
+    if (prm(0) < 0.5) {
+        if (first) {
+            s = mix(1.0, z, ease_in3(t * 2.0));
+        } else {
+            s = mix(1.0 / z, 1.0, ease_out3(t * 2.0 - 1.0));
+        }
+    } else {
+        if (first) {
+            s = mix(1.0, 1.0 / z, ease_in3(t * 2.0));
+        } else {
+            s = mix(z, 1.0, ease_out3(t * 2.0 - 1.0));
+        }
+    }
+    let k = peak(t);
+    let bs = prm(2) * k * k * 0.35;
+    var acc = vec4<f32>(0.0);
+    let n = 24.0;
+    for (var i = 0.0; i < n; i = i + 1.0) {
+        let f = i / (n - 1.0) - 0.5;
+        let si = s * (1.0 + f * bs);
+        acc = acc + pick(first, c + (in.uv - c) / si);
+    }
+    return acc / n;
+}
+
+// prm(0) rotations, prm(1) direction (0 clockwise), prm(2) motion blur, prm(3) zoom at the cut
+@fragment
+fn fs_tr_spin(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let first = t < 0.5;
+    let total = prm(0) * PI * select(1.0, -1.0, prm(1) > 0.5);
+    var ang: f32;
+    if (first) {
+        ang = total * ease_in3(t * 2.0);
+    } else {
+        ang = -total * (1.0 - ease_out3(t * 2.0 - 1.0));
+    }
+    let k = peak(t);
+    let zoom = 1.0 + (max(prm(3), 1.0) - 1.0) * k;
+    let bs = prm(2) * k * k * 0.6;
+    let a = u.out_size.x / max(u.out_size.y, 1.0);
+    let p = (in.uv - vec2<f32>(0.5)) * vec2<f32>(a, 1.0) / zoom;
+    var acc = vec4<f32>(0.0);
+    let n = 24.0;
+    for (var i = 0.0; i < n; i = i + 1.0) {
+        let r = ang + (i / (n - 1.0) - 0.5) * bs;
+        let cs = cos(r);
+        let sn = sin(r);
+        let q = vec2<f32>(p.x * cs - p.y * sn, p.x * sn + p.y * cs);
+        acc = acc + pick(first, vec2<f32>(0.5) + q / vec2<f32>(a, 1.0));
+    }
+    return acc / n;
+}
+
+// prm(0) direction (0 horizontal, 1 vertical), prm(1) stretch factor, prm(2) motion blur
+@fragment
+fn fs_tr_stretch(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let first = t < 0.5;
+    let z = max(prm(1), 1.01);
+    var s: f32;
+    if (first) {
+        s = mix(1.0, z, ease_in3(t * 2.0));
+    } else {
+        s = mix(z, 1.0, ease_out3(t * 2.0 - 1.0));
+    }
+    let k = peak(t);
+    let bs = prm(2) * k * 0.5;
+    let axis = select(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0), prm(0) > 0.5);
+    var acc = vec4<f32>(0.0);
+    let n = 16.0;
+    for (var i = 0.0; i < n; i = i + 1.0) {
+        let si = s * (1.0 + (i / (n - 1.0) - 0.5) * bs);
+        let scale = mix(vec2<f32>(1.0), vec2<f32>(si), axis);
+        acc = acc + pick(first, vec2<f32>(0.5) + (in.uv - vec2<f32>(0.5)) / scale);
+    }
+    return acc / n;
+}
+
+// Push with easing and motion blur. prm(0) direction, prm(1) motion blur
+@fragment
+fn fs_tr_smooth_slide(in: VOut) -> @location(0) vec4<f32> {
+    let dir = direction(i32(prm(0) + 0.5));
+    let t = u.progress;
+    let e = select(4.0 * t * t * t, 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0, t >= 0.5);
+    let speed = select(12.0 * t * t, 12.0 * (1.0 - t) * (1.0 - t), t >= 0.5);
+    let blur = prm(1) * speed * 0.03;
+    var acc = vec4<f32>(0.0);
+    let n = 16.0;
+    for (var i = 0.0; i < n; i = i + 1.0) {
+        let off = dir * (e + (i / (n - 1.0) - 0.5) * blur);
+        acc = acc + ta(in.uv - off) + tb(in.uv - off + dir);
+    }
+    return acc / n;
+}
+
+// B appears first where A is dark. prm(0) softness 0..1, prm(1) invert
+@fragment
+fn fs_tr_luma_fade(in: VOut) -> @location(0) vec4<f32> {
+    let a = ta(in.uv);
+    let b = tb(in.uv);
+    var v = luma(unpremul(a).rgb);
+    if (prm(1) > 0.5) {
+        v = 1.0 - v;
+    }
+    let s = max(prm(0), 0.01);
+    let x = u.progress * (1.0 + 2.0 * s) - s;
+    return mix(a, b, smoothstep(v - s, v + s, x));
+}
+
+// prm(0..2) flash color, prm(3) intensity
+@fragment
+fn fs_tr_flash(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let base = select(tb(in.uv), ta(in.uv), t < 0.5);
+    let w = pow(peak(t), 3.0) * prm(3);
+    let lit = vec4<f32>(base.rgb * (1.0 + w * 2.0), base.a);
+    return mix(lit, vec4<f32>(prm3(0), 1.0), clamp(w, 0.0, 1.0));
+}
+
+// prm(0) mode (0 light leak, 1 film burn), prm(1..3) color, prm(4) intensity
+@fragment
+fn fs_tr_light(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let base = mix(ta(in.uv), tb(in.uv), smoothstep(0.35, 0.65, t));
+    let k = pow(sin(t * PI), 1.5) * prm(4);
+    let asp = u.out_size.x / max(u.out_size.y, 1.0);
+    let p = (in.uv - vec2<f32>(0.5)) * vec2<f32>(asp, 1.0);
+    var light: vec3<f32>;
+    if (prm(0) > 0.5) {
+        let n = tfbm(p * 3.0 + vec2<f32>(t * 2.0, -t * 1.3));
+        let m = smoothstep(1.0 - k * 0.8, 1.0 - k * 0.8 + 0.3, n + (1.0 - length(p)) * 0.3);
+        light = mix(prm3(1), vec3<f32>(1.0, 0.95, 0.8), m * m) * m * 1.5;
+    } else {
+        let n = tfbm(p * 1.4 + vec2<f32>(t * 1.5, t * 0.7));
+        light = prm3(1) * smoothstep(0.35, 0.8, n) * k * 1.6
+            + vec3<f32>(1.0, 0.9, 0.7) * smoothstep(0.6, 1.0, n) * k;
+    }
+    let s = unpremul(base);
+    let rgb = vec3<f32>(1.0) - (vec3<f32>(1.0) - clamp(s.rgb, vec3<f32>(0.0), vec3<f32>(1.0)))
+        * (vec3<f32>(1.0) - clamp(light, vec3<f32>(0.0), vec3<f32>(1.0)));
+    let alpha = max(s.a, clamp(luma(light), 0.0, 1.0));
+    return vec4<f32>(rgb * alpha, alpha);
+}
+
+// prm(0) intensity, prm(1) block size px, prm(2) color shift px
+@fragment
+fn fs_tr_glitch(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let k = pow(peak(t), 2.0) * prm(0);
+    let tick = floor(t * 24.0);
+    let px = pixel(in.uv);
+    let bs = max(prm(1), 4.0);
+    let row = floor(px.y / (bs * 0.5));
+    var uv = in.uv;
+    var first = t < 0.5;
+    let r1 = hash21(vec2<f32>(row, tick));
+    if (r1 < k * 0.6) {
+        uv.x = uv.x + (hash21(vec2<f32>(row * 1.7, tick * 3.1)) - 0.5) * k * 0.25;
+        if (hash21(vec2<f32>(row, tick + 7.0)) < 0.5) {
+            first = !first;
+        }
+    }
+    let cs = vec2<f32>(prm(2) * k, 0.0) / u.out_size;
+    let r = pick(first, uv + cs);
+    let g = pick(first, uv);
+    let b = pick(first, uv - cs);
+    return vec4<f32>(r.r, g.g, b.b, max(r.a, max(g.a, b.a)));
+}
+
+// prm(0) separation px at the peak
+@fragment
+fn fs_tr_chroma(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let d = vec2<f32>(prm(0) * sin(t * PI), 0.0) / u.out_size;
+    let m = smoothstep(0.4, 0.6, t);
+    let r = mix(am(in.uv + d), bm(in.uv + d), m);
+    let g = mix(am(in.uv), bm(in.uv), m);
+    let b = mix(am(in.uv - d), bm(in.uv - d), m);
+    return vec4<f32>(r.r, g.g, b.b, max(r.a, max(g.a, b.a)));
+}

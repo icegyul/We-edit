@@ -1682,6 +1682,7 @@ impl State {
                 }
                 Drag::Effect(id) => op_core::catalog::find(id)
                     .map(|d| tn(d.name))
+                    .or_else(|| op_core::presets::find(id).map(|p| tn(p.name)))
                     .unwrap_or_default(),
             };
             if let Some(pos) = ctx.pointer_hover_pos() {

@@ -717,7 +717,12 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                             (t("Sequences"), r.sequences),
                             (t("Clips"), r.clips),
                             (t("Markers"), r.markers),
+                            (t("Transitions"), r.transitions),
                             (t("Effects imported"), r.components_mapped),
+                            (
+                                t("Effects replaced by an equivalent"),
+                                r.components_equivalent,
+                            ),
                             (t("Effects kept but not rendered"), r.components_opaque),
                         ] {
                             ui.label(k);

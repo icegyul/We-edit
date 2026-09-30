@@ -2152,13 +2152,18 @@ fn external_drop(s: &mut State, ui: &Ui, g: &Geo, sid: SequenceId, painter: &egu
             }
         }
         Drag::Effect(effect) => {
-            let Some(def) = catalog::find(effect) else {
-                return;
+            // presets drop on clips like video effects
+            let kind = match catalog::find(effect) {
+                Some(d) => d.kind,
+                None if op_core::presets::find(effect).is_some() => {
+                    catalog::EffectKind::VideoEffect
+                }
+                None => return,
             };
             let h = hit(&seq, g, p);
-            if def.kind.is_transition() {
+            if kind.is_transition() {
                 let Some(row) = g.row_at(p.y) else { return };
-                if (row.r.kind == TrackKind::Video) != def.kind.is_video() {
+                if (row.r.kind == TrackKind::Video) != kind.is_video() {
                     return;
                 }
                 let Some(cut) = tl::nearest_edit(&s.ed.project, sid, row.r, tt) else {
@@ -2173,7 +2178,7 @@ fn external_drop(s: &mut State, ui: &Ui, g: &Geo, sid: SequenceId, painter: &egu
                 } else {
                     Alignment::StartAtCut
                 };
-                let dur = if def.kind.is_video() {
+                let dur = if kind.is_video() {
                     s.ed.project.settings.video_transition_duration
                 } else {
                     s.ed.project.settings.audio_transition_duration
@@ -2197,7 +2202,7 @@ fn external_drop(s: &mut State, ui: &Ui, g: &Geo, sid: SequenceId, painter: &egu
                     });
                 }
             } else if let Hit::Clip { id, track, .. } = h {
-                if (track.kind == TrackKind::Video) != def.kind.is_video() {
+                if (track.kind == TrackKind::Video) != kind.is_video() {
                     return;
                 }
                 if let Some(c) = seq.clip(id)

@@ -377,7 +377,8 @@ impl Renderer {
                         Some(l) => self.placed(req, seq, l, w, h, depth),
                         None => self.clear(w, h),
                     };
-                    let mixed = self.transition(effect, *progress as f32, params, &a, &b, w, h);
+                    let mixed =
+                        self.transition(effect, *progress as f32, params, &a, &b, w, h, req.scale);
                     self.pool.put(a);
                     self.pool.put(b);
                     acc = self.composite(acc, &mixed, IDENTITY, 1.0, 0, linear);

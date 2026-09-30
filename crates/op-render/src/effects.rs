@@ -405,8 +405,251 @@ impl Renderer {
                 let text = timecode_text(fx, req, layer);
                 self.timecode_overlay(fx, img, s, text, seq_size)
             }
+            "op.video.glow" | "op.video.radiant_glow" => self.glow(fx, img, s),
+            "op.video.rgb_split" => self.single(
+                "fs_rgb_split",
+                img,
+                P::new()
+                    .f(fx.f32("amount") * s)
+                    .f(fx.f32("angle"))
+                    .f(fx.choice("mode") as f32),
+            ),
+            "op.video.camera_shake" => {
+                let m = shake_matrix(fx, clip_time as f64, s as f64, img.width, img.height);
+                self.single("fs_affine_mirror", img, P::new().all(&m))
+            }
+            "op.video.glitch" => self.single(
+                "fs_glitch",
+                img,
+                P::new()
+                    .f(fx.f32("intensity") / 100.0)
+                    .f(fx.f32("block") * s)
+                    .f(fx.f32("shift") * s)
+                    .f(fx.f32("scan_lines") / 100.0)
+                    .f(fx.f32("speed"))
+                    .f(fx.f32("seed"))
+                    .time(clip_time),
+            ),
+            "op.video.film_grain" => {
+                let frame = if fx.bool("animated") {
+                    (clip_time * 24.0).floor()
+                } else {
+                    0.0
+                };
+                self.single(
+                    "fs_film_grain",
+                    img,
+                    P::new()
+                        .f(fx.f32("amount") / 100.0)
+                        .f((fx.f32("size") * s).max(0.5))
+                        .b(fx.bool("color"))
+                        .f(frame % 997.0),
+                )
+            }
+            "op.video.vignette" => self.single(
+                "fs_vignette",
+                img,
+                P::new()
+                    .f(fx.f32("amount") / 100.0)
+                    .f(fx.f32("midpoint") / 100.0)
+                    .f(fx.f32("roundness") / 100.0)
+                    .f(fx.f32("feather") / 100.0)
+                    .rgb(fx.color("color")),
+            ),
+            "op.video.letterbox" => {
+                const RATIOS: [f32; 8] = [2.39, 2.35, 2.0, 1.85, 4.0 / 3.0, 1.0, 0.8, 9.0 / 16.0];
+                let ratio = RATIOS
+                    .get(fx.choice("aspect") as usize)
+                    .copied()
+                    .unwrap_or_else(|| fx.f32("custom"));
+                self.single(
+                    "fs_letterbox",
+                    img,
+                    P::new()
+                        .f(ratio)
+                        .rgb(fx.color("color"))
+                        .f(fx.f32("opacity") / 100.0),
+                )
+            }
+            "op.video.lens_distortion" => self.single(
+                "fs_lens",
+                img,
+                P::new()
+                    .f(fx.f32("curvature") / 100.0)
+                    .v2(fx.point("center"))
+                    .f(fx.f32("zoom") / 100.0),
+            ),
+            "op.video.radial_blur" => self.single(
+                "fs_radial_blur",
+                img,
+                P::new()
+                    .f(fx.f32("amount"))
+                    .v2(fx.point("center"))
+                    .f(fx.choice("type") as f32),
+            ),
+            "op.video.motion_tile" => self.single(
+                "fs_motion_tile",
+                img,
+                P::new()
+                    .v2(fx.point("tile_center"))
+                    .f(fx.f32("tile_width") / 100.0)
+                    .f(fx.f32("tile_height") / 100.0)
+                    .f(fx.f32("output_width") / 100.0)
+                    .f(fx.f32("output_height") / 100.0)
+                    .b(fx.bool("mirror"))
+                    .f(fx.f32("phase"))
+                    .b(fx.bool("horizontal_shift")),
+            ),
+            "op.video.light_leaks" => self.single(
+                "fs_light_leaks",
+                img,
+                P::new()
+                    .f(fx.f32("intensity") / 100.0)
+                    .rgb(fx.color("color1"))
+                    .rgb(fx.color("color2"))
+                    .f(fx.f32("scale") / 100.0)
+                    .f(fx.f32("speed"))
+                    .f(fx.f32("seed"))
+                    .f(fx.choice("blend") as f32)
+                    .time(clip_time),
+            ),
+            "op.video.old_film" => self.single(
+                "fs_old_film",
+                img,
+                P::new()
+                    .f(fx.f32("sepia") / 100.0)
+                    .f(fx.f32("grain") / 100.0)
+                    .f(fx.f32("scratches") / 100.0)
+                    .f(fx.f32("dust") / 100.0)
+                    .f(fx.f32("flicker") / 100.0)
+                    .f(fx.f32("vignette") / 100.0)
+                    .f(fx.f32("seed"))
+                    .time(clip_time),
+            ),
+            "op.video.vhs" => self.single(
+                "fs_vhs",
+                img,
+                P::new()
+                    .f(fx.f32("chroma") * s)
+                    .f(fx.f32("noise") / 100.0)
+                    .f(fx.f32("tracking") / 100.0)
+                    .f(fx.f32("jitter") * s)
+                    .f(fx.f32("saturation") / 100.0)
+                    .f(fx.f32("seed"))
+                    .time(clip_time),
+            ),
+            "op.video.strobe" => self.single(
+                "fs_strobe",
+                img,
+                P::new()
+                    .rgb(fx.color("color"))
+                    .f(fx.f32("frequency"))
+                    .f(fx.f32("duration") / 100.0)
+                    .f(fx.f32("blend") / 100.0)
+                    .time(clip_time),
+            ),
+            "op.video.kaleidoscope" => self.single(
+                "fs_kaleidoscope",
+                img,
+                P::new()
+                    .f(fx.f32("segments"))
+                    .f(fx.f32("angle"))
+                    .v2(fx.point("center")),
+            ),
             _ => img,
         }
+    }
+
+    /// Glow: the bright part of the layer, blurred, added back as light. Radiant Glow sums
+    /// blurs of six octaves (computed on a half-resolution pyramid) for a wide, natural falloff.
+    fn glow(&mut self, fx: &EvalComponent, img: Tex, s: f32) -> Tex {
+        let radiant = fx.effect == "op.video.radiant_glow";
+        let (w, h) = (img.width, img.height);
+        let bright = self.work(w, h);
+        let knee = if radiant { 0.1 } else { 0.05 };
+        self.pass(
+            "fs_bright_pass",
+            &[&img.view],
+            P::new().f(fx.f32("threshold") / 100.0).f(knee),
+            img.size(),
+            &bright,
+        );
+        let radius = fx.f32("radius") * s;
+        let glow = if radiant {
+            self.glow_pyramid(bright, radius, fx.f32("falloff") / 100.0)
+        } else {
+            self.blur(bright, radius / 2.0, false, true, true)
+        };
+        let p = if radiant {
+            P::new()
+                .f(1.5 * 2f32.powf(fx.f32("exposure")))
+                .rgb(fx.color("tint"))
+                .f(fx.f32("tint_amount") / 100.0)
+                .f(fx.f32("aberration") / 100.0 * 0.05)
+                .b(fx.bool("glow_only"))
+        } else {
+            P::new()
+                .f(fx.f32("intensity") * 1.5)
+                .rgb(fx.color("color"))
+                .f(if fx.choice("colors") == 1 { 1.0 } else { 0.0 })
+                .f(0.0)
+                .b(fx.bool("glow_only"))
+        };
+        let out = self.work(w, h);
+        self.pass(
+            "fs_glow_composite",
+            &[&img.view, &glow.view],
+            p,
+            img.size(),
+            &out,
+        );
+        self.put(img);
+        self.put(glow);
+        out
+    }
+
+    fn glow_pyramid(&mut self, bright: Tex, radius: f32, falloff: f32) -> Tex {
+        const LEVELS: usize = 6;
+        // every level is blurred by the same number of its own pixels, so level i covers a
+        // radius of about radius * 2^(i - 5) in full-resolution pixels
+        let sigma = (radius / 32.0).max(0.5);
+        let mut blurred = Vec::with_capacity(LEVELS);
+        let mut cur = bright;
+        for i in 0..LEVELS {
+            let next = (i + 1 < LEVELS).then(|| {
+                let d = self.work((cur.width / 2).max(1), (cur.height / 2).max(1));
+                self.pass("fs_downsample", &[&cur.view], P::new(), cur.size(), &d);
+                d
+            });
+            blurred.push(self.blur(cur, sigma, false, true, true));
+            match next {
+                Some(n) => cur = n,
+                None => break,
+            }
+        }
+        // weights: a tight falloff keeps the small octaves strong
+        let raw: Vec<f32> = (0..blurred.len())
+            .map(|i| 0.5f32.powf((LEVELS - 1 - i) as f32 * (1.0 - falloff)))
+            .collect();
+        let total: f32 = raw.iter().sum();
+        let mut acc = blurred.pop().unwrap();
+        let mut acc_weight = raw[blurred.len()] / total;
+        while let Some(level) = blurred.pop() {
+            let wi = raw[blurred.len()] / total;
+            let out = self.work(level.width, level.height);
+            self.pass(
+                "fs_add_up",
+                &[&acc.view, &level.view],
+                P::new().f(acc_weight).f(wi),
+                level.size(),
+                &out,
+            );
+            self.put(acc);
+            self.put(level);
+            acc = out;
+            acc_weight = 1.0;
+        }
+        acc
     }
 
     fn lumetri(&mut self, fx: &EvalComponent, img: Tex, s: f32) -> Tex {
@@ -532,6 +775,35 @@ fn timecode_text(fx: &EvalComponent, req: &Request, layer: &ClipLayer) -> String
         f.display = TimeDisplay::Frames;
     }
     f.format(d)
+}
+
+/// Smooth pseudo-random motion in -1..1 (a few detuned sines), the same for every render.
+fn shake_noise(t: f64, k: f64) -> f64 {
+    let tau = std::f64::consts::TAU;
+    (t * tau + k).sin() * 0.5
+        + (t * tau * 2.13 + k * 2.1 + 1.3).sin() * 0.3
+        + (t * tau * 3.71 + k * 3.3 + 0.7).sin() * 0.2
+}
+
+/// Inverse matrix (output pixels -> input pixels) of Camera Shake at a clip time.
+fn shake_matrix(fx: &EvalComponent, t: f64, scale: f64, w: u32, h: u32) -> [f32; 6] {
+    let (w, h) = (w as f64, h as f64);
+    let seed = fx.f64("seed") * 7.31;
+    let tt = t * fx.f64("frequency");
+    let amp = fx.f64("amplitude") * scale;
+    let (dx, dy) = (
+        shake_noise(tt, seed) * amp,
+        shake_noise(tt, seed + 1.7) * amp,
+    );
+    let rot = shake_noise(tt, seed + 3.1) * fx.f64("rotation").to_radians();
+    let zoom = (fx.f64("zoom") / 100.0).max(0.01);
+    // p_in = c + R(-rot) (p_out - c - d) / zoom
+    let (sn, cs) = (-rot).sin_cos();
+    let (a00, a01, a10, a11) = (cs / zoom, -sn / zoom, sn / zoom, cs / zoom);
+    let (cx, cy) = (w / 2.0 + dx, h / 2.0 + dy);
+    let tx = w / 2.0 - (a00 * cx + a01 * cy);
+    let ty = h / 2.0 - (a10 * cx + a11 * cy);
+    [a00, a01, tx, a10, a11, ty].map(|v| v as f32)
 }
 
 /// Inverse matrix of the Transform effect (output pixels -> input pixels).

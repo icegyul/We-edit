@@ -2,6 +2,25 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.3.0 - 2026-09-30
+
+### Added
+
+- Sixteen new video effects of our own: Glow, Radiant Glow (a wide, soft multi-octave glow), RGB Split, Camera Shake, Digital Glitch, Film Grain, Vignette, Cinematic Bars, Lens Distortion, Radial Blur, Motion Tile, Light Leaks, Old Film, VHS Tape, Strobe Light and Kaleidoscope.
+- Twelve new video transitions: Zoom In, Zoom Out, Spin, Stretch, Smooth Slide, Blur Dissolve, Luma Fade, Flash, Light Leak, Film Burn, Glitch and Chromatic Split. The motion transitions mirror the image at its edges, so zooms and spins never show empty borders.
+- Animation presets in the Effects panel (Presets): slow zooms, punch and pop entrances and exits, fades, slides from each side, spins, blur in/out, impact shake, handheld camera, glitch burst and ready-made looks. They are dragged onto a clip or applied with a double-click like any effect, and their keyframes adapt to the clip length.
+- Effect Controls has a divider between the parameters and the keyframe timeline that can be dragged and is remembered, plus a button to show or hide the timeline.
+
+### Changed
+
+- Importing Premiere Pro projects (`.prproj`) and XML now recognizes effects and transitions it does not implement under their own identity and uses our closest equivalent (for example popular glow, blur, shake, glitch and zoom plug-ins), instead of leaving them unrendered. The import report counts these replacements and lists each one.
+- `.prproj` import reads Opacity, maps transition items to transitions at the clip edges they cover, and reads Fast Blur settings into Gaussian Blur.
+- XML import maps filters by name with their parameter values and keyframes, including Basic Motion scale and rotation and Opacity fades.
+
+### Fixed
+
+- Long effect and parameter names in Effect Controls are shortened (full name on hover) instead of running over the values and buttons, in effect headers and group titles too.
+
 ## 0.2.0 - 2026-09-30
 
 ### Added

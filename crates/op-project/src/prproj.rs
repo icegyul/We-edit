@@ -46,7 +46,10 @@ pub struct ImportReport {
     pub clips: usize,
     pub markers: usize,
     pub components_mapped: usize,
+    /// Effects of other programs replaced by an equivalent of ours.
+    pub components_equivalent: usize,
     pub components_opaque: usize,
+    pub transitions: usize,
     /// Reason -> count of things not imported.
     pub skipped: BTreeMap<String, usize>,
     /// Approximations and diagnostics.
@@ -646,14 +649,7 @@ impl<'a> Importer<'a> {
                 self.project.ids = ids;
             }
         }
-        if let Some(items) = self.doc.path(tnode, "ClipTrack/TransitionItems/TrackItems")
-            && self.doc.children(items).next().is_some()
-        {
-            let n = self.doc.children(items).count();
-            for _ in 0..n {
-                self.report.skip("transitions (serialization not mapped)");
-            }
-        }
+        let transitions = self.transition_items(tnode);
         let Some(items) = self.doc.path(tnode, "ClipTrack/ClipItems/TrackItems") else {
             return t;
         };
@@ -671,7 +667,166 @@ impl<'a> Importer<'a> {
                 self.report.clips += 1;
             }
         }
+        self.attach_transitions(&mut t, kind, transitions);
         t
+    }
+
+    /// (start, end, identity) of the transition items of a track. Their serialization is not
+    /// documented (docs/prproj-spec.md); times and the component identity are looked up the way
+    /// clip items store them, and items without them are skipped.
+    fn transition_items(&mut self, tnode: usize) -> Vec<(i64, i64, Option<String>)> {
+        let Some(items) = self.doc.path(tnode, "ClipTrack/TransitionItems/TrackItems") else {
+            return vec![];
+        };
+        let refs: Vec<usize> = self.doc.children(items).collect();
+        let mut out = Vec::new();
+        for r in refs {
+            let node = self.deref(r).unwrap_or(r);
+            let Some(ti) = self.find_desc(node, "TrackItem") else {
+                self.report.skip("transitions without times");
+                continue;
+            };
+            let num =
+                |s: &Self, name: &str| s.text(ti, name).and_then(|t| t.trim().parse::<i64>().ok());
+            let (Some(start), Some(end)) = (num(self, "Start"), num(self, "End")) else {
+                self.report.skip("transitions without times");
+                continue;
+            };
+            if start < 0 || end <= start {
+                self.report.skip("transitions without times");
+                continue;
+            }
+            let identity = self.find_identity(node, 4);
+            out.push((start, end, identity));
+        }
+        out
+    }
+
+    /// Adds transitions at the clip edges they cover, as the closest effect of ours.
+    fn attach_transitions(
+        &mut self,
+        t: &mut Track,
+        kind: TrackKind,
+        items: Vec<(i64, i64, Option<String>)>,
+    ) {
+        let video = kind == TrackKind::Video;
+        for (start, end, identity) in items {
+            let s = SeqTime::from_ticks(to_ticks(start).0);
+            let e = SeqTime::from_ticks(to_ticks(end).0);
+            // the edit point inside the transition: an edge shared by two clips, else any edge
+            let from = t.clips.iter().find(|c| c.end() >= s && c.end() <= e);
+            let to = t.clips.iter().find(|c| c.start >= s && c.start <= e);
+            let cut = match (from, to) {
+                (Some(a), Some(b)) if a.end() == b.start => a.end(),
+                (Some(a), None) => a.end(),
+                (None, Some(b)) => b.start,
+                (Some(a), Some(_)) => a.end(),
+                (None, None) => {
+                    self.report.skip("transitions away from clip edges");
+                    continue;
+                }
+            };
+            let from = t.clips.iter().find(|c| c.end() == cut).map(|c| c.id);
+            let to = t.clips.iter().find(|c| c.start == cut).map(|c| c.id);
+            if t.transitions.iter().any(|x| x.cut == cut) {
+                continue;
+            }
+            let effect = match identity
+                .as_deref()
+                .and_then(|n| catalog::resolve_foreign(n, true, video))
+            {
+                Some((d, how)) => {
+                    if how == catalog::ForeignMatch::Equivalent {
+                        self.report.warn(format!(
+                            "transition {} imported as {}",
+                            identity.as_deref().unwrap_or_default(),
+                            d.name
+                        ));
+                    }
+                    d.id
+                }
+                None => {
+                    self.report.warn(format!(
+                        "transition {} imported as a {}",
+                        identity.as_deref().unwrap_or("of an unknown kind"),
+                        if video {
+                            "Cross Dissolve"
+                        } else {
+                            "Constant Power"
+                        }
+                    ));
+                    if video {
+                        catalog::CROSS_DISSOLVE
+                    } else {
+                        catalog::CONSTANT_POWER
+                    }
+                }
+            };
+            t.transitions.push(Transition {
+                id: self.project.ids.transition(),
+                effect: effect.into(),
+                cut,
+                duration: e - s,
+                alignment: Alignment::Custom(cut - s),
+                from,
+                to,
+                params: vec![],
+            });
+            self.report.transitions += 1;
+        }
+    }
+
+    /// The first descendant element called `name` (references are not followed).
+    fn find_desc(&self, n: usize, name: &str) -> Option<usize> {
+        let mut stack: Vec<usize> = self.doc.children(n).collect();
+        let mut seen = 0;
+        while let Some(c) = stack.pop() {
+            seen += 1;
+            if seen > 5000 {
+                return None;
+            }
+            if self.doc.name(c) == name {
+                return Some(c);
+            }
+            stack.extend(self.doc.children(c));
+        }
+        None
+    }
+
+    /// A component identity (`MatchName`, or a display name) in the subtree of `n` or in the
+    /// objects it references, up to `depth` references away.
+    fn find_identity(&mut self, n: usize, depth: usize) -> Option<String> {
+        for tag in ["MatchName", "DisplayName"] {
+            if let Some(m) = self.find_desc(n, tag) {
+                let t = self.doc.text(m).trim();
+                if !t.is_empty() {
+                    return Some(t.to_string());
+                }
+            }
+        }
+        if depth == 0 {
+            return None;
+        }
+        let mut refs = Vec::new();
+        let mut stack: Vec<usize> = self.doc.children(n).collect();
+        while let Some(c) = stack.pop() {
+            if refs.len() > 32 {
+                break;
+            }
+            if self.doc.attr(c, "ObjectRef").is_some() || self.doc.attr(c, "ObjectURef").is_some() {
+                refs.push(c);
+            } else {
+                stack.extend(self.doc.children(c));
+            }
+        }
+        for r in refs {
+            if let Some(target) = self.deref(r)
+                && let Some(found) = self.find_identity(target, depth - 1)
+            {
+                return Some(found);
+            }
+        }
+        None
     }
 
     fn clip(&mut self, node: usize, kind: TrackKind, sid: SequenceId) -> Option<Clip> {
@@ -828,6 +983,35 @@ impl<'a> Importer<'a> {
                             .warn("Lumetri Color basic values were imported; the look may differ");
                     }
                 }
+                Some(def) if def.id == catalog::OPACITY && clip.kind == TrackKind::Video => {
+                    if let Some(o) = clip.component_mut(catalog::OPACITY) {
+                        let mapped = apply_params(o, &params, OPACITY_MAP);
+                        o.enabled = !bypass;
+                        if mapped > 0 {
+                            self.report.components_mapped += 1;
+                        }
+                    }
+                }
+                _ if let Some((def, map)) = self.equivalent(comp, &match_name, clip.kind) => {
+                    let mut ids = self.project.ids.clone();
+                    let mut c = Component::new(def, &mut ids);
+                    self.project.ids = ids;
+                    if let Some(map) = map {
+                        apply_params(&mut c, &params, map);
+                    }
+                    c.enabled = !bypass;
+                    clip.components.push(c);
+                    self.report.components_equivalent += 1;
+                    self.report.warn(format!(
+                        "effect {match_name} imported as {}{}",
+                        def.name,
+                        if map.is_some() {
+                            ""
+                        } else {
+                            " (with its default settings)"
+                        }
+                    ));
+                }
                 _ => {
                     let raw = self.doc.subtree_xml(comp, MAX_OPAQUE);
                     let id = self.project.ids.component();
@@ -844,6 +1028,25 @@ impl<'a> Importer<'a> {
                 }
             }
         }
+    }
+
+    /// Our equivalent of a component we do not implement under its own identity, and the
+    /// parameter layout to read when it is known.
+    fn equivalent(
+        &mut self,
+        comp: usize,
+        match_name: &str,
+        kind: TrackKind,
+    ) -> Option<(&'static catalog::EffectDef, Option<ParamMap>)> {
+        let video = kind == TrackKind::Video;
+        let found = catalog::resolve_foreign(match_name, false, video).or_else(|| {
+            // third-party effects are often recognizable only by their display name
+            let name = self
+                .text(comp, "Component/DisplayName")
+                .or_else(|| self.text(comp, "DisplayName"))?;
+            catalog::resolve_foreign(name, false, video)
+        })?;
+        Some((found.0, foreign_param_map(match_name)))
     }
 
     /// (ParameterID, animated, values) of a component's parameters.
@@ -1029,6 +1232,19 @@ const LUMETRI_MAP: ParamMap = &[
 ];
 
 const MOSAIC_MAP: ParamMap = &[(1, "horizontal"), (2, "vertical")];
+/// Opacity's first parameter (docs/effects-catalog.md); the blend mode is not mapped yet.
+const OPACITY_MAP: ParamMap = &[(1, "opacity")];
+/// Fast Blur's observed layout (docs/evidence/generated/premiere_effect_layouts.md), read into
+/// Gaussian Blur.
+const FAST_BLUR_MAP: ParamMap = &[(1, "blurriness"), (2, "dimensions"), (3, "repeat_edge")];
+
+/// Parameter layouts of foreign components imported as an equivalent effect.
+fn foreign_param_map(match_name: &str) -> Option<ParamMap> {
+    match match_name {
+        "AE.ADBE Fast Blur" => Some(FAST_BLUR_MAP),
+        _ => None,
+    }
+}
 const TWIRL_MAP: ParamMap = &[(1, "angle"), (2, "radius"), (3, "center")];
 const SOLARIZE_MAP: ParamMap = &[(1, "threshold")];
 
@@ -1278,6 +1494,40 @@ mod tests {
             clip.source,
             ClipSource::Asset { item: Some(_), .. }
         ));
+    }
+
+    /// Transition items are mapped by the component identity they reference and attached to
+    /// the clip edge they cover; unimplemented effects become our equivalent. The transition
+    /// layout here is synthetic: no fixture with populated transitions exists yet.
+    #[test]
+    fn transitions_and_equivalent_effects() {
+        let xml = SYNTHETIC
+            .replace(
+                "<ClipItems>",
+                r#"<TransitionItems><TrackItems><TrackItem Index="0" ObjectRef="90"/></TrackItems></TransitionItems><ClipItems>"#,
+            )
+            .replace(
+                "</PremiereData>",
+                r#"<VideoTransitionTrackItem ObjectID="90" ClassID="vtti" Version="1"><TransitionTrackItem><TrackItem><Start>635040000000</Start><End>762048000000</End></TrackItem><Component ObjectRef="91"/></TransitionTrackItem></VideoTransitionTrackItem>
+<VideoTransitionComponent ObjectID="91" ClassID="vtc" Version="1"><MatchName>PR.ADBE Dip To Black</MatchName></VideoTransitionComponent>
+</PremiereData>"#,
+            )
+            .replace(
+                "<MatchName>AE.ADBE Unknown Effect</MatchName>",
+                "<MatchName>AE.ADBE Deep Glow</MatchName>",
+            );
+        let (p, report) = import(&gz(&xml), "demo").unwrap();
+        assert_eq!(report.transitions, 1, "{report:?}");
+        assert_eq!(report.components_equivalent, 1, "{report:?}");
+        let seq = &p.sequences.values().next().unwrap();
+        let track = &seq.video[0];
+        let tr = &track.transitions[0];
+        assert_eq!(tr.effect, "op.tr.dip_to_black");
+        let clip = &track.clips[0];
+        assert_eq!(tr.cut, clip.end());
+        assert_eq!(tr.from, Some(clip.id));
+        assert_eq!(tr.duration, Dur::from_seconds(0.5));
+        assert!(clip.component("op.video.radiant_glow").is_some());
     }
 
     #[test]

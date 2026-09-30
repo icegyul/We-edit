@@ -157,13 +157,22 @@ pub fn section(ui: &mut Ui, id: egui::Id, title: &str, default_open: bool) -> bo
         icon,
         theme::TEXT_DIM,
     );
-    ui.painter().text(
-        rect.min + vec2(20.0, 10.0),
-        egui::Align2::LEFT_CENTER,
-        title,
+    // long titles are cut at the row's end (full title on hover)
+    let galley = ui.painter().layout_no_wrap(
+        title.to_string(),
         FontId::proportional(12.5),
         theme::TEXT_BRIGHT,
     );
+    let text_rect = Rect::from_min_max(rect.min + vec2(20.0, 0.0), rect.max - vec2(4.0, 0.0));
+    let cut = galley.size().x > text_rect.width();
+    ui.painter()
+        .with_clip_rect(text_rect.intersect(ui.clip_rect()))
+        .galley(
+            egui::pos2(text_rect.min.x, rect.center().y - galley.size().y / 2.0),
+            galley,
+            theme::TEXT_BRIGHT,
+        );
+    let resp = if cut { resp.on_hover_text(title) } else { resp };
     if resp.clicked() {
         open = !open;
         ui.data_mut(|d| d.insert_temp(id, open));

@@ -254,6 +254,51 @@ fn compositing_effects_and_transitions() {
             .components
             .pop();
     }
+
+    // looks: bars cover the top rows, a vignette darkens the corners, glow brightens
+    let base = s.render(&mut r, 1.0);
+    s.set(c, "op.video.letterbox", "aspect", Value::Choice(0));
+    let px = s.render(&mut r, 1.0);
+    assert!(
+        near(at(&px, 32, 1), [0, 0, 0, 255], 2),
+        "{:?}",
+        at(&px, 32, 1)
+    );
+    assert!(near(at(&px, 32, 18), at(&base, 32, 18), 2));
+    s.p.sequence_mut(s.seq)
+        .unwrap()
+        .clip_mut(c)
+        .unwrap()
+        .components
+        .retain(|x| x.effect != "op.video.letterbox");
+    s.set(c, "op.video.vignette", "amount", Value::Float(100.0));
+    let px = s.render(&mut r, 1.0);
+    assert!(
+        at(&px, 0, 0)[0] < at(&base, 0, 0)[0] / 2,
+        "{:?}",
+        at(&px, 0, 0)
+    );
+    s.p.sequence_mut(s.seq)
+        .unwrap()
+        .clip_mut(c)
+        .unwrap()
+        .components
+        .retain(|x| x.effect != "op.video.vignette");
+    for glow in ["op.video.glow", "op.video.radiant_glow"] {
+        s.set(c, glow, "threshold", Value::Float(0.0));
+        let px = s.render(&mut r, 1.0);
+        assert!(
+            at(&px, 32, 18)[1] > at(&base, 32, 18)[1],
+            "{glow}: {:?}",
+            at(&px, 32, 18)
+        );
+        s.p.sequence_mut(s.seq)
+            .unwrap()
+            .clip_mut(c)
+            .unwrap()
+            .components
+            .retain(|x| x.effect != glow);
+    }
 }
 
 #[test]

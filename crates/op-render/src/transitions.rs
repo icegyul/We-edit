@@ -7,7 +7,9 @@ use crate::pool::Tex;
 use crate::render::Renderer;
 
 impl Renderer {
-    /// Mixes the outgoing (`a`) and incoming (`b`) images at `progress`.
+    /// Mixes the outgoing (`a`) and incoming (`b`) images at `progress`; `scale` is the preview
+    /// scale (pixel-sized parameters are multiplied by it).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn transition(
         &mut self,
         effect: &str,
@@ -17,6 +19,7 @@ impl Renderer {
         b: &Tex,
         w: u32,
         h: u32,
+        scale: f32,
     ) -> Tex {
         let reverse = fx.bool("reverse");
         let (a, b, t) = if reverse {
@@ -24,6 +27,9 @@ impl Renderer {
         } else {
             (a, b, progress)
         };
+        if effect == "op.tr.blur_dissolve" {
+            return self.blur_dissolve(a, b, t, fx.f32("blur") * scale, w, h);
+        }
         let dir = fx.choice("direction") as f32;
         let border = |p: P| p.f(fx.f32("border")).rgb(fx.color("border_color"));
         let (entry, params): (&'static str, P) = match effect {
@@ -114,6 +120,62 @@ impl Renderer {
                 "fs_tr_flip",
                 P::new().f(fx.choice("axis") as f32).rgb(fx.color("fill")),
             ),
+            "op.tr.zoom_in" | "op.tr.zoom_out" => (
+                "fs_tr_zoom_motion",
+                P::new()
+                    .f(if effect == "op.tr.zoom_out" { 1.0 } else { 0.0 })
+                    .f(fx.f32("zoom") / 100.0)
+                    .f(fx.f32("blur") / 100.0)
+                    .v2(fx.point("center")),
+            ),
+            "op.tr.spin" => (
+                "fs_tr_spin",
+                P::new()
+                    .f(fx.f32("rotations"))
+                    .f(fx.choice("direction") as f32)
+                    .f(fx.f32("blur") / 100.0)
+                    .f(fx.f32("zoom") / 100.0),
+            ),
+            "op.tr.stretch" => (
+                "fs_tr_stretch",
+                P::new()
+                    .f(fx.choice("direction") as f32)
+                    .f(fx.f32("amount") / 100.0)
+                    .f(fx.f32("blur") / 100.0),
+            ),
+            "op.tr.smooth_slide" => (
+                "fs_tr_smooth_slide",
+                P::new().f(dir).f(fx.f32("blur") / 100.0),
+            ),
+            "op.tr.luma_fade" => (
+                "fs_tr_luma_fade",
+                P::new().f(fx.f32("softness") / 100.0).b(fx.bool("invert")),
+            ),
+            "op.tr.flash" => (
+                "fs_tr_flash",
+                P::new()
+                    .rgb(fx.color("color"))
+                    .f(fx.f32("intensity") / 100.0),
+            ),
+            "op.tr.light_leak" | "op.tr.film_burn" => (
+                "fs_tr_light",
+                P::new()
+                    .f(if effect == "op.tr.film_burn" {
+                        1.0
+                    } else {
+                        0.0
+                    })
+                    .rgb(fx.color("color"))
+                    .f(fx.f32("intensity") / 100.0),
+            ),
+            "op.tr.glitch" => (
+                "fs_tr_glitch",
+                P::new()
+                    .f(fx.f32("intensity") / 100.0)
+                    .f(fx.f32("block") * scale)
+                    .f(fx.f32("shift") * scale),
+            ),
+            "op.tr.chroma_split" => ("fs_tr_chroma", P::new().f(fx.f32("amount") * scale)),
             _ => ("fs_tr_dissolve", P::new().f(0.0)),
         };
         let out = self.work(w, h);
@@ -124,6 +186,34 @@ impl Renderer {
             a.size(),
             &out,
         );
+        out
+    }
+
+    /// Both images blurred (most at the cut) and cross-faded.
+    fn blur_dissolve(&mut self, a: &Tex, b: &Tex, t: f32, radius: f32, w: u32, h: u32) -> Tex {
+        let sigma = radius * (t.clamp(0.0, 1.0) * std::f32::consts::PI).sin() / 2.0;
+        let mut blurred = Vec::with_capacity(2);
+        for src in [a, b] {
+            let copy = self.work(w, h);
+            self.pass("fs_copy", &[&src.view], P::new(), src.size(), &copy);
+            blurred.push(self.blur(copy, sigma, true, true, true));
+        }
+        let bb = blurred.pop().unwrap();
+        let ba = blurred.pop().unwrap();
+        let k = {
+            let x = ((t - 0.3) / 0.4).clamp(0.0, 1.0);
+            x * x * (3.0 - 2.0 * x)
+        };
+        let out = self.work(w, h);
+        self.pass(
+            "fs_tr_dissolve",
+            &[&ba.view, &bb.view],
+            P::new().f(0.0).progress(k),
+            ba.size(),
+            &out,
+        );
+        self.put(ba);
+        self.put(bb);
         out
     }
 }

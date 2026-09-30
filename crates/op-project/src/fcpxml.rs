@@ -637,11 +637,15 @@ impl<'a> Importer<'a> {
             let mut speed = Speed::NORMAL;
             let mut reverse = false;
             let mut opacity = None;
+            let mut effects: Vec<XmlEffect> = Vec::new();
             for f in doc.children_named(i, "filter").collect::<Vec<_>>() {
                 let Some(e) = doc.child(f, "effect") else {
                     continue;
                 };
                 let eid = doc.text_at(e, "effectid").unwrap_or("");
+                if !matches!(eid, "timeremap") {
+                    effects.push(xml_effect(doc, e, f));
+                }
                 for prm in doc.children_named(e, "parameter").collect::<Vec<_>>() {
                     let pid = doc.text_at(prm, "parameterid").unwrap_or("");
                     let value = doc.text_at(prm, "value").unwrap_or("");
@@ -673,6 +677,17 @@ impl<'a> Importer<'a> {
             ) && let Some(p) = c.param_mut("opacity")
             {
                 p.value = Value::Float(o.clamp(0.0, 100.0));
+            }
+            if kind == TrackKind::Video {
+                let key_time = |when: i64| {
+                    // keyframe frames count from the media start; some writers count from the in
+                    // point instead
+                    let f = if when < inn { when + inn } else { when };
+                    SrcTime::ZERO + clip_rate.frames_to_dur(f)
+                };
+                for fx in &effects {
+                    apply_xml_effect(&mut components, &mut self.p.ids, fx, &key_time);
+                }
             }
             let duration = rate.frames_to_dur(end - start);
             let source_len = clip_rate.frames_to_dur((out - inn).max(1));
@@ -730,14 +745,8 @@ impl<'a> Importer<'a> {
             if from.is_none() && to.is_none() {
                 continue;
             }
-            let effect = catalog::CATALOG
-                .iter()
-                .find(|d| {
-                    d.kind.is_transition()
-                        && d.kind.is_video() == (kind == TrackKind::Video)
-                        && d.name.eq_ignore_ascii_case(&name)
-                })
-                .map(|d| d.id)
+            let effect = catalog::resolve_foreign(&name, true, kind == TrackKind::Video)
+                .map(|(d, _)| d.id)
                 .unwrap_or(if kind == TrackKind::Video {
                     catalog::CROSS_DISSOLVE
                 } else {
@@ -756,6 +765,124 @@ impl<'a> Importer<'a> {
         }
         track
     }
+}
+
+/// A `<filter>` of a clip item: effect name/id and its parameters (name, id, value, keyframes).
+struct XmlEffect {
+    name: String,
+    id: String,
+    enabled: bool,
+    params: Vec<XmlParam>,
+}
+
+struct XmlParam {
+    name: String,
+    id: String,
+    value: Option<f64>,
+    keys: Vec<(i64, f64)>,
+}
+
+fn xml_effect(doc: &Doc, e: usize, filter: usize) -> XmlEffect {
+    let params = doc
+        .children_named(e, "parameter")
+        .map(|prm| XmlParam {
+            name: doc.text_at(prm, "name").unwrap_or("").to_string(),
+            id: doc.text_at(prm, "parameterid").unwrap_or("").to_string(),
+            value: doc
+                .text_at(prm, "value")
+                .and_then(|v| v.trim().parse::<f64>().ok()),
+            keys: doc
+                .children_named(prm, "keyframe")
+                .filter_map(|k| {
+                    let when = doc.text_at(k, "when")?.trim().parse::<f64>().ok()?;
+                    let v = doc.text_at(k, "value")?.trim().parse::<f64>().ok()?;
+                    Some((when.round() as i64, v))
+                })
+                .collect(),
+        })
+        .collect();
+    XmlEffect {
+        name: doc.text_at(e, "name").unwrap_or("").to_string(),
+        id: doc.text_at(e, "effectid").unwrap_or("").to_string(),
+        enabled: doc
+            .text_at(filter, "enabled")
+            .is_none_or(|v| !v.eq_ignore_ascii_case("false")),
+        params,
+    }
+}
+
+/// Sets one parameter (value and keyframes) of a component from an XML parameter.
+fn set_xml_param(c: &mut Component, key: &str, prm: &XmlParam, key_time: &dyn Fn(i64) -> SrcTime) {
+    let spec = c.def().and_then(|d| d.param(key));
+    let Some(p) = c.param_mut(key) else { return };
+    let clamp = |v: f64| {
+        let v = Value::Float(v);
+        spec.map(|s| s.clamp(v.clone())).unwrap_or(v)
+    };
+    if !matches!(p.value, Value::Float(_)) {
+        return;
+    }
+    if let Some(v) = prm.value {
+        p.value = clamp(v);
+    }
+    if !prm.keys.is_empty() && spec.is_none_or(|s| s.animatable) {
+        p.keys = prm
+            .keys
+            .iter()
+            .map(|(w, v)| Keyframe::new(key_time(*w), clamp(*v), Interp::Linear))
+            .collect();
+        p.animated = true;
+        p.sort_keys();
+    }
+}
+
+/// Maps a filter onto the clip: Opacity and Basic Motion onto the fixed components, anything
+/// else onto our effect of the same name or purpose; parameters match by name.
+fn apply_xml_effect(
+    components: &mut Vec<Component>,
+    ids: &mut IdGen,
+    fx: &XmlEffect,
+    key_time: &dyn Fn(i64) -> SrcTime,
+) {
+    let id = fx.id.to_ascii_lowercase();
+    let name = fx.name.to_ascii_lowercase();
+    if id == "opacity" || name == "opacity" {
+        if let Some(c) = components.iter_mut().find(|c| c.effect == catalog::OPACITY) {
+            for prm in &fx.params {
+                if prm.id.eq_ignore_ascii_case("opacity")
+                    || prm.name.eq_ignore_ascii_case("opacity")
+                {
+                    set_xml_param(c, "opacity", prm, key_time);
+                }
+            }
+        }
+        return;
+    }
+    if id == "basic" || name == "basic motion" {
+        if let Some(c) = components.iter_mut().find(|c| c.effect == catalog::MOTION) {
+            for prm in &fx.params {
+                match prm.id.to_ascii_lowercase().as_str() {
+                    "scale" => set_xml_param(c, "scale", prm, key_time),
+                    "rotation" => set_xml_param(c, "rotation", prm, key_time),
+                    _ => {}
+                }
+            }
+        }
+        return;
+    }
+    let found = catalog::resolve_foreign(&fx.name, false, true)
+        .or_else(|| catalog::resolve_foreign(&fx.id, false, true));
+    let Some((def, _)) = found else { return };
+    let mut c = Component::new(def, ids);
+    c.enabled = fx.enabled;
+    for prm in &fx.params {
+        let spec =
+            catalog::param_by_name(def, &prm.name).or_else(|| catalog::param_by_name(def, &prm.id));
+        if let Some(spec) = spec {
+            set_xml_param(&mut c, spec.key, prm, key_time);
+        }
+    }
+    components.push(c);
 }
 
 fn ensure_kind(p: &mut Project, asset: AssetId, kind: TrackKind) {
@@ -874,6 +1001,46 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn premiere_filters_become_our_effects() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xmeml version="4"><sequence id="s1"><name>S</name><duration>100</duration>
+<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>
+<media><video><format><samplecharacteristics><width>1920</width><height>1080</height></samplecharacteristics></format>
+<track>
+<clipitem id="c1"><name>a</name><start>0</start><end>50</end><in>0</in><out>50</out>
+<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>
+<file id="f1"><name>a.mov</name><pathurl>file:///C:/media/a.mov</pathurl><duration>200</duration>
+<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate><media><video/></media></file>
+<filter><effect><name>Gaussian Blur</name><effectid>Gaussian Blur</effectid><effecttype>filter</effecttype>
+<parameter><parameterid>blurriness</parameterid><name>Blurriness</name><value>25</value></parameter></effect></filter>
+<filter><effect><name>Basic Motion</name><effectid>basic</effectid>
+<parameter><parameterid>scale</parameterid><name>Scale</name><value>100</value>
+<keyframe><when>0</when><value>100</value></keyframe><keyframe><when>25</when><value>130</value></keyframe></parameter></effect></filter>
+<filter><effect><name>S_Glow</name><effectid>S_Glow</effectid></effect></filter>
+</clipitem>
+<clipitem id="c2"><name>b</name><start>50</start><end>100</end><in>60</in><out>110</out>
+<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate><file id="f1"/></clipitem>
+<transitionitem><start>45</start><end>55</end><alignment>center</alignment>
+<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>
+<effect><name>Impact Zoom Blur</name><effectid>ImpactZoomBlur</effectid><effecttype>transition</effecttype></effect></transitionitem>
+</track></video></media></sequence></xmeml>"#;
+        let (p, sid) = import(xml, "x").unwrap();
+        let seq = p.sequence(sid).unwrap();
+        let track = &seq.video[0];
+        let c = &track.clips[0];
+        let blur = c.component("op.video.gaussian_blur").expect("blur");
+        assert_eq!(blur.param("blurriness").unwrap().value, Value::Float(25.0));
+        assert!(c.component("op.video.glow").is_some());
+        let scale = c
+            .component(catalog::MOTION)
+            .unwrap()
+            .param("scale")
+            .unwrap();
+        assert!(scale.animated && scale.keys.len() == 2);
+        assert_eq!(track.transitions[0].effect, "op.tr.zoom_in");
+    }
 
     #[test]
     fn export_import_round_trip() {

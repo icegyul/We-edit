@@ -378,6 +378,30 @@ const fn still(mut p: ParamSpec) -> ParamSpec {
     p
 }
 
+const fn places(mut p: ParamSpec, n: u8) -> ParamSpec {
+    if let ParamKind::Float {
+        default,
+        min,
+        max,
+        soft_min,
+        soft_max,
+        unit,
+        ..
+    } = p.kind
+    {
+        p.kind = ParamKind::Float {
+            default,
+            min,
+            max,
+            soft_min,
+            soft_max,
+            unit,
+            decimals: n,
+        };
+    }
+    p
+}
+
 // ------------------------------------------------------------------------------------ categories
 
 pub const CAT_ADJUST: &str = "Adjust";
@@ -401,6 +425,9 @@ pub const CAT_TR_SLIDE: &str = "Slide";
 pub const CAT_TR_WIPE: &str = "Wipe";
 pub const CAT_TR_ZOOM: &str = "Zoom";
 pub const CAT_TR_3D: &str = "3D Motion";
+pub const CAT_TR_SPIN: &str = "Spin";
+pub const CAT_TR_LIGHT: &str = "Light";
+pub const CAT_TR_STYLE: &str = "Stylized";
 pub const CAT_AUDIO_AMPLITUDE: &str = "Amplitude and Compression";
 pub const CAT_AUDIO_DELAY: &str = "Delay and Echo";
 pub const CAT_AUDIO_FILTER: &str = "Filter and EQ";
@@ -1613,6 +1640,351 @@ static TIMECODE: [ParamSpec; 6] = [
     ),
 ];
 
+// ------------------------------------------------------------ light, motion and stylized looks
+
+static GLOW: [ParamSpec; 6] = [
+    pct("threshold", "Glow Threshold", 60.0),
+    fs(
+        "radius",
+        "Glow Radius",
+        25.0,
+        0.0,
+        1000.0,
+        0.0,
+        200.0,
+        Unit::Pixels,
+    ),
+    places(
+        fs(
+            "intensity",
+            "Glow Intensity",
+            1.0,
+            0.0,
+            10.0,
+            0.0,
+            4.0,
+            Unit::None,
+        ),
+        2,
+    ),
+    choice(
+        "colors",
+        "Glow Colors",
+        0,
+        &["Original Colors", "Glow Color"],
+    ),
+    color("color", "Glow Color", 1.0, 0.85, 0.6),
+    boolean("glow_only", "Glow Only", false),
+];
+
+static RADIANT_GLOW: [ParamSpec; 8] = [
+    fs(
+        "radius",
+        "Radius",
+        120.0,
+        0.0,
+        3000.0,
+        0.0,
+        600.0,
+        Unit::Pixels,
+    ),
+    places(
+        fs(
+            "exposure",
+            "Exposure",
+            0.0,
+            -8.0,
+            8.0,
+            -4.0,
+            4.0,
+            Unit::None,
+        ),
+        2,
+    ),
+    pct("threshold", "Threshold", 0.0),
+    pct("falloff", "Falloff", 50.0),
+    color("tint", "Tint Color", 1.0, 1.0, 1.0),
+    pct("tint_amount", "Tint Amount", 0.0),
+    pct("aberration", "Chromatic Aberration", 0.0),
+    boolean("glow_only", "Glow Only", false),
+];
+
+static RGB_SPLIT: [ParamSpec; 3] = [
+    fs(
+        "amount",
+        "Separation",
+        10.0,
+        0.0,
+        1000.0,
+        0.0,
+        100.0,
+        Unit::Pixels,
+    ),
+    angle("angle", "Angle", 0.0),
+    choice("mode", "Mode", 0, &["Linear", "Radial"]),
+];
+
+static CAMERA_SHAKE: [ParamSpec; 5] = [
+    fs(
+        "amplitude",
+        "Amplitude",
+        20.0,
+        0.0,
+        1000.0,
+        0.0,
+        200.0,
+        Unit::Pixels,
+    ),
+    fs(
+        "frequency",
+        "Frequency",
+        6.0,
+        0.1,
+        60.0,
+        0.1,
+        20.0,
+        Unit::Hz,
+    ),
+    fs(
+        "rotation",
+        "Rotation Amount",
+        2.0,
+        0.0,
+        90.0,
+        0.0,
+        20.0,
+        Unit::Degrees,
+    ),
+    fs(
+        "zoom",
+        "Zoom",
+        105.0,
+        100.0,
+        300.0,
+        100.0,
+        150.0,
+        Unit::Percent,
+    ),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static GLITCH: [ParamSpec; 6] = [
+    pct("intensity", "Intensity", 50.0),
+    fs(
+        "block",
+        "Block Size",
+        32.0,
+        2.0,
+        400.0,
+        2.0,
+        160.0,
+        Unit::Pixels,
+    ),
+    fs(
+        "shift",
+        "Color Shift",
+        12.0,
+        0.0,
+        200.0,
+        0.0,
+        60.0,
+        Unit::Pixels,
+    ),
+    pct("scan_lines", "Scan Lines", 20.0),
+    fs("speed", "Speed", 8.0, 0.0, 60.0, 0.0, 30.0, Unit::Hz),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static FILM_GRAIN: [ParamSpec; 4] = [
+    pct("amount", "Amount", 25.0),
+    fs("size", "Grain Size", 1.5, 0.5, 10.0, 0.5, 5.0, Unit::Pixels),
+    boolean("color", "Color Grain", false),
+    boolean("animated", "Animated", true),
+];
+
+static VIGNETTE: [ParamSpec; 5] = [
+    f("amount", "Amount", 50.0, -100.0, 100.0, Unit::None),
+    pct("midpoint", "Midpoint", 50.0),
+    f("roundness", "Roundness", 0.0, -100.0, 100.0, Unit::None),
+    pct("feather", "Feather", 50.0),
+    color("color", "Color", 0.0, 0.0, 0.0),
+];
+
+static LETTERBOX: [ParamSpec; 4] = [
+    choice(
+        "aspect",
+        "Aspect Ratio",
+        0,
+        &[
+            "2.39:1", "2.35:1", "2:1", "1.85:1", "4:3", "1:1", "4:5", "9:16", "Custom",
+        ],
+    ),
+    places(
+        fs(
+            "custom",
+            "Custom Ratio",
+            2.39,
+            0.2,
+            5.0,
+            0.5,
+            3.0,
+            Unit::None,
+        ),
+        2,
+    ),
+    color("color", "Bar Color", 0.0, 0.0, 0.0),
+    pct("opacity", "Opacity", 100.0),
+];
+
+static LENS_DISTORTION: [ParamSpec; 3] = [
+    f("curvature", "Curvature", 0.0, -100.0, 100.0, Unit::None),
+    point("center", "Center", 0.5, 0.5, PointSpace::Layer),
+    fs(
+        "zoom",
+        "Zoom",
+        100.0,
+        50.0,
+        300.0,
+        50.0,
+        200.0,
+        Unit::Percent,
+    ),
+];
+
+static RADIAL_BLUR: [ParamSpec; 3] = [
+    f("amount", "Amount", 10.0, 0.0, 100.0, Unit::None),
+    point("center", "Center", 0.5, 0.5, PointSpace::Layer),
+    choice("type", "Type", 0, &["Spin", "Zoom"]),
+];
+
+static MOTION_TILE: [ParamSpec; 8] = [
+    point("tile_center", "Tile Center", 0.5, 0.5, PointSpace::Layer),
+    fs(
+        "tile_width",
+        "Tile Width",
+        100.0,
+        1.0,
+        1000.0,
+        10.0,
+        200.0,
+        Unit::Percent,
+    ),
+    fs(
+        "tile_height",
+        "Tile Height",
+        100.0,
+        1.0,
+        1000.0,
+        10.0,
+        200.0,
+        Unit::Percent,
+    ),
+    fs(
+        "output_width",
+        "Output Width",
+        100.0,
+        1.0,
+        1000.0,
+        10.0,
+        400.0,
+        Unit::Percent,
+    ),
+    fs(
+        "output_height",
+        "Output Height",
+        100.0,
+        1.0,
+        1000.0,
+        10.0,
+        400.0,
+        Unit::Percent,
+    ),
+    boolean("mirror", "Mirror Edges", false),
+    angle("phase", "Phase", 0.0),
+    boolean("horizontal_shift", "Horizontal Phase Shift", false),
+];
+
+static LIGHT_LEAKS: [ParamSpec; 7] = [
+    pct("intensity", "Intensity", 70.0),
+    color("color1", "Color 1", 1.0, 0.45, 0.1),
+    color("color2", "Color 2", 1.0, 0.15, 0.35),
+    fs(
+        "scale",
+        "Scale",
+        100.0,
+        10.0,
+        1000.0,
+        20.0,
+        300.0,
+        Unit::Percent,
+    ),
+    places(
+        fs("speed", "Speed", 1.0, 0.0, 20.0, 0.0, 5.0, Unit::None),
+        2,
+    ),
+    int("seed", "Random Seed", 1, 0, 9999),
+    choice("blend", "Blend Mode", 0, &["Screen", "Add"]),
+];
+
+static OLD_FILM: [ParamSpec; 7] = [
+    pct("sepia", "Sepia", 80.0),
+    pct("grain", "Grain", 40.0),
+    pct("scratches", "Scratches", 30.0),
+    pct("dust", "Dust", 30.0),
+    pct("flicker", "Flicker", 30.0),
+    pct("vignette", "Vignette", 50.0),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static VHS: [ParamSpec; 6] = [
+    fs(
+        "chroma",
+        "Color Bleed",
+        6.0,
+        0.0,
+        100.0,
+        0.0,
+        30.0,
+        Unit::Pixels,
+    ),
+    pct("noise", "Noise", 30.0),
+    pct("tracking", "Tracking Lines", 40.0),
+    fs("jitter", "Jitter", 2.0, 0.0, 50.0, 0.0, 10.0, Unit::Pixels),
+    fs(
+        "saturation",
+        "Saturation",
+        80.0,
+        0.0,
+        200.0,
+        0.0,
+        200.0,
+        Unit::Percent,
+    ),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static STROBE: [ParamSpec; 4] = [
+    color("color", "Strobe Color", 1.0, 1.0, 1.0),
+    fs(
+        "frequency",
+        "Frequency",
+        4.0,
+        0.1,
+        60.0,
+        0.1,
+        20.0,
+        Unit::Hz,
+    ),
+    pct("duration", "Flash Duration", 30.0),
+    pct("blend", "Blend With Original", 0.0),
+];
+
+static KALEIDOSCOPE: [ParamSpec; 3] = [
+    int("segments", "Segments", 6, 2, 64),
+    angle("angle", "Angle", 0.0),
+    point("center", "Center", 0.5, 0.5, PointSpace::Layer),
+];
+
 // ------------------------------------------------------------------------------- transitions
 
 static TR_NONE: [ParamSpec; 1] = [boolean("reverse", "Reverse", false)];
@@ -1733,6 +2105,149 @@ static TR_ZOOM: [ParamSpec; 2] = [
 static TR_FLIP: [ParamSpec; 3] = [
     choice("axis", "Axis", 0, &["Horizontal", "Vertical"]),
     color("fill", "Fill Color", 0.0, 0.0, 0.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_ZOOM_MOTION: [ParamSpec; 4] = [
+    fs(
+        "zoom",
+        "Zoom Amount",
+        200.0,
+        110.0,
+        1000.0,
+        110.0,
+        400.0,
+        Unit::Percent,
+    ),
+    pct("blur", "Motion Blur", 60.0),
+    point("center", "Center", 0.5, 0.5, PointSpace::Sequence),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_SPIN: [ParamSpec; 5] = [
+    places(
+        fs(
+            "rotations",
+            "Rotations",
+            1.0,
+            0.25,
+            4.0,
+            0.25,
+            4.0,
+            Unit::None,
+        ),
+        2,
+    ),
+    choice(
+        "direction",
+        "Direction",
+        0,
+        &["Clockwise", "Counterclockwise"],
+    ),
+    pct("blur", "Motion Blur", 60.0),
+    fs(
+        "zoom",
+        "Zoom Amount",
+        130.0,
+        100.0,
+        300.0,
+        100.0,
+        200.0,
+        Unit::Percent,
+    ),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_GLITCH: [ParamSpec; 4] = [
+    pct("intensity", "Intensity", 80.0),
+    fs(
+        "block",
+        "Block Size",
+        40.0,
+        4.0,
+        400.0,
+        4.0,
+        160.0,
+        Unit::Pixels,
+    ),
+    fs(
+        "shift",
+        "Color Shift",
+        20.0,
+        0.0,
+        200.0,
+        0.0,
+        80.0,
+        Unit::Pixels,
+    ),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_FLASH: [ParamSpec; 3] = [
+    color("color", "Flash Color", 1.0, 1.0, 1.0),
+    pct("intensity", "Intensity", 100.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_BLUR: [ParamSpec; 2] = [
+    fs(
+        "blur",
+        "Blurriness",
+        60.0,
+        0.0,
+        500.0,
+        0.0,
+        200.0,
+        Unit::Pixels,
+    ),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_SMOOTH_SLIDE: [ParamSpec; 3] = [
+    choice("direction", "Direction", 0, DIRECTIONS),
+    pct("blur", "Motion Blur", 60.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_CHROMA: [ParamSpec; 2] = [
+    fs(
+        "amount",
+        "Separation",
+        60.0,
+        0.0,
+        500.0,
+        0.0,
+        200.0,
+        Unit::Pixels,
+    ),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_LIGHT: [ParamSpec; 3] = [
+    color("color", "Light Color", 1.0, 0.55, 0.2),
+    pct("intensity", "Intensity", 100.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_STRETCH: [ParamSpec; 4] = [
+    choice("direction", "Direction", 0, &["Horizontal", "Vertical"]),
+    fs(
+        "amount",
+        "Stretch",
+        400.0,
+        110.0,
+        2000.0,
+        110.0,
+        1000.0,
+        Unit::Percent,
+    ),
+    pct("blur", "Motion Blur", 50.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_LUMA: [ParamSpec; 3] = [
+    pct("softness", "Softness", 20.0),
+    boolean("invert", "Invert", false),
     boolean("reverse", "Reverse", false),
 ];
 
@@ -2234,6 +2749,127 @@ pub static CATALOG: &[EffectDef] = &[
         [],
         TIMECODE
     ),
+    def!("op.video.glow", "Glow", VideoEffect, CAT_STYLIZE, [], GLOW),
+    def!(
+        "op.video.radiant_glow",
+        "Radiant Glow",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        RADIANT_GLOW
+    ),
+    def!(
+        "op.video.rgb_split",
+        "RGB Split",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        RGB_SPLIT
+    ),
+    def!(
+        "op.video.camera_shake",
+        "Camera Shake",
+        VideoEffect,
+        CAT_TRANSFORM,
+        [],
+        CAMERA_SHAKE
+    ),
+    def!(
+        "op.video.glitch",
+        "Digital Glitch",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        GLITCH
+    ),
+    def!(
+        "op.video.film_grain",
+        "Film Grain",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        FILM_GRAIN
+    ),
+    def!(
+        "op.video.vignette",
+        "Vignette",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        VIGNETTE
+    ),
+    def!(
+        "op.video.letterbox",
+        "Cinematic Bars",
+        VideoEffect,
+        CAT_TRANSFORM,
+        [],
+        LETTERBOX
+    ),
+    def!(
+        "op.video.lens_distortion",
+        "Lens Distortion",
+        VideoEffect,
+        CAT_DISTORT,
+        [],
+        LENS_DISTORTION
+    ),
+    def!(
+        "op.video.radial_blur",
+        "Radial Blur",
+        VideoEffect,
+        CAT_BLUR,
+        [],
+        RADIAL_BLUR
+    ),
+    def!(
+        "op.video.motion_tile",
+        "Motion Tile",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        MOTION_TILE
+    ),
+    def!(
+        "op.video.light_leaks",
+        "Light Leaks",
+        VideoEffect,
+        CAT_GENERATE,
+        [],
+        LIGHT_LEAKS
+    ),
+    def!(
+        "op.video.old_film",
+        "Old Film",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        OLD_FILM
+    ),
+    def!(
+        "op.video.vhs",
+        "VHS Tape",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        VHS
+    ),
+    def!(
+        "op.video.strobe",
+        "Strobe Light",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        STROBE
+    ),
+    def!(
+        "op.video.kaleidoscope",
+        "Kaleidoscope",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        KALEIDOSCOPE
+    ),
     // video transitions
     def!(
         CROSS_DISSOLVE,
@@ -2435,6 +3071,102 @@ pub static CATALOG: &[EffectDef] = &[
         [],
         TR_FLIP
     ),
+    def!(
+        "op.tr.zoom_in",
+        "Zoom In",
+        VideoTransition,
+        CAT_TR_ZOOM,
+        [],
+        TR_ZOOM_MOTION
+    ),
+    def!(
+        "op.tr.zoom_out",
+        "Zoom Out",
+        VideoTransition,
+        CAT_TR_ZOOM,
+        [],
+        TR_ZOOM_MOTION
+    ),
+    def!(
+        "op.tr.spin",
+        "Spin",
+        VideoTransition,
+        CAT_TR_SPIN,
+        [],
+        TR_SPIN
+    ),
+    def!(
+        "op.tr.stretch",
+        "Stretch",
+        VideoTransition,
+        CAT_TR_SLIDE,
+        [],
+        TR_STRETCH
+    ),
+    def!(
+        "op.tr.smooth_slide",
+        "Smooth Slide",
+        VideoTransition,
+        CAT_TR_SLIDE,
+        [],
+        TR_SMOOTH_SLIDE
+    ),
+    def!(
+        "op.tr.blur_dissolve",
+        "Blur Dissolve",
+        VideoTransition,
+        CAT_TR_DISSOLVE,
+        [],
+        TR_BLUR
+    ),
+    def!(
+        "op.tr.luma_fade",
+        "Luma Fade",
+        VideoTransition,
+        CAT_TR_DISSOLVE,
+        [],
+        TR_LUMA
+    ),
+    def!(
+        "op.tr.flash",
+        "Flash",
+        VideoTransition,
+        CAT_TR_LIGHT,
+        [],
+        TR_FLASH
+    ),
+    def!(
+        "op.tr.light_leak",
+        "Light Leak",
+        VideoTransition,
+        CAT_TR_LIGHT,
+        [],
+        TR_LIGHT
+    ),
+    def!(
+        "op.tr.film_burn",
+        "Film Burn",
+        VideoTransition,
+        CAT_TR_LIGHT,
+        [],
+        TR_LIGHT
+    ),
+    def!(
+        "op.tr.glitch",
+        "Glitch",
+        VideoTransition,
+        CAT_TR_STYLE,
+        [],
+        TR_GLITCH
+    ),
+    def!(
+        "op.tr.chroma_split",
+        "Chromatic Split",
+        VideoTransition,
+        CAT_TR_STYLE,
+        [],
+        TR_CHROMA
+    ),
     // audio effects
     def!(
         "op.audio.amplify",
@@ -2629,10 +3361,271 @@ pub fn by_kind(kind: EffectKind) -> impl Iterator<Item = &'static EffectDef> {
     CATALOG.iter().filter(move |d| d.kind == kind)
 }
 
+// ------------------------------------------------------------------ effects from other programs
+
+/// How an effect from another application was recognized.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ForeignMatch {
+    /// An attested interchange identity (`match_names`).
+    Identity,
+    /// Same name as one of ours.
+    Name,
+    /// A different effect with the same purpose, recognized by keywords in its name.
+    Equivalent,
+}
+
+/// Lowercase letters and digits only, without the vendor prefixes other programs put on
+/// effect identities ("AE.ADBE Gaussian Blur 2" -> "gaussianblur2").
+pub fn normalize_name(name: &str) -> String {
+    let lower = name.trim().to_lowercase();
+    let mut rest = lower.as_str();
+    for prefix in ["ae.adbe ", "pr.adbe ", "adbe ", "ae.", "pr.", "com.adobe."] {
+        if let Some(r) = rest.strip_prefix(prefix) {
+            rest = r;
+        }
+    }
+    rest.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+}
+
+/// Keywords (normalized) of well-known effects, including third-party plug-ins, and the effect
+/// of ours used in their place. Earlier, more specific entries win.
+const VIDEO_EQUIVALENTS: &[(&str, &str)] = &[
+    ("deepglow", "op.video.radiant_glow"),
+    ("radiantglow", "op.video.radiant_glow"),
+    ("realglow", "op.video.radiant_glow"),
+    ("glo2", "op.video.glow"),
+    ("gaussianblur", "op.video.gaussian_blur"),
+    ("fastboxblur", "op.video.gaussian_blur"),
+    ("fastblur", "op.video.gaussian_blur"),
+    ("lensblur", "op.video.gaussian_blur"),
+    ("compoundblur", "op.video.gaussian_blur"),
+    ("channelblur", "op.video.gaussian_blur"),
+    ("directionalblur", "op.video.directional_blur"),
+    ("motionblur", "op.video.directional_blur"),
+    ("radialblur", "op.video.radial_blur"),
+    ("zoomblur", "op.video.radial_blur"),
+    ("spinblur", "op.video.radial_blur"),
+    ("rgbsplit", "op.video.rgb_split"),
+    ("rgbseparation", "op.video.rgb_split"),
+    ("rgbshift", "op.video.rgb_split"),
+    ("channelshift", "op.video.rgb_split"),
+    ("chromatic", "op.video.rgb_split"),
+    ("camerashake", "op.video.camera_shake"),
+    ("shake", "op.video.camera_shake"),
+    ("wiggle", "op.video.camera_shake"),
+    ("handheld", "op.video.camera_shake"),
+    ("glitch", "op.video.glitch"),
+    ("datamosh", "op.video.glitch"),
+    ("twitch", "op.video.glitch"),
+    ("digitaldamage", "op.video.glitch"),
+    ("pixelsort", "op.video.glitch"),
+    ("filmgrain", "op.video.film_grain"),
+    ("grain", "op.video.film_grain"),
+    ("vignette", "op.video.vignette"),
+    ("letterbox", "op.video.letterbox"),
+    ("cinematicbars", "op.video.letterbox"),
+    ("cinemascope", "op.video.letterbox"),
+    ("widescreen", "op.video.letterbox"),
+    ("lensdistortion", "op.video.lens_distortion"),
+    ("opticscompensation", "op.video.lens_distortion"),
+    ("fisheye", "op.video.lens_distortion"),
+    ("bulge", "op.video.spherize"),
+    ("motiontile", "op.video.motion_tile"),
+    ("lightleak", "op.video.light_leaks"),
+    ("lensflare", "op.video.light_leaks"),
+    ("oldfilm", "op.video.old_film"),
+    ("filmdamage", "op.video.old_film"),
+    ("agedfilm", "op.video.old_film"),
+    ("vhs", "op.video.vhs"),
+    ("badtv", "op.video.vhs"),
+    ("strobe", "op.video.strobe"),
+    ("kaleid", "op.video.kaleidoscope"),
+    ("geometry", "op.video.transform"),
+    ("huesaturation", "op.video.procamp"),
+    ("blackwhite", "op.video.black_white"),
+    ("blackandwhite", "op.video.black_white"),
+    ("monochrome", "op.video.black_white"),
+    ("grayscale", "op.video.black_white"),
+    ("pixelate", "op.video.mosaic"),
+    ("keylight", "op.video.ultra_key"),
+    ("chromakey", "op.video.ultra_key"),
+    ("greenscreen", "op.video.ultra_key"),
+    ("gradient", "op.video.ramp"),
+    ("unsharp", "op.video.unsharp_mask"),
+    ("dropshadow", "op.video.drop_shadow"),
+    ("turbulentdisplace", "op.video.wave_warp"),
+    ("wavewarp", "op.video.wave_warp"),
+    ("curves", "op.video.lumetri"),
+    ("lumetri", "op.video.lumetri"),
+    ("glow", "op.video.glow"),
+    ("blur", "op.video.gaussian_blur"),
+];
+
+const TRANSITION_EQUIVALENTS: &[(&str, &str)] = &[
+    ("crossdissolve", CROSS_DISSOLVE),
+    ("morphcut", CROSS_DISSOLVE),
+    ("diptoblack", "op.tr.dip_to_black"),
+    ("fadetoblack", "op.tr.dip_to_black"),
+    ("diptowhite", "op.tr.dip_to_white"),
+    ("fadetowhite", "op.tr.dip_to_white"),
+    ("filmdissolve", "op.tr.film_dissolve"),
+    ("nonadditive", "op.tr.non_additive_dissolve"),
+    ("additivedissolve", "op.tr.additive_dissolve"),
+    ("lumafade", "op.tr.luma_fade"),
+    ("lumadissolve", "op.tr.luma_fade"),
+    ("gradientwipe", "op.tr.luma_fade"),
+    ("blurdissolve", "op.tr.blur_dissolve"),
+    ("crosszoom", "op.tr.cross_zoom"),
+    ("zoomout", "op.tr.zoom_out"),
+    ("zoomin", "op.tr.zoom_in"),
+    ("zoom", "op.tr.zoom_in"),
+    ("spin", "op.tr.spin"),
+    ("roll", "op.tr.spin"),
+    ("rotate", "op.tr.spin"),
+    ("stretch", "op.tr.stretch"),
+    ("whip", "op.tr.whip"),
+    ("pushblur", "op.tr.smooth_slide"),
+    ("impactpush", "op.tr.smooth_slide"),
+    ("smoothslide", "op.tr.smooth_slide"),
+    ("push", "op.tr.push"),
+    ("flash", "op.tr.flash"),
+    ("lightleak", "op.tr.light_leak"),
+    ("filmburn", "op.tr.film_burn"),
+    ("burn", "op.tr.film_burn"),
+    ("glitch", "op.tr.glitch"),
+    ("rgbsplit", "op.tr.chroma_split"),
+    ("chromatic", "op.tr.chroma_split"),
+    ("clockwipe", "op.tr.clock_wipe"),
+    ("radialwipe", "op.tr.radial_wipe"),
+    ("barndoor", "op.tr.barn_doors"),
+    ("venetian", "op.tr.venetian_blinds"),
+    ("checker", "op.tr.checker_wipe"),
+    ("randomblock", "op.tr.random_blocks"),
+    ("iris", "op.tr.iris_round"),
+    ("inset", "op.tr.inset"),
+    ("centersplit", "op.tr.center_split"),
+    ("split", "op.tr.split"),
+    ("flip", "op.tr.flip_over"),
+    ("cube", "op.tr.flip_over"),
+    ("pageturn", "op.tr.flip_over"),
+    ("pagepeel", "op.tr.flip_over"),
+    ("slide", "op.tr.slide"),
+    ("wipe", "op.tr.wipe"),
+    ("blur", "op.tr.blur_dissolve"),
+    ("dissolve", CROSS_DISSOLVE),
+];
+
+/// Our equivalent of an effect or transition from another application, by its identity or
+/// display name. `transition` and `video` choose the kind of component searched.
+pub fn resolve_foreign(
+    name: &str,
+    transition: bool,
+    video: bool,
+) -> Option<(&'static EffectDef, ForeignMatch)> {
+    let fits = |d: &EffectDef| {
+        d.kind.is_transition() == transition
+            && d.kind.is_video() == video
+            && !matches!(d.kind, EffectKind::VideoFixed | EffectKind::AudioFixed)
+    };
+    if let Some(d) = find_match_name(name).filter(|d| fits(d)) {
+        return Some((d, ForeignMatch::Identity));
+    }
+    let n = normalize_name(name);
+    if n.is_empty() {
+        return None;
+    }
+    if let Some(d) = CATALOG
+        .iter()
+        .find(|d| fits(d) && normalize_name(d.name) == n)
+    {
+        return Some((d, ForeignMatch::Name));
+    }
+    // the same name with a version suffix ("Gaussian Blur 2", "Cross Dissolve New")
+    if let Some(d) = CATALOG
+        .iter()
+        .filter(|d| fits(d))
+        .filter(|d| {
+            let dn = normalize_name(d.name);
+            dn.len() >= 5 && n.starts_with(&dn)
+        })
+        .max_by_key(|d| normalize_name(d.name).len())
+    {
+        return Some((d, ForeignMatch::Name));
+    }
+    if !video {
+        return None;
+    }
+    let table = if transition {
+        TRANSITION_EQUIVALENTS
+    } else {
+        VIDEO_EQUIVALENTS
+    };
+    table
+        .iter()
+        .find(|(k, _)| n.contains(k))
+        .and_then(|(_, id)| find(id))
+        .filter(|d| fits(d))
+        .map(|d| (d, ForeignMatch::Equivalent))
+}
+
+/// The parameter of `def` that a foreign parameter name refers to (same label or key).
+pub fn param_by_name(def: &'static EffectDef, name: &str) -> Option<&'static ParamSpec> {
+    let n = normalize_name(name);
+    if n.is_empty() {
+        return None;
+    }
+    def.params
+        .iter()
+        .find(|p| normalize_name(p.label) == n || normalize_name(p.key) == n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn foreign_effects_resolve_to_ours() {
+        let r = |n: &str, tr: bool| resolve_foreign(n, tr, true).map(|(d, m)| (d.id, m));
+        assert_eq!(
+            r("AE.ADBE Gaussian Blur 2", false),
+            Some(("op.video.gaussian_blur", ForeignMatch::Name))
+        );
+        assert_eq!(
+            r("AE.ADBE Brightness & Contrast 2", false).map(|x| x.0),
+            Some("op.video.brightness_contrast")
+        );
+        assert_eq!(
+            r("Gaussian Blur", false),
+            Some(("op.video.gaussian_blur", ForeignMatch::Name))
+        );
+        assert_eq!(
+            r("Deep Glow", false).map(|x| x.0),
+            Some("op.video.radiant_glow")
+        );
+        assert_eq!(r("S_Glow", false).map(|x| x.0), Some("op.video.glow"));
+        assert_eq!(
+            r("Cross Dissolve", true),
+            Some((CROSS_DISSOLVE, ForeignMatch::Name))
+        );
+        assert_eq!(
+            r("Impact Zoom Blur", true).map(|x| x.0),
+            Some("op.tr.zoom_in")
+        );
+        assert_eq!(
+            r("Dip to Black", true).map(|x| x.0),
+            Some("op.tr.dip_to_black")
+        );
+        assert_eq!(r("Whip Pan", true).map(|x| x.0), Some("op.tr.whip"));
+        assert!(r("Something Unheard Of", false).is_none());
+        // fixed components are never offered as equivalents
+        assert!(resolve_foreign("AE.ADBE Motion", false, true).is_none());
+        let blur = find("op.video.gaussian_blur").unwrap();
+        assert_eq!(
+            param_by_name(blur, "Blurriness").map(|p| p.key),
+            Some("blurriness")
+        );
+    }
 
     #[test]
     fn ids_and_param_keys_are_unique() {

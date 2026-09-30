@@ -1273,10 +1273,28 @@ impl Editor {
 
     /// Adds an effect to the selected clips of its kind (or to one clip).
     pub fn apply_effect(&mut self, effect: &str, clips: Option<Vec<ClipId>>) {
+        let clips = clips.unwrap_or_else(|| self.selection.clips.clone());
+        if let Some(preset) = op_core::presets::find(effect) {
+            self.seq_edit(&format!("Add {}", preset.name), |p, sid, _| {
+                let mut ids = p.ids.clone();
+                let s = p.sequence_mut(sid).unwrap();
+                let mut any = false;
+                for id in &clips {
+                    if let Some(c) = s.clip_mut(*id)
+                        && c.is_video()
+                    {
+                        preset.apply(c, &mut ids);
+                        any = true;
+                    }
+                }
+                p.ids = ids;
+                if any { Ok(()) } else { Err(EditError::Nothing) }
+            });
+            return;
+        }
         let Some(def) = catalog::find(effect) else {
             return;
         };
-        let clips = clips.unwrap_or_else(|| self.selection.clips.clone());
         let video = def.kind.is_video();
         self.seq_edit(&format!("Add {}", def.name), |p, sid, _| {
             let mut ids = p.ids.clone();
@@ -1354,6 +1372,38 @@ mod tests {
         assert_eq!(e.active_seq().unwrap().video[0].clips.len(), 1);
         e.execute("cmd.edit.redo", Focus::Timeline);
         assert_eq!(e.active_seq().unwrap().video[0].clips.len(), 2);
+    }
+
+    #[test]
+    fn presets_and_effects_apply_to_clips() {
+        let (mut e, _d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        e.load_source(item);
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        let clip = e.active_seq().unwrap().video[0].clips[0].id;
+        e.apply_effect("op.preset.fade_in_out", Some(vec![clip]));
+        e.apply_effect("op.video.radiant_glow", Some(vec![clip]));
+        let seq = e.active_seq().unwrap();
+        let c = seq.clip(clip).unwrap();
+        assert!(
+            c.component(catalog::OPACITY)
+                .unwrap()
+                .param("opacity")
+                .unwrap()
+                .animated
+        );
+        assert!(c.component("op.video.radiant_glow").is_some());
+        e.execute("cmd.edit.undo", Focus::Timeline);
+        e.execute("cmd.edit.undo", Focus::Timeline);
+        let c = e.active_seq().unwrap().clip(clip).unwrap().clone();
+        assert!(
+            !c.component(catalog::OPACITY)
+                .unwrap()
+                .param("opacity")
+                .unwrap()
+                .animated
+        );
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub mod media;
 pub mod model;
 pub mod params;
 pub mod plan;
+pub mod presets;
 pub mod time;
 pub mod timecode;
 pub mod validate;

@@ -19,6 +19,7 @@ const MODULES: &[(&str, &str, Layout)] = &[
         Layout::Main,
     ),
     ("keying", include_str!("shaders/keying.wgsl"), Layout::Main),
+    ("looks", include_str!("shaders/looks.wgsl"), Layout::Main),
     (
         "stylize",
         include_str!("shaders/stylize.wgsl"),

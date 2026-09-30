@@ -38,6 +38,10 @@ pub struct Preferences {
     pub logging_enabled: bool,
     /// Log detail: "error", "warn", "info", "debug" or "trace".
     pub log_level: String,
+    /// Share of Effect Controls given to the parameters; the keyframe timeline gets the rest.
+    pub effect_controls_split: f32,
+    /// Effect Controls shows its keyframe timeline.
+    pub effect_controls_timeline: bool,
 }
 
 impl Default for Preferences {
@@ -67,6 +71,8 @@ impl Default for Preferences {
             last_import_dir: None,
             logging_enabled: true,
             log_level: "info".into(),
+            effect_controls_split: 0.62,
+            effect_controls_timeline: true,
         }
     }
 }

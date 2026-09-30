@@ -157,7 +157,30 @@ For deterministic effects, the default target is max absolute/relative error plu
 
 Inputs cover integer and float formats, RGB/YUV range/matrix/transfer/primaries, premultiplied/straight alpha, odd sizes, borders, NaN/Inf handling, interlacing, pixel aspect and temporal discontinuities. Output comparison is performed before display encoding when the oracle permits it.
 
-## 11. Public references
+## 11. Original looks, presets and import equivalents
+
+OpenPremier also ships original effects that editors commonly reach for (glow, radiant glow,
+RGB split, camera shake, digital glitch, film grain, vignette, cinematic bars, lens distortion,
+radial blur, motion tile, light leaks, old film, VHS, strobe, kaleidoscope), motion and light
+transitions (zoom, spin, stretch, smooth slide, blur dissolve, luma fade, flash, light leak, film
+burn, glitch, chromatic split) and animation presets. Their names, parameters and processing are
+our own; none claims to reproduce another product's output.
+
+Importers (`.prproj` and FCP XML) resolve a foreign component in this order
+(`op_core::catalog::resolve_foreign`):
+
+1. an attested interchange identity (`match_names`);
+2. the same display name, also with a version suffix (for example "Gaussian Blur 2");
+3. an equivalent by purpose, recognized from keywords in the identity or display name (for
+   example third-party glow, shake, glitch or zoom-transition plug-ins).
+
+Equivalents start from their own defaults unless a parameter layout is attested (Fast Blur) or
+the interchange format names the parameters (FCP XML). Every replacement is listed in the import
+report; unresolved components stay opaque and disabled (DM-FX-003). `.prproj` transition items
+are read with the same field names as clip items and the component identity they reference; this
+is not yet validated against a fixture with populated transitions (PR-X-003).
+
+## 12. Public references
 
 - [Adobe: Video and audio transitions overview](https://helpx.adobe.com/premiere/desktop/add-video-effects/apply-video-transitions/transitions-overview.html)
 - [Adobe: Audio effects library](https://helpx.adobe.com/premiere/desktop/add-audio-effects/apply-audio-effects/audio-effects-library.html)

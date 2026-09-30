@@ -166,11 +166,18 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         s.ed.active_seq()
             .map(|q| q.name.clone())
             .unwrap_or_default();
-    let split = if full.width() >= 460.0 {
-        full.min.x + (full.width() * 0.62).clamp(300.0, full.width() - 150.0)
+    // parameters on the left, the keyframe timeline on the right; the boundary is dragged like
+    // any panel divider and remembered
+    let timeline = s.ed.prefs.effect_controls_timeline && full.width() >= 360.0;
+    let split = if timeline {
+        let min_left = 200.0f32.min(full.width() - 120.0);
+        full.min.x
+            + (full.width() * s.ed.prefs.effect_controls_split)
+                .clamp(min_left, full.width() - 120.0)
     } else {
         full.max.x
     };
+    set_label_width(ui, &cx.clip.components, split - full.min.x);
     let lane = Lane {
         x0: split + 8.0,
         x1: full.max.x - 8.0,
@@ -180,8 +187,41 @@ pub fn show(s: &mut State, ui: &mut Ui) {
     // header
     let header = Rect::from_min_size(full.min, vec2(full.width(), 22.0));
     ui.painter().rect_filled(header, 0.0, theme::PANEL_DARK);
+    // show or hide the keyframe timeline
+    let toggle = Rect::from_center_size(
+        pos2(split.min(full.max.x) - 12.0, header.center().y),
+        vec2(18.0, 18.0),
+    );
+    if full.width() >= 360.0 {
+        let tr = ui.interact(toggle, ui.id().with("ec-timeline"), Sense::click());
+        icons::draw(
+            ui.painter(),
+            toggle.shrink(2.0),
+            if timeline {
+                Icon::ChevronRight
+            } else {
+                Icon::KeyAdd
+            },
+            if tr.hovered() {
+                theme::TEXT_BRIGHT
+            } else {
+                theme::TEXT_DIM
+            },
+        );
+        let tip = if timeline {
+            t("Hide Timeline View")
+        } else {
+            t("Show Timeline View")
+        };
+        if tr.on_hover_text(tip).clicked() {
+            s.ed.prefs.effect_controls_timeline = !s.ed.prefs.effect_controls_timeline;
+        }
+    }
     ui.painter()
-        .with_clip_rect(Rect::from_min_max(header.min, pos2(split, header.max.y)))
+        .with_clip_rect(Rect::from_min_max(
+            header.min,
+            pos2(toggle.min.x - 4.0, header.max.y),
+        ))
         .text(
             header.left_center() + vec2(8.0, 0.0),
             Align2::LEFT_CENTER,
@@ -223,6 +263,9 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                 ui.add_space(40.0);
             });
     });
+    if !timeline {
+        return;
+    }
     // playhead in the lane
     let x = lane.x(ph.clamp(lane.start, lane.end));
     ui.painter()
@@ -231,6 +274,63 @@ pub fn show(s: &mut State, ui: &mut Ui) {
             [pos2(x, full.min.y), pos2(x, full.max.y)],
             Stroke::new(1.0, theme::PLAYHEAD),
         );
+    // the divider between the parameters and the timeline (registered last so it wins the
+    // pointer over the rows below it)
+    let handle = Rect::from_center_size(pos2(split, full.center().y), vec2(8.0, full.height()));
+    let hr = ui.interact(handle, ui.id().with("ec-split"), Sense::drag());
+    let active = hr.hovered() || hr.dragged();
+    if active {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+    }
+    if hr.dragged()
+        && let Some(p) = hr.interact_pointer_pos()
+    {
+        s.ed.prefs.effect_controls_split = ((p.x - full.min.x) / full.width()).clamp(0.2, 0.9);
+    }
+    ui.painter().line_segment(
+        [pos2(split, full.min.y), pos2(split, full.max.y)],
+        Stroke::new(
+            if active { 2.0 } else { 1.0 },
+            if active { theme::ACCENT } else { theme::LINE },
+        ),
+    );
+}
+
+/// One label column for every parameter shown, sized to the longest name but never more than
+/// about half of the parameter area, so values line up and long names are shortened instead of
+/// running under the values.
+fn set_label_width(ui: &Ui, comps: &[Component], left_width: f32) {
+    let font = FontId::proportional(12.0);
+    let widest = comps
+        .iter()
+        .filter_map(|c| c.def())
+        .flat_map(|d| d.params.iter())
+        .map(|p| {
+            ui.painter()
+                .layout_no_wrap(tn(p.label), font.clone(), theme::TEXT)
+                .size()
+                .x
+        })
+        .fold(0.0f32, f32::max);
+    let w = (widest + 12.0).clamp(70.0, (left_width * 0.45).max(70.0));
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new("ec-label-w"), w));
+}
+
+/// Paints `text` inside `r`, cut at its right edge; returns whether it was cut.
+fn clipped_text(ui: &Ui, r: Rect, text: &str, size: f32, color: Color32) -> bool {
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_string(), FontId::proportional(size), color);
+    let cut = galley.size().x > r.width();
+    ui.painter()
+        .with_clip_rect(r.intersect(ui.clip_rect()))
+        .galley(
+            pos2(r.min.x, r.center().y - galley.size().y / 2.0),
+            galley,
+            color,
+        );
+    cut
 }
 
 fn empty(ui: &Ui, r: Rect, text: &str) {
@@ -332,26 +432,32 @@ fn component_ui(
         },
         theme::TEXT_DIM,
     );
-    ui.painter().text(
-        row.min + vec2(48.0, ROW_H / 2.0),
-        Align2::LEFT_CENTER,
-        &name,
-        FontId::proportional(12.5),
-        if comp.enabled {
-            theme::TEXT_BRIGHT
-        } else {
-            theme::TEXT_DIM
-        },
-    );
+    // the name stops before the controls at the right; the full name shows on hover
+    let mut name_end = split - 30.0;
     if def.is_none() {
-        ui.painter().text(
+        let warn = ui.painter().text(
             pos2(split - 8.0, row.center().y),
             Align2::RIGHT_CENTER,
             t("not supported"),
             FontId::proportional(11.0),
             theme::WARN,
         );
+        name_end = warn.min.x - 6.0;
     }
+    let name_rect = Rect::from_min_max(
+        pos2(row.min.x + 48.0, row.min.y),
+        pos2(name_end.max(row.min.x + 60.0), row.max.y),
+    );
+    let color = if comp.enabled {
+        theme::TEXT_BRIGHT
+    } else {
+        theme::TEXT_DIM
+    };
+    let resp = if clipped_text(ui, name_rect, &name, 12.5, color) {
+        resp.on_hover_text(&name)
+    } else {
+        resp
+    };
     // reset
     let reset = Rect::from_center_size(pos2(split - 16.0, row.center().y), vec2(18.0, 18.0));
     if def.is_some() {
@@ -579,27 +685,15 @@ fn param_row(
     }
     // the name gets its own column and is cut (with the full name as a tooltip) rather than
     // running under the values when the panel is narrow
-    let label_w = 140.0f32.min((split - left.min.x - indent) * 0.45).max(40.0);
+    let column: Option<f32> = ui.ctx().data(|d| d.get_temp(egui::Id::new("ec-label-w")));
+    let room = (split - left.min.x - indent) * 0.5;
+    let label_w = column.unwrap_or(140.0).min(room).max(40.0);
     let label_rect = Rect::from_min_max(
-        pos2(left.min.x + indent + 2.0, left.min.y),
+        pos2(left.min.x + indent + 4.0, left.min.y),
         pos2(left.min.x + indent + label_w - 4.0, left.min.y + ROW_H),
     );
     let name = tn(spec.label);
-    let galley = ui
-        .painter()
-        .layout_no_wrap(name.clone(), FontId::proportional(12.0), theme::TEXT);
-    let cut = galley.size().x > label_rect.width();
-    ui.painter()
-        .with_clip_rect(label_rect.intersect(ui.clip_rect()))
-        .galley(
-            pos2(
-                label_rect.min.x + 2.0,
-                label_rect.center().y - galley.size().y / 2.0,
-            ),
-            galley,
-            theme::TEXT,
-        );
-    if cut {
+    if clipped_text(ui, label_rect, &name, 12.0, theme::TEXT) {
         ui.interact(
             label_rect,
             ui.id().with(("lbl", comp.id.0, spec.key)),
@@ -1292,5 +1386,6 @@ pub fn component_panel(
     };
     let Some(def) = c.def() else { return };
     let split = ui.max_rect().max.x - 4.0;
+    set_label_width(ui, std::slice::from_ref(&c), split - ui.max_rect().min.x);
     params_ui(s, ui, &cx, &c, def, None, split);
 }
