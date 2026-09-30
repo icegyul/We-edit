@@ -2,6 +2,36 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.2.0 - 2026-09-30
+
+### Added
+
+- Exports can be paused and resumed; paused time is not counted in the elapsed and remaining estimates.
+- While exporting, the Program monitor shows the frames being rendered with the export progress, and the bottom right corner of the window shows the progress with Pause and Cancel (details such as frames, elapsed and remaining time, speed and encoder on hover). When the export ends, an Open Folder button appears there.
+- The output frame rate can be chosen in Export Settings (Ctrl+M); the sequence rate stays the default.
+- Crash recovery: shortly after each change the project is written to a recovery file in the background, and an emergency copy plus a crash report are written if the program fails. The recovered project is offered at the next start.
+- Program log with an in-app viewer (Help > Show Log...) offering level filter, search, copy and clear. The log file can be switched on or off and its detail level chosen in Preferences; the previous session's log is kept and crash reports are always written.
+- Full color picker for color parameters and mattes: saturation and brightness square, hue and opacity strips, RGB fields and hexadecimal code.
+- Closing the program during an export asks whether to stop it or keep exporting.
+
+### Changed
+
+- Interface Scale in Preferences is applied with an Apply button instead of resizing the whole interface while the slider moves.
+- Projects open on a background thread with a progress indicator; autosave and recovery files are written in the background.
+- Panel tabs have gray panel icons, more spacing and a flat look with an underline on the active tab.
+- The Tools panel starts as a compact strip without a tab bar. Workspace layouts saved by 0.1.0 are replaced once by the new default layout.
+- Dialogs, pop-ups and undocked panels open centered on the program window.
+- The panel tab context menu and more status messages follow the interface language.
+- Effect Controls and the monitor transport controls adapt to narrow panels: long names are shortened (full name on hover) and less important buttons move to the settings menu instead of overlapping.
+- Thinner OP logo.
+
+### Fixed
+
+- A failing panel, dialog, decoder, thumbnail or audio mix no longer closes the program; the affected part is restored or skipped and the problem is logged.
+- Graphics validation errors are logged instead of ending the program.
+- An export to a folder that cannot be written, for example one protected by Windows Controlled folder access, reports a clear error instead of "No such file or directory".
+- Minimizing the window no longer squeezes the panels; their sizes are kept for when it is restored.
+
 ## 0.1.0 - 2026-09-29
 
 ### Added

@@ -29,6 +29,15 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-09-30">
+      <description>
+        <p>
+          Pausable exports with a live preview of the rendered frames and a selectable output
+          frame rate, crash recovery, a program log that can be enabled in Preferences, a full
+          color picker, redesigned panel tabs and dialogs that open centered.
+        </p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-09-28"/>
   </releases>
 </component>

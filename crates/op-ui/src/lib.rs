@@ -2,6 +2,7 @@
 //! call its methods; the GPU compositor draws the monitors on the window's own device.
 
 mod app;
+mod color;
 mod dialogs;
 mod effect_controls;
 mod effects_panel;

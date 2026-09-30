@@ -149,7 +149,15 @@ impl Playback {
                                     .clamp(1, out.rate as usize / 4);
                                 let mut buf = vec![0f32; frames * 2];
                                 mixer.reset();
-                                mixer.render(&p, s, at, 1.0, &mut buf, &*source);
+                                let mixed =
+                                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                        mixer.render(&p, s, at, 1.0, &mut buf, &*source)
+                                    }));
+                                if mixed.is_err() {
+                                    log::error!("audio scrubbing failed at {:.3} s", at.seconds());
+                                    buf.fill(0.0);
+                                    mixer.reset();
+                                }
                                 // short fades avoid clicks
                                 let fade = frames.min(64);
                                 for i in 0..fade {
@@ -174,7 +182,19 @@ impl Playback {
                         && let Some(p) = &project
                     {
                         while out.free_frames() >= BLOCK {
-                            mixer.render(p, sequence, next, speed, &mut stereo, &*source);
+                            // a failure while mixing one block plays silence, never stops the engine
+                            let mixed =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    mixer.render(p, sequence, next, speed, &mut stereo, &*source)
+                                }));
+                            if mixed.is_err() {
+                                log::error!(
+                                    "audio mixing failed at {:.3} s; muted this block",
+                                    next.seconds()
+                                );
+                                stereo.fill(0.0);
+                                mixer.reset();
+                            }
                             to_device(&stereo, &mut device, out.channels);
                             out.write(&device);
                             next += Dur::from_seconds(BLOCK as f64 * speed / out.rate as f64);

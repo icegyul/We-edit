@@ -1,6 +1,6 @@
 # Technical documentation
 
-OpenPremier 0.1.0 is an early alpha with working builds for Windows and Linux. This documentation records the implemented architecture, interoperability research and the tests still required before broader compatibility claims can be made.
+OpenPremier 0.2.0 is an early alpha with working builds for Windows and Linux. This documentation records the implemented architecture, interoperability research and the tests still required before broader compatibility claims can be made.
 
 ## Project documentation
 

@@ -169,6 +169,7 @@ impl Output {
             })
             .map_err(|e| e.to_string())?;
         ready_rx.recv().map_err(|e| e.to_string())??;
+        log::info!("audio output: {name} ({rate} Hz, {channels} channels)");
         Ok(Output {
             rate,
             channels,

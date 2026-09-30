@@ -111,8 +111,14 @@ pub fn tool_name(tool: Tool) -> &'static str {
 }
 
 pub fn tools(s: &mut State, ui: &mut Ui) {
-    let r = ui.max_rect();
-    let vertical = r.height() > r.width();
+    let full = ui.max_rect();
+    let vertical = full.height() > full.width();
+    // the strip has no tab: its top edge is the handle that moves the panel
+    let r = if vertical {
+        Rect::from_min_max(pos2(full.min.x, full.min.y + 10.0), full.max)
+    } else {
+        full
+    };
     let layout = if vertical {
         egui::Layout::top_down(egui::Align::Center)
     } else {
@@ -691,7 +697,8 @@ pub fn info(s: &mut State, ui: &mut Ui) {
                 .show(ui, |ui| {
                     let mut row = |k: &str, v: String| {
                         ui.label(RichText::new(k).color(theme::TEXT_DIM));
-                        ui.label(v);
+                        ui.add(egui::Label::new(v.clone()).truncate())
+                            .on_hover_text(v);
                         ui.end_row();
                     };
                     if let Some(seq) = s.ed.active_seq() {

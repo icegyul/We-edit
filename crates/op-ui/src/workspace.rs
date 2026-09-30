@@ -133,7 +133,7 @@ impl Workspace {
                     t.split_left(top, 0.5, vec![Source, EffectControls, AudioMixer, Graphics]);
                 let [timeline, _project] =
                     t.split_left(bottom, 0.3, vec![Project, Effects, Markers, History, Info]);
-                let [timeline, _tools] = t.split_left(timeline, 0.04, vec![Tools]);
+                let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
                 t.split_right(timeline, 0.965, vec![Meters]);
             }
             Workspace::Assembly => {
@@ -143,7 +143,7 @@ impl Workspace {
                     vec![Project, Effects, Markers, History],
                 );
                 let [timeline, _program] = t.split_above(right, 0.5, vec![Program, Source]);
-                let [timeline, _tools] = t.split_left(timeline, 0.05, vec![Tools]);
+                let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
                 t.split_right(timeline, 0.955, vec![Meters]);
             }
             Workspace::Color => {
@@ -162,7 +162,7 @@ impl Workspace {
                 t.split_left(top, 0.5, vec![EffectControls, Source]);
                 let [timeline, _project] =
                     t.split_left(bottom, 0.25, vec![Project, History, Markers]);
-                let [timeline, _tools] = t.split_left(timeline, 0.05, vec![Tools]);
+                let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
                 t.split_right(timeline, 0.955, vec![Meters]);
             }
             Workspace::Audio => {
@@ -177,13 +177,21 @@ impl Workspace {
                     t.split_right(NodeIndex::root(), 0.77, vec![Graphics, EffectControls]);
                 let [bottom, top] = t.split_above(left, 0.52, vec![Program]);
                 t.split_left(top, 0.4, vec![Source, Project]);
-                let [timeline, _tools] = t.split_left(bottom, 0.05, vec![Tools]);
+                let [timeline, _tools] = t.split_left(bottom, 0.02, vec![Tools]);
                 t.split_right(timeline, 0.955, vec![Meters]);
             }
+        }
+        // the tool strip is a slim column without a tab, like the tools of other editors
+        if let Some((node, _)) = s.main_surface().find_tab(&Tools) {
+            s.main_surface_mut()[node].set_tab_bar_hidden(true);
         }
         s
     }
 }
+
+/// Saved layouts carry this version in their file name; a new factory layout replaces layouts
+/// saved by older versions.
+pub const LAYOUT_VERSION: u32 = 2;
 
 /// Layout JSON as saved: rectangles that were never laid out are NaN, which JSON writes as
 /// null; they are restored as zero (egui_dock recomputes them on the next frame).
@@ -227,6 +235,12 @@ mod tests {
             let json = to_json(&s).unwrap();
             let back = from_json(&json).expect("layout round trip");
             assert_eq!(back.iter_all_tabs().count(), tabs.len());
+            if let Some((node, _)) = back.main_surface().find_tab(&Panel::Tools) {
+                assert!(
+                    back.main_surface()[node].is_tab_bar_hidden(),
+                    "{w:?} tools tab bar"
+                );
+            }
         }
     }
 }

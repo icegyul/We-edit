@@ -176,12 +176,17 @@ fn render(
         return Some((d.id, [d.tex.width, d.tex.height], aspect));
     }
     let speed = s.ed.transport.speed;
+    // never block the interface for long on a decoder: while scrubbing the nearest decoded
+    // frame is shown at once and the exact one replaces it as soon as it arrives
+    let scrubbing = s.ctx.input(|i| i.pointer.is_decidedly_dragging());
     let frames = PreviewFrames {
         service: s.ed.media.clone(),
         wait: if playing {
-            Duration::from_millis(8)
+            Duration::from_millis(6)
+        } else if scrubbing {
+            Duration::ZERO
         } else {
-            Duration::from_millis(40)
+            Duration::from_millis(25)
         },
         ahead: if playing {
             (speed.round() as i64)
@@ -273,6 +278,14 @@ fn body(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
     let controls = Rect::from_min_max(pos2(full.min.x, full.max.y - controls_h), full.max);
     ui.painter()
         .rect_filled(pic_area.expand(4.0), 0.0, theme::PANEL_DARK);
+    if v.which == Monitor::Program && s.exporting() {
+        export_view(s, ui, pic_area);
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(controls.shrink2(vec2(8.0, 2.0))),
+            |ui| transport(s, v, ui),
+        );
+        return;
+    }
 
     let rendered = render(s, v, pic_area.size());
     let ppp = ui.ctx().pixels_per_point();
@@ -348,6 +361,49 @@ fn body(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
     );
 }
 
+/// The frames an export renders, with its progress, shown in the Program Monitor.
+fn export_view(s: &mut State, ui: &Ui, area: Rect) {
+    let Some(p) = s.running_export().map(|j| j.progress.lock().clone()) else {
+        return;
+    };
+    let painter = ui.painter().with_clip_rect(area);
+    if let Some((id, size)) = s.export_preview() {
+        let k = (area.width() / size.x).min(area.height() / size.y);
+        let r = Rect::from_center_size(area.center(), size * k);
+        painter.image(
+            id,
+            r,
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+    let bar = Rect::from_min_max(pos2(area.min.x, area.max.y - 26.0), area.max);
+    painter.rect_filled(bar, 0.0, Color32::from_black_alpha(190));
+    let fill = Rect::from_min_max(
+        pos2(bar.min.x, bar.max.y - 3.0),
+        pos2(bar.min.x + bar.width() * p.fraction(), bar.max.y),
+    );
+    painter.rect_filled(fill, 0.0, theme::ACCENT);
+    let text = if p.paused {
+        format!("{}  {:.0} %", t("Export paused"), p.fraction() * 100.0)
+    } else if p.preparing {
+        t("Preparing audio...").to_string()
+    } else {
+        format!(
+            "{}  {:.0} %",
+            crate::i18n::tf("Exporting frame {} of {}", &[&p.frame, &p.total]),
+            p.fraction() * 100.0
+        )
+    };
+    painter.text(
+        bar.left_center() + vec2(10.0, -1.0),
+        Align2::LEFT_CENTER,
+        text,
+        FontId::proportional(12.0),
+        theme::TEXT_BRIGHT,
+    );
+}
+
 fn checkerboard(p: &egui::Painter, r: Rect) {
     p.rect_filled(r, 0.0, Color32::from_gray(40));
     let n = 16.0;
@@ -376,7 +432,12 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
         Monitor::Program => s.ed.active_seq().map(|q| q.duration()).unwrap_or(Dur::ZERO),
         Monitor::Source => s.ed.source_duration(),
     };
-    // timecode row
+    // controls give way as the monitor narrows, instead of drawing over each other: the zoom
+    // and resolution menus move into the settings menu, then the duration and the less
+    // frequent buttons are left out
+    let width = ui.available_width();
+    let compact = width < 470.0;
+    let tiny = width < 300.0;
     ui.horizontal(|ui| {
         let id = ui.id().with(("tc", which == Monitor::Program));
         if let Some(d) =
@@ -385,43 +446,54 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
             s.ed.stop();
             s.ed.set_monitor_time(which, SeqTime::ZERO + (d - offset));
         }
-        ui.add_space(8.0);
         let fit = if v.zoom == 0.0 {
             t("Fit").to_string()
         } else {
             format!("{:.0} %", v.zoom * 100.0)
         };
-        egui::ComboBox::from_id_salt(("zoom", which == Monitor::Program))
-            .selected_text(fit)
-            .width(64.0)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut v.zoom, 0.0, t("Fit"));
-                for z in [0.25f32, 0.5, 0.75, 1.0, 1.5, 2.0] {
-                    ui.selectable_value(&mut v.zoom, z, format!("{:.0} %", z * 100.0));
-                }
-            });
         let res = s.ed.prefs.paused_resolution;
-        let label = match res {
-            1 => t("Full"),
-            2 => "1/2",
-            4 => "1/4",
-            _ => "1/8",
+        let res_label = |d: u32| match d {
+            1 => t("Full").to_string(),
+            n => format!("1/{n}"),
         };
-        egui::ComboBox::from_id_salt(("res", which == Monitor::Program))
-            .selected_text(label)
-            .width(56.0)
-            .show_ui(ui, |ui| {
-                for (d, l) in [(1u32, t("Full")), (2, "1/2"), (4, "1/4"), (8, "1/8")] {
-                    if ui.selectable_label(res == d, l).clicked() {
-                        s.ed.prefs.paused_resolution = d;
-                        s.ed.prefs.playback_resolution = s.ed.prefs.playback_resolution.max(d);
-                    }
+        let zoom_choices = |ui: &mut Ui, v: &mut MonitorView| {
+            ui.selectable_value(&mut v.zoom, 0.0, t("Fit"));
+            for z in [0.25f32, 0.5, 0.75, 1.0, 1.5, 2.0] {
+                ui.selectable_value(&mut v.zoom, z, format!("{:.0} %", z * 100.0));
+            }
+        };
+        let res_choices = |ui: &mut Ui, s: &mut State| {
+            for d in [1u32, 2, 4, 8] {
+                if ui.selectable_label(res == d, res_label(d)).clicked() {
+                    s.ed.prefs.paused_resolution = d;
+                    s.ed.prefs.playback_resolution = s.ed.prefs.playback_resolution.max(d);
                 }
-            })
-            .response
-            .on_hover_text(t("Resolution"));
+            }
+        };
+        if !compact {
+            ui.add_space(8.0);
+            egui::ComboBox::from_id_salt(("zoom", which == Monitor::Program))
+                .selected_text(fit.clone())
+                .width(64.0)
+                .show_ui(ui, |ui| zoom_choices(ui, v))
+                .response
+                .on_hover_text(t("Zoom"));
+            egui::ComboBox::from_id_salt(("res", which == Monitor::Program))
+                .selected_text(res_label(res))
+                .width(56.0)
+                .show_ui(ui, |ui| res_choices(ui, s))
+                .response
+                .on_hover_text(t("Resolution"));
+        }
         let wrench = icons::button(ui, Icon::Wrench, 20.0, false, t("Settings"));
         egui::Popup::menu(&wrench).show(|ui| {
+            if compact {
+                ui.menu_button(format!("{}: {fit}", t("Zoom")), |ui| zoom_choices(ui, v));
+                ui.menu_button(format!("{}: {}", t("Resolution"), res_label(res)), |ui| {
+                    res_choices(ui, s)
+                });
+                ui.separator();
+            }
             ui.checkbox(&mut v.safe_margins, t("Safe Margins"));
             ui.checkbox(&mut v.show_alpha, t("Show Alpha Channel"));
             let mut scrub = s.ed.prefs.audio_scrubbing;
@@ -430,21 +502,24 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
             }
             ui.checkbox(&mut s.loop_playback, t("Loop"));
         });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let (i, o) = (s.ed.mark(which, true), s.ed.mark(which, false));
-            let span = match (i, o) {
-                (Some(i), Some(o)) => o - i,
-                (Some(i), None) => SeqTime::ZERO + duration - i,
-                (None, Some(o)) => o.since_zero(),
-                _ => duration,
-            };
-            ui.label(
-                egui::RichText::new(fmt.format(span))
-                    .monospace()
-                    .size(13.0)
-                    .color(theme::TEXT),
-            );
-        });
+        if !tiny {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (i, o) = (s.ed.mark(which, true), s.ed.mark(which, false));
+                let span = match (i, o) {
+                    (Some(i), Some(o)) => o - i,
+                    (Some(i), None) => SeqTime::ZERO + duration - i,
+                    (None, Some(o)) => o.since_zero(),
+                    _ => duration,
+                };
+                ui.label(
+                    egui::RichText::new(fmt.format(span))
+                        .monospace()
+                        .size(13.0)
+                        .color(theme::TEXT),
+                )
+                .on_hover_text(t("Duration"));
+            });
+        }
     });
     // mini timeline
     let (bar, resp) =
@@ -501,12 +576,30 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
         s.ed.set_monitor_time(which, tt);
         s.ed.scrub_audio(which);
     }
-    // buttons
+    // buttons: everything when there is room, the essentials when the monitor is narrow
+    let all = width >= 420.0;
+    let most = width >= 300.0;
+    let size = if most { 22.0 } else { 20.0 };
     ui.add_space(3.0);
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let count = if all {
+            14.0
+        } else if most {
+            10.0
+        } else {
+            5.0
+        };
+        let groups = if all {
+            3.0
+        } else if most {
+            2.0
+        } else {
+            0.0
+        };
+        let needed = count * (size + 4.0) + groups * 8.0;
+        ui.add_space(((ui.available_width() - needed) / 2.0).max(0.0));
         let playing = s.ed.transport.playing == Some(which);
-        let total = 14.0 * 28.0;
-        ui.add_space(((ui.available_width() - total) / 2.0).max(0.0));
         let cmd = |s: &mut State, c: &str| {
             s.focus = if which == Monitor::Program {
                 op_application::Focus::Program
@@ -521,9 +614,9 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
                     .keys_for(c)
                     .map(|k| format!(" ({k})"))
                     .unwrap_or_default();
-            icons::button(ui, icon, 22.0, false, &format!("{}{keys}", t(tip))).clicked()
+            icons::button(ui, icon, size, false, &format!("{}{keys}", t(tip))).clicked()
         };
-        if b(ui, s, Icon::Marker, "Add Marker", "cmd.set.marker") {
+        if most && b(ui, s, Icon::Marker, "Add Marker", "cmd.set.marker") {
             cmd(s, "cmd.set.marker");
         }
         if b(ui, s, Icon::MarkIn, "Mark In", "cmd.common.setin") {
@@ -532,9 +625,11 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
         if b(ui, s, Icon::MarkOut, "Mark Out", "cmd.common.setout") {
             cmd(s, "cmd.common.setout");
         }
-        ui.add_space(8.0);
-        if b(ui, s, Icon::GoIn, "Go to In", "cmd.goto.in") {
-            cmd(s, "cmd.goto.in");
+        if most {
+            ui.add_space(8.0);
+            if b(ui, s, Icon::GoIn, "Go to In", "cmd.goto.in") {
+                cmd(s, "cmd.goto.in");
+            }
         }
         if b(
             ui,
@@ -562,45 +657,51 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
         ) {
             cmd(s, "cmd.transport.step.forward");
         }
-        if b(ui, s, Icon::GoOut, "Go to Out", "cmd.goto.out") {
-            cmd(s, "cmd.goto.out");
-        }
-        ui.add_space(8.0);
-        match which {
-            Monitor::Source => {
-                if b(ui, s, Icon::Insert, "Insert", "cmd.clip.insert") {
-                    s.command("cmd.clip.insert");
+        if most {
+            if b(ui, s, Icon::GoOut, "Go to Out", "cmd.goto.out") {
+                cmd(s, "cmd.goto.out");
+            }
+            ui.add_space(8.0);
+            match which {
+                Monitor::Source => {
+                    if b(ui, s, Icon::Insert, "Insert", "cmd.clip.insert") {
+                        s.command("cmd.clip.insert");
+                    }
+                    if b(ui, s, Icon::Overwrite, "Overwrite", "cmd.clip.overlay") {
+                        s.command("cmd.clip.overlay");
+                    }
                 }
-                if b(ui, s, Icon::Overwrite, "Overwrite", "cmd.clip.overlay") {
-                    s.command("cmd.clip.overlay");
+                Monitor::Program => {
+                    if b(ui, s, Icon::Lift, "Lift", "cmd.sequence.lift") {
+                        cmd(s, "cmd.sequence.lift");
+                    }
+                    if b(ui, s, Icon::Extract, "Extract", "cmd.sequence.extract") {
+                        cmd(s, "cmd.sequence.extract");
+                    }
                 }
             }
-            Monitor::Program => {
-                if b(ui, s, Icon::Lift, "Lift", "cmd.sequence.lift") {
-                    cmd(s, "cmd.sequence.lift");
-                }
-                if b(ui, s, Icon::Extract, "Extract", "cmd.sequence.extract") {
-                    cmd(s, "cmd.sequence.extract");
-                }
+        }
+        if all {
+            ui.add_space(8.0);
+            if icons::button(ui, Icon::Loop, size, s.loop_playback, t("Loop")).clicked() {
+                s.loop_playback = !s.loop_playback;
             }
-        }
-        ui.add_space(8.0);
-        if icons::button(ui, Icon::Loop, 22.0, s.loop_playback, t("Loop")).clicked() {
-            s.loop_playback = !s.loop_playback;
-        }
-        if icons::button(
-            ui,
-            Icon::SafeMargins,
-            22.0,
-            v.safe_margins,
-            t("Safe Margins"),
-        )
-        .clicked()
-        {
-            v.safe_margins = !v.safe_margins;
-        }
-        if which == Monitor::Program && b(ui, s, Icon::Camera, "Export Frame", "cmd.export.frame") {
-            s.command("cmd.export.frame");
+            if icons::button(
+                ui,
+                Icon::SafeMargins,
+                size,
+                v.safe_margins,
+                t("Safe Margins"),
+            )
+            .clicked()
+            {
+                v.safe_margins = !v.safe_margins;
+            }
+            if which == Monitor::Program
+                && b(ui, s, Icon::Camera, "Export Frame", "cmd.export.frame")
+            {
+                s.command("cmd.export.frame");
+            }
         }
     });
 }

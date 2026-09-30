@@ -2,9 +2,7 @@
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 const USAGE: &str = "\
 OpenPremier - a free and open source video editor
@@ -18,56 +16,25 @@ Options:
   --help         print this help
 ";
 
-/// Logs to stderr and to a file in the data folder.
-struct Logger {
-    file: Mutex<Option<std::fs::File>>,
-    level: log::LevelFilter,
-}
-
-impl log::Log for Logger {
-    fn enabled(&self, m: &log::Metadata) -> bool {
-        m.level() <= self.level && (m.target().starts_with("op") || m.level() <= log::Level::Warn)
-    }
-
-    fn log(&self, r: &log::Record) {
-        if !self.enabled(r.metadata()) {
-            return;
-        }
-        let line = format!("[{}] {}: {}\n", r.level(), r.target(), r.args());
-        let _ = std::io::stderr().write_all(line.as_bytes());
-        if let Ok(mut f) = self.file.lock()
-            && let Some(f) = f.as_mut()
-        {
-            let _ = f.write_all(line.as_bytes());
-        }
-    }
-
-    fn flush(&self) {}
-}
-
-fn init_logging(data: &Path) {
-    let _ = std::fs::create_dir_all(data);
-    let path = data.join("openpremier.log");
-    // keep the previous session's log for bug reports
-    if path.exists() {
-        let _ = std::fs::rename(&path, data.join("openpremier.previous.log"));
-    }
-    let level = match std::env::var("OPENPREMIER_LOG").as_deref() {
-        Ok("debug") => log::LevelFilter::Debug,
-        Ok("trace") => log::LevelFilter::Trace,
-        Ok("warn") => log::LevelFilter::Warn,
-        _ => log::LevelFilter::Info,
-    };
-    let logger = Logger {
-        file: Mutex::new(std::fs::File::create(&path).ok()),
-        level,
-    };
-    if log::set_boxed_logger(Box::new(logger)).is_ok() {
-        log::set_max_level(level);
-    }
+/// Starts the program log with the user's preferences (`OPENPREMIER_LOG` overrides the level)
+/// and makes every failure leave a crash report and a recovery copy of the open project.
+fn init_logging(dirs: &op_application::Dirs) {
+    let prefs = op_application::Preferences::load(dirs);
+    let level = std::env::var("OPENPREMIER_LOG").unwrap_or(prefs.log_level.clone());
+    op_application::logging::init(&dirs.logs(), prefs.logging_enabled, &level);
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        log::error!("panic: {info}");
+        let thread = std::thread::current()
+            .name()
+            .unwrap_or("unnamed")
+            .to_string();
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        log::error!("failure in thread {thread}: {info}");
+        let report = format!("Thread: {thread}\n{info}\n\n{backtrace}");
+        if let Some(path) = op_application::logging::crash_report(&report) {
+            log::error!("crash report written to {}", path.display());
+        }
+        op_application::recovery::emergency_save();
         prev(info);
     }));
 }
@@ -176,14 +143,21 @@ fn main() {
         Some(root) => op_application::Dirs::portable(root),
         None => op_application::Dirs::system(),
     };
-    init_logging(&dirs.data);
+    init_logging(&dirs);
     log::info!(
-        "OpenPremier {} starting ({} {})",
+        "OpenPremier {} starting ({} {}), settings in {}{}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
-        std::env::consts::ARCH
+        std::env::consts::ARCH,
+        dirs.config.display(),
+        if portable.is_some() {
+            " (portable)"
+        } else {
+            ""
+        }
     );
     op_media::init();
+    log::info!("FFmpeg {}", op_media::ffmpeg_version());
     let open: Vec<PathBuf> = args
         .iter()
         .filter(|a| !a.starts_with("--"))
@@ -194,4 +168,6 @@ fn main() {
         eprintln!("OpenPremier could not start: {e}");
         std::process::exit(1);
     }
+    log::info!("OpenPremier closed normally");
+    log::logger().flush();
 }

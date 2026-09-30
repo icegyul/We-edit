@@ -34,6 +34,10 @@ pub struct Preferences {
     pub hardware_encoding: bool,
     pub last_export_dir: Option<PathBuf>,
     pub last_import_dir: Option<PathBuf>,
+    /// Write the program log to a file (errors are always kept in memory).
+    pub logging_enabled: bool,
+    /// Log detail: "error", "warn", "info", "debug" or "trace".
+    pub log_level: String,
 }
 
 impl Default for Preferences {
@@ -61,6 +65,8 @@ impl Default for Preferences {
             hardware_encoding: true,
             last_export_dir: None,
             last_import_dir: None,
+            logging_enabled: true,
+            log_level: "info".into(),
         }
     }
 }
@@ -99,6 +105,10 @@ impl Dirs {
     pub fn workspaces(&self) -> PathBuf {
         self.config.join("workspaces")
     }
+
+    pub fn logs(&self) -> PathBuf {
+        self.data.join("Logs")
+    }
 }
 
 impl Preferences {
@@ -109,10 +119,14 @@ impl Preferences {
             .unwrap_or_default()
     }
 
+    /// Writes the preferences atomically (a crash while saving keeps the previous file).
     pub fn save(&self, dirs: &Dirs) -> std::io::Result<()> {
         std::fs::create_dir_all(&dirs.config)?;
         let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        std::fs::write(dirs.config.join("preferences.json"), text)
+        let path = dirs.config.join("preferences.json");
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, &path)
     }
 
     pub fn add_recent(&mut self, path: &Path) {

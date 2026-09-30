@@ -3,19 +3,40 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use egui::{Color32, RichText, Stroke, StrokeKind, Ui, ViewportCommand};
-use egui_dock::{DockArea, DockState, TabViewer};
-use op_application::{Dirs, Editor, Focus, Monitor, Preferences, autosave};
+use egui_dock::{DockArea, DockState, SurfaceIndex, TabViewer};
+use op_application::{Dirs, Editor, Focus, LoadedProject, Monitor, Preferences, autosave};
 use op_core::*;
 
 use crate::dialogs::{Dialog, Then};
 use crate::i18n::{self, t, tf, tn};
+use crate::icons::{self, Icon};
 use crate::workspace::{Panel, Workspace};
 use crate::{
     effect_controls, effects_panel, keys, monitor, panels, project_panel, theme, timeline, widgets,
 };
+
+/// A project being read on a background thread.
+pub struct Opening {
+    pub path: PathBuf,
+    rx: std::sync::mpsc::Receiver<Result<LoadedProject, String>>,
+    pub started: Instant,
+    /// A recovered copy: it must be saved under a new name, so it starts as unsaved.
+    recovered: bool,
+}
+
+/// Export progress presentation: the frames shown in the Program Monitor and the entries at the
+/// right of the status bar.
+#[derive(Default)]
+pub struct ExportUi {
+    preview: Option<(u64, egui::TextureHandle)>,
+    /// Finished exports whose status bar entry was closed or has expired.
+    dismissed: HashSet<usize>,
+    /// When each export was first seen finished (successful entries hide after a while).
+    finished_at: HashMap<usize, Instant>,
+}
 
 /// Something being dragged between panels.
 #[derive(Clone, Debug)]
@@ -53,6 +74,10 @@ pub(crate) struct State {
     pub graphics: panels::GraphicsView,
     pub dialogs: Vec<Dialog>,
     pub drag: Option<Drag>,
+    pub opening: Option<Opening>,
+    pub export_ui: ExportUi,
+    /// Tab button rectangles of this frame (for the active-tab underline).
+    tab_rects: HashMap<Panel, egui::Rect>,
     dock_action: Option<DockAction>,
     thumbs: HashMap<(AssetId, i64), egui::TextureHandle>,
     title: String,
@@ -62,11 +87,15 @@ pub(crate) struct State {
     pub visible: HashSet<Panel>,
     drawn: HashSet<Panel>,
     ui_scale: f32,
+    minimized: bool,
 }
 
 pub struct App {
     dock: DockState<Panel>,
     layouts: HashMap<Workspace, DockState<Panel>>,
+    /// Floating panel windows already placed (new ones open centered).
+    placed: HashSet<SurfaceIndex>,
+    lang: i18n::Lang,
     s: State,
 }
 
@@ -85,7 +114,66 @@ fn focus_of(p: Panel) -> Option<Focus> {
 }
 
 fn layout_path(dirs: &Dirs, w: Workspace) -> PathBuf {
-    dirs.workspaces().join(format!("{}.json", w.key()))
+    dirs.workspaces().join(format!(
+        "{}.v{}.json",
+        w.key(),
+        crate::workspace::LAYOUT_VERSION
+    ))
+}
+
+/// Built-in texts of the docking system in the interface language.
+fn dock_translations() -> egui_dock::Translations {
+    let mut tr = egui_dock::Translations::english();
+    tr.tab_context_menu.close_button = t("Close Panel").into();
+    tr.tab_context_menu.eject_button = t("Undock Panel").into();
+    tr.tab_context_menu.hide_tab_bar_button = t("Hide Tab Bar").into();
+    tr.tab_context_menu.show_tab_bar_button = t("Show Tab Bar").into();
+    tr.leaf.close_button_disabled_tooltip = t("This panel group cannot be closed.").into();
+    tr.leaf.close_all_button = t("Close Window").into();
+    tr.leaf.close_all_button_menu_hint = t("Right-click to close this window.").into();
+    tr.leaf.close_all_button_modifier_hint = t("Hold Shift to close this window.").into();
+    tr.leaf.close_all_button_modifier_menu_hint =
+        t("Hold Shift or right-click to close this window.").into();
+    tr.leaf.close_all_button_disabled_tooltip = t("This window cannot be closed.").into();
+    tr.leaf.minimize_button = t("Minimize Window").into();
+    tr.leaf.minimize_button_menu_hint = t("Right-click to minimize this window.").into();
+    tr.leaf.minimize_button_modifier_hint = t("Hold Shift to minimize this window.").into();
+    tr.leaf.minimize_button_modifier_menu_hint =
+        t("Hold Shift or right-click to minimize this window.").into();
+    tr
+}
+
+/// The icon shown before a panel's name in its tab.
+fn panel_icon(p: Panel) -> Icon {
+    match p {
+        Panel::Project => Icon::Folder,
+        Panel::Source => Icon::Film,
+        Panel::Program => Icon::Play,
+        Panel::Timeline => Icon::Sequence,
+        Panel::EffectControls => Icon::Stopwatch,
+        Panel::Effects => Icon::Fx,
+        Panel::History => Icon::Reset,
+        Panel::Tools => Icon::Selection,
+        Panel::Meters | Panel::AudioMixer => Icon::Music,
+        Panel::Markers => Icon::Marker,
+        Panel::Info => Icon::List,
+        Panel::Lumetri => Icon::Eye,
+        Panel::Scopes => Icon::Grid,
+        Panel::Graphics => Icon::Type,
+    }
+}
+
+/// Opens a folder in the system file manager.
+pub fn open_folder(path: &Path) {
+    let _ = std::fs::create_dir_all(path);
+    let program = if cfg!(windows) {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    if let Err(e) = std::process::Command::new(program).arg(path).spawn() {
+        log::warn!("cannot open {}: {e}", path.display());
+    }
 }
 
 fn load_layout(dirs: &Dirs, w: Workspace) -> Option<DockState<Panel>> {
@@ -101,6 +189,10 @@ impl App {
             .wgpu_render_state
             .clone()
             .ok_or("the window has no GPU renderer")?;
+        // a GPU validation error must not end the program: report it and carry on
+        rs.device.on_uncaptured_error(Arc::new(|e: wgpu::Error| {
+            log::error!("GPU error: {e}");
+        }));
         let gpu =
             op_render::Gpu::shared(rs.device.clone(), rs.queue.clone(), rs.adapter.get_info());
         log::info!("GPU: {}", gpu.description());
@@ -148,6 +240,9 @@ impl App {
             graphics: panels::GraphicsView::default(),
             dialogs: Vec::new(),
             drag: None,
+            opening: None,
+            export_ui: ExportUi::default(),
+            tab_rects: HashMap::new(),
             dock_action: None,
             thumbs: HashMap::new(),
             title: String::new(),
@@ -156,15 +251,20 @@ impl App {
             visible: HashSet::new(),
             drawn: HashSet::new(),
             ui_scale,
+            minimized: false,
         };
         s.renderer.warm_up();
         s.open_or_import(opts.open);
         if let Some(p) = recovery {
             s.dialogs.push(Dialog::Recover(p));
         }
+        let mut dock = dock;
+        dock.translations = dock_translations();
         Ok(App {
             dock,
             layouts: HashMap::new(),
+            placed: HashSet::new(),
+            lang: i18n::current(),
             s,
         })
     }
@@ -196,14 +296,43 @@ impl App {
                         .remove(&w)
                         .or_else(|| load_layout(&self.s.ed.dirs, w))
                         .unwrap_or_else(|| w.layout());
+                    self.dock.translations = dock_translations();
                     self.s.workspace = w;
+                    log::debug!("workspace {}", w.key());
                 }
             }
             DockAction::Reset => {
                 self.dock = self.s.workspace.layout();
+                self.dock.translations = dock_translations();
                 let _ = std::fs::remove_file(layout_path(&self.s.ed.dirs, self.s.workspace));
             }
         }
+    }
+
+    /// Newly undocked panels open centered in the program window; the docking texts follow the
+    /// interface language.
+    fn tend_dock(&mut self, ctx: &egui::Context) {
+        if i18n::current() != self.lang {
+            self.lang = i18n::current();
+            self.dock.translations = dock_translations();
+        }
+        let center = ctx.content_rect().center();
+        let size = egui::vec2(560.0, 420.0);
+        for (index, surface) in self.dock.iter_surfaces_mut_indexed() {
+            if let egui_dock::Surface::Window(_, state) = surface
+                && self.placed.insert(index)
+            {
+                state.set_size(size);
+                state.set_position(center - size / 2.0);
+            }
+        }
+        let alive: HashSet<SurfaceIndex> = self
+            .dock
+            .iter_surfaces_indexed()
+            .filter(|(_, s)| matches!(s, egui_dock::Surface::Window(..)))
+            .map(|(i, _)| i)
+            .collect();
+        self.placed.retain(|i| alive.contains(i));
     }
 
     fn save_layouts(&mut self) {
@@ -276,6 +405,10 @@ impl App {
             });
             ui.menu_button(t("Help"), |ui| {
                 item(ui, s, "Keyboard Shortcuts...", "cmd.edit.keyboardshortcuts");
+                ui.separator();
+                item(ui, s, "Show Log...", "op.help.log");
+                item(ui, s, "Open Log Folder", "op.help.logfolder");
+                ui.separator();
                 item(ui, s, "About OpenPremier", "op.help.about");
             });
             // workspace tabs on the right, like the header of professional editors
@@ -754,7 +887,13 @@ impl State {
                 self.clipboard_text();
             }
             "cmd.edit.keyboardshortcuts" => self.dialogs.push(Dialog::shortcuts()),
-            "op.edit.preferences" => self.dialogs.push(Dialog::Preferences),
+            "op.edit.preferences" => self.dialogs.push(Dialog::preferences(self)),
+            "op.help.log" => self.dialogs.push(Dialog::log()),
+            "op.help.logfolder" => {
+                if let Some(dir) = op_application::logging::folder() {
+                    open_folder(&dir);
+                }
+            }
             "op.help.about" | "cmd.help.contents" => self.dialogs.push(Dialog::About),
             "cmd.clip.speed" => {
                 if let Some(d) = Dialog::speed(self) {
@@ -870,8 +1009,11 @@ impl State {
                     self.dock_action = Some(DockAction::Focus(p));
                 } else if !self.ed.execute(cmd, self.focus) {
                     log::debug!("command not available: {cmd}");
-                } else if self.loop_playback && cmd.starts_with("cmd.transport.") {
-                    self.apply_loop();
+                } else {
+                    log::debug!("command {cmd} ({:?})", self.focus);
+                    if self.loop_playback && cmd.starts_with("cmd.transport.") {
+                        self.apply_loop();
+                    }
                 }
             }
         }
@@ -969,15 +1111,69 @@ impl State {
         }
     }
 
+    /// Reads a project on a background thread; the window stays responsive meanwhile.
     pub fn open_path(&mut self, p: &Path) {
-        match self.ed.open(p) {
-            Ok(()) => {
+        self.open_in_background(p, false);
+    }
+
+    /// Opens a recovered copy: it is shown as unsaved and must be saved under a name.
+    pub fn open_recovered(&mut self, p: &Path) {
+        self.open_in_background(p, true);
+    }
+
+    fn open_in_background(&mut self, p: &Path, recovered: bool) {
+        if self.opening.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path = p.to_path_buf();
+        let spawned = std::thread::Builder::new()
+            .name("open-project".into())
+            .spawn(move || {
+                let r =
+                    op_application::media::guarded("open project", || Editor::load_project(&path));
+                let _ = tx.send(r);
+            });
+        match spawned {
+            Ok(_) => {
+                self.opening = Some(Opening {
+                    path: p.to_path_buf(),
+                    rx,
+                    started: Instant::now(),
+                    recovered,
+                })
+            }
+            Err(e) => self.ed.error(format!("{}: {e}", p.display())),
+        }
+    }
+
+    fn poll_opening(&mut self) {
+        let Some(o) = &self.opening else { return };
+        let result = match o.rx.try_recv() {
+            Ok(r) => r,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err("the project could not be read".into())
+            }
+        };
+        let o = self.opening.take().unwrap();
+        match result {
+            Ok(loaded) => {
+                self.ed.install(loaded);
                 self.after_open();
+                if o.recovered {
+                    // the copy is not the user's file: keep it unsaved until saved by name
+                    self.ed.path = None;
+                    self.ed.history.clear();
+                    self.ed
+                        .info(t("Recovered project opened; save it to keep it"));
+                }
                 if let Some(r) = self.ed.last_import_report.take() {
                     self.dialogs.push(Dialog::ImportReport(Box::new(r)));
                 }
+                log::info!("project ready in {} ms", o.started.elapsed().as_millis());
             }
-            Err(e) => self.ed.error(format!("{}: {e}", p.display())),
+            Err(e) => self.ed.error(format!("{}: {e}", o.path.display())),
         }
     }
 
@@ -1263,6 +1459,49 @@ impl State {
         }
     }
 
+    /// The export shown in the Program Monitor: the newest one still running.
+    pub fn running_export(&self) -> Option<&op_application::ExportJob> {
+        self.ed.exports.iter().rev().find(|j| !j.finished())
+    }
+
+    /// The running export's preview frame as a texture (updated as the export advances).
+    pub fn export_preview(&mut self) -> Option<(egui::TextureId, egui::Vec2)> {
+        let img = self.running_export()?.progress.lock().preview.clone()?;
+        let key = Arc::as_ptr(&img) as usize as u64;
+        let stale = self
+            .export_ui
+            .preview
+            .as_ref()
+            .is_none_or(|(k, _)| *k != key);
+        if stale {
+            let color = egui::ColorImage::from_rgba_unmultiplied(
+                [img.width as usize, img.height as usize],
+                &img.rgba,
+            );
+            match &mut self.export_ui.preview {
+                Some((k, h)) => {
+                    h.set(color, egui::TextureOptions::LINEAR);
+                    *k = key;
+                }
+                None => {
+                    let h = self.ctx.load_texture(
+                        "export-preview",
+                        color,
+                        egui::TextureOptions::LINEAR,
+                    );
+                    self.export_ui.preview = Some((key, h));
+                }
+            }
+        }
+        let (_, h) = self.export_ui.preview.as_ref()?;
+        Some((h.id(), egui::vec2(img.width as f32, img.height as f32)))
+    }
+
+    /// An export is running: the Program Monitor shows the frames it renders.
+    pub fn exporting(&self) -> bool {
+        self.running_export().is_some()
+    }
+
     /// A cached thumbnail texture of a media frame (generated in the background).
     pub fn thumb(
         &mut self,
@@ -1301,7 +1540,9 @@ impl State {
             }
             self.focused_panel = Some(p);
         }
-        match p {
+        // a failure inside one panel is contained: the panel is drawn again next frame and the
+        // program keeps running (the failure is logged with a crash report)
+        let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match p {
             Panel::Project => project_panel::show(self, ui),
             Panel::Source => monitor::show(self, ui, Monitor::Source),
             Panel::Program => monitor::show(self, ui, Monitor::Program),
@@ -1317,6 +1558,37 @@ impl State {
             Panel::Lumetri => panels::lumetri(self, ui),
             Panel::Scopes => panels::scopes(self, ui),
             Panel::Graphics => panels::graphics(self, ui),
+        }));
+        if drawn.is_err() {
+            log::error!("the {:?} panel failed and was restored", p);
+            self.tl.cancel();
+            self.drag = None;
+            self.ed.error(tf(
+                "The {} panel had a problem and was restored. Your work is safe.",
+                &[&t(p.title())],
+            ));
+        }
+        // the active tab is underlined: blue in the focused panel, gray elsewhere
+        if let Some(tab) = self.tab_rects.get(&p) {
+            let focused = self.focused_panel == Some(p);
+            let y = tab.max.y - 1.5;
+            ui.ctx()
+                .layer_painter(ui.layer_id())
+                .with_clip_rect(tab.expand(2.0))
+                .line_segment(
+                    [
+                        egui::pos2(tab.min.x + 6.0, y),
+                        egui::pos2(tab.max.x - 6.0, y),
+                    ],
+                    Stroke::new(
+                        2.0,
+                        if focused {
+                            theme::ACCENT
+                        } else {
+                            theme::TEXT_DIM
+                        },
+                    ),
+                );
         }
         if self.focused_panel == Some(p) && focus_of(p).is_some() {
             ui.painter().rect_stroke(
@@ -1329,7 +1601,10 @@ impl State {
     }
 
     fn begin_frame(&mut self, ctx: &egui::Context) {
-        let busy = self.ed.tick();
+        self.poll_opening();
+        self.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
+        self.tab_rects.clear();
+        let busy = self.ed.tick() || self.opening.is_some();
         if self.ed.is_playing() {
             ctx.request_repaint();
         } else if busy {
@@ -1367,7 +1642,17 @@ impl State {
             self.ui_scale = self.ed.prefs.ui_scale;
             theme::apply(ctx, self.ui_scale);
         }
-        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
+        let exporting = self.ed.exports.iter().any(|j| !j.finished());
+        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close && exporting {
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            if !self
+                .dialogs
+                .iter()
+                .any(|d| matches!(d, Dialog::ExportRunning))
+            {
+                self.dialogs.push(Dialog::ExportRunning);
+            }
+        } else if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
             if self.ed.history.is_dirty() {
                 ctx.send_viewport_cmd(ViewportCommand::CancelClose);
                 if !self.dialogs.iter().any(|d| matches!(d, Dialog::Unsaved(_))) {
@@ -1415,6 +1700,16 @@ impl State {
             self.drag = None;
             self.ed.seal();
         }
+        if self.quit && self.ed.exports.iter().any(|j| !j.finished()) {
+            self.quit = false;
+            if !self
+                .dialogs
+                .iter()
+                .any(|d| matches!(d, Dialog::ExportRunning))
+            {
+                self.dialogs.push(Dialog::ExportRunning);
+            }
+        }
         if self.quit {
             if self.ed.history.is_dirty() && !self.allow_close {
                 self.quit = false;
@@ -1442,38 +1737,13 @@ impl State {
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // exports sit in the bottom right corner, like background tasks
+                self.export_status(ui);
                 ui.label(
                     RichText::new(self.gpu.description())
                         .color(theme::TEXT_DIM)
                         .size(11.0),
                 );
-                let mut done = Vec::new();
-                for (i, job) in self.ed.exports.iter().enumerate() {
-                    let p = job.progress.lock().clone();
-                    if p.done {
-                        continue;
-                    }
-                    if ui.small_button(t("Cancel")).clicked() {
-                        done.push(i);
-                    }
-                    let name = job
-                        .settings
-                        .path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    let eta = p.remaining.map(widgets::clock).unwrap_or_default();
-                    ui.add(
-                        egui::ProgressBar::new(p.fraction())
-                            .desired_width(160.0)
-                            .text(format!("{:.0} %  {eta}", p.fraction() * 100.0)),
-                    );
-                    ui.label(RichText::new(tf("Exporting {}", &[&name])).size(12.0));
-                    ui.ctx().request_repaint_after(Duration::from_millis(200));
-                }
-                for i in done {
-                    self.ed.exports[i].cancel();
-                }
                 let conforming = self.ed.media.conforming();
                 if conforming > 0 {
                     ui.spinner();
@@ -1493,6 +1763,106 @@ impl State {
                 }
             });
         });
+    }
+
+    /// One entry per export, right to left: progress with pause and cancel while it runs (its
+    /// frames show in the Program Monitor), then the result until it expires or is closed.
+    fn export_status(&mut self, ui: &mut Ui) {
+        let mut cancel = Vec::new();
+        let mut pause = Vec::new();
+        let mut folder = None;
+        let ui_state = &mut self.export_ui;
+        for (i, job) in self.ed.exports.iter().enumerate().rev() {
+            if ui_state.dismissed.contains(&i) {
+                continue;
+            }
+            let p = job.progress.lock().clone();
+            let name = job
+                .settings
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if !p.done {
+                if ui.small_button(t("Cancel")).clicked() {
+                    cancel.push(i);
+                }
+                let label = if p.paused { t("Resume") } else { t("Pause") };
+                if ui.small_button(label).clicked() {
+                    pause.push((i, !p.paused));
+                }
+                let text = if p.preparing {
+                    t("Preparing audio...").to_string()
+                } else if p.paused {
+                    format!("{}  {:.0} %", t("Paused"), p.fraction() * 100.0)
+                } else {
+                    let eta = p.remaining.map(widgets::clock).unwrap_or_default();
+                    format!("{:.0} %  {eta}", p.fraction() * 100.0)
+                };
+                ui.add(
+                    egui::ProgressBar::new(p.fraction())
+                        .desired_width(170.0)
+                        .text(text),
+                )
+                .on_hover_ui(|ui| export_details(ui, job, &p));
+                ui.label(RichText::new(tf("Exporting {}", &[&name])).size(12.0));
+                ui.ctx().request_repaint_after(Duration::from_millis(200));
+                continue;
+            }
+            let since = *ui_state.finished_at.entry(i).or_insert_with(Instant::now);
+            if let Some(e) = &p.error {
+                if ui.small_button("x").on_hover_text(t("Close")).clicked() {
+                    ui_state.dismissed.insert(i);
+                }
+                let mut details = translate_status(&format!("Export failed: {e}"));
+                if e.starts_with("cannot write ") && cfg!(windows) {
+                    details.push_str("\n\n");
+                    details.push_str(t(
+                        "Windows may be blocking this folder (Controlled folder access). Allow OpenPremier in Windows Security or choose another folder.",
+                    ));
+                }
+                ui.label(
+                    RichText::new(tf("Export of {} failed", &[&name]))
+                        .size(12.0)
+                        .color(theme::ERROR),
+                )
+                .on_hover_text(details);
+            } else if p.cancelled || since.elapsed() > Duration::from_secs(15) {
+                ui_state.dismissed.insert(i);
+            } else {
+                if ui.small_button(t("Open Folder")).clicked() {
+                    folder = job.settings.path.parent().map(|d| d.to_path_buf());
+                }
+                ui.label(RichText::new(tf("Exported {}", &[&name])).size(12.0))
+                    .on_hover_text(job.settings.path.display().to_string());
+                ui.ctx().request_repaint_after(Duration::from_secs(1));
+            }
+        }
+        for i in cancel {
+            self.ed.exports[i].cancel();
+        }
+        for (i, paused) in pause {
+            self.ed.exports[i].set_paused(paused);
+        }
+        if let Some(dir) = folder {
+            open_folder(&dir);
+        }
+    }
+}
+
+/// Details of a running export, shown over its progress bar.
+fn export_details(ui: &mut Ui, job: &op_application::ExportJob, p: &op_application::Progress) {
+    ui.label(RichText::new(job.settings.path.display().to_string()).strong());
+    ui.label(tf("Frame {} of {}", &[&p.frame, &p.total]));
+    ui.label(tf("Elapsed: {}", &[&widgets::clock(p.elapsed)]));
+    if let Some(r) = p.remaining {
+        ui.label(tf("Remaining: {}", &[&widgets::clock(r)]));
+    }
+    if p.fps > 0.0 {
+        ui.label(format!("{:.1} fps", p.fps));
+    }
+    if !p.encoder.is_empty() {
+        ui.label(RichText::new(&p.encoder).color(theme::TEXT_DIM));
     }
 }
 
@@ -1523,6 +1893,32 @@ fn translate_status(text: &str) -> String {
     }
     if let Some(n) = text.strip_suffix(" media files are offline") {
         return tf("{} media files are offline", &[&n]);
+    }
+    // messages with one variable part, from the editing engine and the exporter
+    const PATTERNS: [(&str, &str, &str); 8] = [
+        ("track ", " is locked", "Track {} is locked"),
+        ("clips would overlap on ", "", "Clips would overlap on {}"),
+        ("not enough media: ", "", "Not enough media: {}"),
+        ("not found: ", "", "Not found: {}"),
+        (
+            "Export failed: cannot write ",
+            "",
+            "Export failed: cannot write {}",
+        ),
+        ("Export failed: ", "", "Export failed: {}"),
+        ("Exported ", "", "Exported {}"),
+        (
+            "This project was saved by a newer version (format ",
+            ").",
+            "This project was saved by a newer version (format {}).",
+        ),
+    ];
+    for (prefix, suffix, fmt) in PATTERNS {
+        if let Some(rest) = text.strip_prefix(prefix)
+            && let Some(mid) = rest.strip_suffix(suffix)
+        {
+            return tf(fmt, &[&mid]);
+        }
     }
     tn(text)
 }
@@ -1567,7 +1963,47 @@ impl TabViewer for Viewer<'_> {
             Panel::Project => format!("{base}: {}", self.s.ed.project.name),
             _ => base.to_string(),
         };
-        text.into()
+        let mut job = egui::text::LayoutJob::default();
+        job.append(
+            &text,
+            20.0,
+            egui::TextFormat {
+                font_id: egui::FontId::proportional(12.5),
+                ..Default::default()
+            },
+        );
+        job.into()
+    }
+
+    fn on_tab_button(&mut self, tab: &mut Panel, response: &egui::Response) {
+        let r = response.rect;
+        self.s.tab_rects.insert(*tab, r);
+        let icon = egui::Rect::from_center_size(
+            egui::pos2(r.min.x + 17.0, r.center().y),
+            egui::vec2(14.0, 14.0),
+        );
+        let color = if response.hovered() {
+            theme::TEXT
+        } else {
+            theme::TEXT_DIM
+        };
+        icons::draw(
+            &response
+                .ctx
+                .layer_painter(response.layer_id)
+                .with_clip_rect(r),
+            icon,
+            panel_icon(*tab),
+            color,
+        );
+    }
+
+    fn context_menu(&mut self, ui: &mut Ui, tab: &mut Panel, _path: egui_dock::NodePath) {
+        if ui.button(t("Reset to Saved Layout")).clicked() {
+            self.s.command("cmd.window.workspace.revert");
+            ui.close();
+        }
+        let _ = tab;
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Panel) {
@@ -1586,31 +2022,42 @@ impl TabViewer for Viewer<'_> {
 fn dock_style(style: &egui::Style) -> egui_dock::Style {
     let mut d = egui_dock::Style::from_egui(style);
     d.main_surface_border_stroke = Stroke::NONE;
+    // panel headers: flat, with room between the names and a quiet line under the bar
     d.tab_bar.bg_fill = theme::PANEL_DARK;
-    d.tab_bar.height = 26.0;
-    d.tab_bar.hline_color = theme::LINE;
+    d.tab_bar.height = 30.0;
+    d.tab_bar.hline_color = theme::BG;
+    d.tab_bar.inner_margin = egui::Margin::symmetric(6, 0);
+    d.tab.spacing = 4.0;
+    d.tab.minimum_width = Some(64.0);
+    d.tab.hline_below_active_tab_name = false;
     d.tab.tab_body.bg_fill = theme::PANEL;
     d.tab.tab_body.stroke = Stroke::NONE;
     d.tab.tab_body.inner_margin = egui::Margin::same(0);
+    d.tab.tab_body.hidden_tab_bar_drag_height = Some(8.0);
     for s in [
         &mut d.tab.active,
         &mut d.tab.focused,
         &mut d.tab.active_with_kb_focus,
         &mut d.tab.focused_with_kb_focus,
     ] {
-        s.bg_fill = theme::PANEL;
+        s.bg_fill = theme::PANEL_DARK;
         s.text_color = theme::TEXT_BRIGHT;
-        s.outline_color = theme::PANEL;
+        s.outline_color = theme::PANEL_DARK;
+        s.corner_radius = egui::CornerRadius::ZERO;
     }
     for s in [&mut d.tab.inactive, &mut d.tab.inactive_with_kb_focus] {
         s.bg_fill = theme::PANEL_DARK;
         s.text_color = theme::TEXT_DIM;
         s.outline_color = theme::PANEL_DARK;
+        s.corner_radius = egui::CornerRadius::ZERO;
     }
-    d.tab.hovered.bg_fill = theme::RAISED;
-    d.tab.hovered.text_color = theme::TEXT_BRIGHT;
+    d.tab.hovered.bg_fill = theme::PANEL_DARK;
+    d.tab.hovered.text_color = theme::TEXT;
+    d.tab.hovered.outline_color = theme::PANEL_DARK;
+    d.buttons.show_tab_bar_color = theme::LINE;
+    d.buttons.show_tab_bar_active_color = theme::ACCENT;
     d.separator.width = 3.0;
-    d.separator.extra = 56.0;
+    d.separator.extra = 40.0;
     d.separator.color_idle = theme::BG;
     d.separator.color_hovered = theme::ACCENT_DIM;
     d.separator.color_dragged = theme::ACCENT;
@@ -1621,7 +2068,14 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.s.begin_frame(&ctx);
-        if self.s.dialogs.is_empty() {
+        if self.s.minimized {
+            // nothing is visible: keep working (playback, exports) but do not lay out panels
+            // at zero size, which would disturb their remembered sizes
+            self.s.end_frame(&ctx);
+            return;
+        }
+        self.tend_dock(&ctx);
+        if self.s.dialogs.is_empty() && self.s.opening.is_none() {
             keys::handle(&mut self.s, &ctx);
         }
         egui::Panel::top("menu")
@@ -1646,11 +2100,23 @@ impl eframe::App for App {
             DockArea::new(&mut self.dock)
                 .style(style)
                 .show_add_buttons(false)
+                .show_close_buttons(false)
+                .hidable_tab_bars(true)
                 .show_leaf_collapse_buttons(false)
                 .show_leaf_close_all_buttons(false)
                 .show_inside(ui, &mut viewer);
         });
-        crate::dialogs::show(&mut self.s, &ctx);
+        let shown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::dialogs::show(&mut self.s, &ctx);
+        }));
+        if shown.is_err() {
+            log::error!("a dialog failed and was closed");
+            self.s.dialogs.clear();
+            self.s.ed.error(t(
+                "A dialog had a problem and was closed. Your work is safe.",
+            ));
+        }
+        crate::dialogs::opening(&mut self.s, &ctx);
         self.apply_dock_action();
         self.s.end_frame(&ctx);
     }
@@ -1660,9 +2126,16 @@ impl eframe::App for App {
     }
 
     fn on_exit(&mut self) {
+        log::info!("closing");
         self.s.ed.stop();
+        for job in &self.s.ed.exports {
+            if !job.finished() {
+                job.cancel();
+            }
+        }
         self.save_layouts();
         let _ = self.s.ed.prefs.save(&self.s.ed.dirs);
+        op_application::recovery::forget();
         autosave::end_session(&self.s.ed.dirs);
     }
 }

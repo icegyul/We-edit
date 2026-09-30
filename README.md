@@ -20,7 +20,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.1.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
+La versión `0.2.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -30,11 +30,14 @@ en todos los trabajos de producción.
   snapping, nesting, marcadores, transiciones y keyframes.
 - Paneles acoplables para Proyecto, Source, Program, Timeline, Effect Controls, Effects, History,
   Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics y Tools.
-- Lectura, decodificación y exportación multimedia mediante FFmpeg.
+- Lectura, decodificación y exportación multimedia mediante FFmpeg, con exportación que se puede
+  pausar, vista previa de los fotogramas renderizados y velocidad de fotogramas configurable.
 - Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12 y Metal según la plataforma.
 - Mezclador de audio en punto flotante, medidores, efectos básicos y salida a dispositivos.
 - Formato nativo `.opproj`, intercambio OTIO/FCP XML/EDL e importación parcial de `.prproj`.
 - Interfaz en español e inglés e importación de mapas de teclado `.kys`.
+- Recuperación automática del proyecto ante fallos y registro de actividad configurable desde
+  Preferencias.
 - Paquete ZIP portátil para Windows y AppImage para Linux.
 
 ### Trabajo pendiente
@@ -83,7 +86,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.1.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.2.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

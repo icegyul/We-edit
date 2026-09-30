@@ -31,9 +31,9 @@ def scan(text, patterns):
 
 
 ui_patterns = [
-    r"\bt\(" + S + r"\)",
-    r"\btf\(" + S,
-    r"\btn\(" + S + r"\)",
+    r"\bt\(\s*" + S + r"\s*,?\s*\)",
+    r"\btf\(\s*" + S,
+    r"\btn\(\s*" + S + r"\s*\)",
     r"\bitem(?:_if)?\(ui, s, " + S,
     r"\bcheck\(ui, s, " + S,
     r"\brun\(s, ui, " + S,

@@ -177,7 +177,7 @@ impl MediaService {
             let dir = self.cache_dir.join("Audio");
             let data = dir.join(format!("{key}.opa"));
             let peaks = dir.join(format!("{key}.opk"));
-            let result = if data.exists() && peaks.exists() {
+            let result: Result<(), String> = if data.exists() && peaks.exists() {
                 Ok(())
             } else {
                 let align = asset
@@ -186,23 +186,36 @@ impl MediaService {
                     .map(|v| v.start)
                     .or(asset.audio.get(stream).map(|a| a.start))
                     .unwrap_or(Dur::ZERO);
-                op_media::conform(
-                    Path::new(&asset.path),
-                    stream,
-                    align,
-                    &data,
-                    &peaks,
-                    &mut |_| true,
-                )
-                .map(|_| ())
-            };
-            let entry = match result.and_then(|_| ConformedAudio::open(&data)) {
-                Ok(a) => AudioEntry::Ready(Arc::new(a), Peaks::open(&peaks).ok().map(Arc::new)),
-                Err(e) => {
-                    log::warn!("audio conform failed for {}: {e}", asset.path);
-                    AudioEntry::Failed(e.to_string())
+                let started = Instant::now();
+                let r = guarded("audio conform", || {
+                    op_media::conform(
+                        Path::new(&asset.path),
+                        stream,
+                        align,
+                        &data,
+                        &peaks,
+                        &mut |_| true,
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+                });
+                if r.is_ok() {
+                    log::debug!(
+                        "conformed audio stream {stream} of {} in {} ms",
+                        asset.path,
+                        started.elapsed().as_millis()
+                    );
                 }
+                r
             };
+            let entry =
+                match result.and_then(|_| ConformedAudio::open(&data).map_err(|e| e.to_string())) {
+                    Ok(a) => AudioEntry::Ready(Arc::new(a), Peaks::open(&peaks).ok().map(Arc::new)),
+                    Err(e) => {
+                        log::warn!("audio conform failed for {}: {e}", asset.path);
+                        AudioEntry::Failed(e.to_string())
+                    }
+                };
             self.audio.lock().insert(key, entry);
             self.bump();
         }
@@ -308,13 +321,17 @@ impl MediaService {
             Some(v) => v.clone(),
             None => return,
         };
-        let mut dec = match VideoDecoder::open(
-            Path::new(&asset.path),
-            Some(v.index),
-            asset.frame_rate(),
-            v.color,
-            asset.is_still(),
-        ) {
+        let opened = guarded("decoder", || {
+            VideoDecoder::open(
+                Path::new(&asset.path),
+                Some(v.index),
+                asset.frame_rate(),
+                v.color,
+                asset.is_still(),
+            )
+            .map_err(|e| e.to_string())
+        });
+        let mut dec = match opened {
             Ok(d) => d,
             Err(e) => {
                 log::warn!("cannot decode {}: {e}", asset.path);
@@ -364,15 +381,28 @@ impl MediaService {
             if self.frames.lock().get((asset.id, index)).is_some() {
                 continue;
             }
-            match dec.frame(index) {
-                Ok(f) => {
+            let decoded =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dec.frame(index)));
+            match decoded {
+                Ok(Ok(f)) => {
                     self.frames.lock().insert((asset.id, index), Arc::new(f));
                     self.frame_ready.notify_all();
                     self.bump();
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     log::debug!("frame {index} of {}: {e}", asset.path);
                     prefetch = None;
+                }
+                Err(panic) => {
+                    // the decoder state is unknown after a failure: stop using this file
+                    let msg = panic_message(panic.as_ref());
+                    log::error!("decoder failure on frame {index} of {}: {msg}", asset.path);
+                    self.failed
+                        .lock()
+                        .insert(asset.id, format!("internal decoder error ({msg})"));
+                    self.workers.lock().remove(&asset.id);
+                    self.frame_ready.notify_all();
+                    return;
                 }
             }
         }
@@ -484,9 +514,11 @@ impl MediaService {
                 q.pop_back()
             };
             let Some((asset, index)) = job else { continue };
-            let img = op_media::thumb::thumbnail(&asset, index, 320, 180)
-                .ok()
-                .map(Arc::new);
+            let img = guarded("thumbnail", || {
+                op_media::thumb::thumbnail(&asset, index, 320, 180).map_err(|e| e.to_string())
+            })
+            .ok()
+            .map(Arc::new);
             self.thumbs.lock().insert((asset.id, index), img);
             self.bump();
         }
@@ -514,6 +546,23 @@ impl MediaService {
     }
 }
 
+/// The text of a panic payload.
+pub fn panic_message(p: &(dyn std::any::Any + Send)) -> String {
+    p.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "unknown failure".into())
+}
+
+/// Runs `f`, turning a panic into an error, so one damaged file cannot stop a worker thread.
+pub fn guarded<T>(what: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|p| {
+        let msg = panic_message(p.as_ref());
+        log::error!("{what} failed unexpectedly: {msg}");
+        Err(format!("internal error ({msg})"))
+    })
+}
+
 /// Probes files on a background thread.
 pub fn probe_many(
     paths: Vec<PathBuf>,
@@ -523,7 +572,19 @@ pub fn probe_many(
         .name("probe".into())
         .spawn(move || {
             for p in paths {
-                let r = op_media::probe(&p).map_err(|e| e.to_string());
+                let r = guarded("probe", || op_media::probe(&p).map_err(|e| e.to_string()));
+                match &r {
+                    Ok(a) => log::info!(
+                        "imported {} ({}, {} audio streams)",
+                        p.display(),
+                        a.video
+                            .as_ref()
+                            .map(|v| format!("{}x{} {}", v.width, v.height, v.codec))
+                            .unwrap_or_else(|| "no video".into()),
+                        a.audio.len()
+                    ),
+                    Err(e) => log::warn!("cannot import {}: {e}", p.display()),
+                }
                 if tx.send((p, r)).is_err() {
                     return;
                 }

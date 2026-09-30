@@ -1,6 +1,8 @@
 //! Export jobs: render every frame of a sequence range on the GPU, convert to the delivery
 //! format on the GPU, encode with FFmpeg, and mix audio with the same mixer as playback. Jobs
-//! run on their own thread from an immutable project snapshot (architecture 9).
+//! run on their own thread from an immutable project snapshot (architecture 9). They can be
+//! paused and cancelled, report progress with a small preview of the frame being rendered, and
+//! a failure inside a job ends that job with an error instead of ending the program.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,17 +26,32 @@ pub struct ExportSettings {
     pub audio: Option<AudioSettings>,
 }
 
+/// A reduced copy of the frame an export is rendering (RGBA8, straight alpha).
+#[derive(Clone, Debug)]
+pub struct PreviewImage {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    /// Output frame number it shows.
+    pub frame: u64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Progress {
     pub frame: u64,
     pub total: u64,
     pub fps: f32,
     pub remaining: Option<Duration>,
+    /// Time spent working, pauses excluded.
+    pub elapsed: Duration,
     pub encoder: String,
     pub done: bool,
     pub error: Option<String>,
     pub cancelled: bool,
     pub paused: bool,
+    /// Waiting for audio to be conformed before the first frame.
+    pub preparing: bool,
+    pub preview: Option<Arc<PreviewImage>>,
 }
 
 impl Progress {
@@ -72,14 +89,38 @@ impl ExportJob {
             pause.clone(),
             settings.clone(),
         );
+        log::info!(
+            "export started: {} ({} to {})",
+            settings.path.display(),
+            settings.range.start.seconds(),
+            settings.range.end.seconds()
+        );
         let thread = std::thread::Builder::new()
             .name("export".into())
             .spawn(move || {
-                let result = run(&project, &s, gpu, media, &p, &c, &pa);
+                let started = Instant::now();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run(&project, &s, gpu, media, &p, &c, &pa)
+                }))
+                .unwrap_or_else(|panic| {
+                    let what = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "internal error".into());
+                    Err(format!("the export stopped unexpectedly ({what})"))
+                });
                 let mut pr = p.lock();
                 pr.done = true;
+                pr.preparing = false;
                 match result {
-                    Ok(()) => {}
+                    Ok(()) => log::info!(
+                        "export finished in {:.1} s: {} ({} frames, {})",
+                        started.elapsed().as_secs_f32(),
+                        s.path.display(),
+                        pr.total,
+                        pr.encoder
+                    ),
                     Err(e) if c.load(Ordering::Relaxed) => {
                         pr.cancelled = true;
                         let _ = std::fs::remove_file(&s.path);
@@ -87,6 +128,7 @@ impl ExportJob {
                     }
                     Err(e) => {
                         let _ = std::fs::remove_file(&s.path);
+                        log::error!("export failed: {e}");
                         pr.error = Some(e);
                     }
                 }
@@ -110,6 +152,15 @@ impl ExportJob {
     pub fn set_paused(&self, paused: bool) {
         self.pause.store(paused, Ordering::Relaxed);
         self.progress.lock().paused = paused;
+        log::info!(
+            "export {}: {}",
+            if paused { "paused" } else { "resumed" },
+            self.settings.path.display()
+        );
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.pause.load(Ordering::Relaxed)
     }
 
     pub fn finished(&self) -> bool {
@@ -178,7 +229,8 @@ fn run(
     let seq = project
         .sequence(s.sequence)
         .ok_or("the sequence no longer exists")?;
-    let rate = seq.rate();
+    // frames are sampled at the output rate, which may differ from the sequence rate
+    let rate = s.video.as_ref().map(|v| v.rate).unwrap_or(seq.rate());
     let total = rate.dur_to_frames_round(s.range.duration()).max(0) as u64;
     if total == 0 && s.video.is_some() {
         return Err("the export range is empty".into());
@@ -187,11 +239,17 @@ fn run(
     if s.audio.is_some() {
         let mut streams = Vec::new();
         audio_streams(project, s.sequence, &mut streams, 0);
+        progress.lock().preparing = true;
         media.wait_audio(&streams, Duration::from_secs(600));
+        progress.lock().preparing = false;
     }
     if let Some(dir) = s.path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot write {}: {e}", dir.display()))?;
     }
+    // FFmpeg reports a protected or missing destination vaguely ("No such file or directory"
+    // when Windows Controlled folder access blocks it); check it first for a clear message
+    std::fs::File::create(&s.path)
+        .map_err(|e| format!("cannot write {}: {e}", s.path.display()))?;
     let mut muxer =
         Muxer::create(&s.path, s.video.as_ref(), s.audio.as_ref()).map_err(|e| e.to_string())?;
     progress.lock().encoder = muxer.video_encoder().unwrap_or("audio").to_string();
@@ -207,6 +265,8 @@ fn run(
         .map(|a| op_audio::Mixer::new(a.rate, a.channels as usize));
     let mut audio_done: i64 = 0;
     let started = Instant::now();
+    let mut paused_for = Duration::ZERO;
+    let mut preview_at: Option<Instant> = None;
     let audio_total = s
         .audio
         .as_ref()
@@ -215,8 +275,12 @@ fn run(
     let video_frames = if s.video.is_some() { total } else { 0 };
     let steps = video_frames.max(1);
     for n in 0..steps {
-        while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
-            std::thread::sleep(Duration::from_millis(50));
+        if pause.load(Ordering::Relaxed) {
+            let since = Instant::now();
+            while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            paused_for += since.elapsed();
         }
         if cancel.load(Ordering::Relaxed) {
             return Err("cancelled".into());
@@ -231,6 +295,26 @@ fn run(
                 scale,
                 source: &frames,
             });
+            // a small copy of the frame a few times per second, for the progress preview
+            if preview_at.is_none_or(|p| p.elapsed() >= Duration::from_millis(200)) {
+                preview_at = Some(Instant::now());
+                let k = (480.0 / frame.width as f32)
+                    .min(270.0 / frame.height as f32)
+                    .min(1.0);
+                let (pw, ph) = (
+                    ((frame.width as f32 * k) as u32).max(1),
+                    ((frame.height as f32 * k) as u32).max(1),
+                );
+                let target = r.display_target(pw, ph);
+                r.present_into(&frame, &target, false);
+                let rgba = r.read_texture(&target, 4);
+                progress.lock().preview = Some(Arc::new(PreviewImage {
+                    width: pw,
+                    height: ph,
+                    rgba,
+                    frame: n,
+                }));
+            }
             let planes = if (frame.width, frame.height) == (v.width, v.height) {
                 r.delivery_planes(&frame, v.codec.input())
             } else {
@@ -278,9 +362,10 @@ fn run(
             }
         }
         let mut pr = progress.lock();
+        pr.elapsed = started.elapsed().saturating_sub(paused_for);
         if video_frames > 0 {
             pr.frame = n + 1;
-            let secs = started.elapsed().as_secs_f32().max(1e-3);
+            let secs = pr.elapsed.as_secs_f32().max(1e-3);
             pr.fps = (n + 1) as f32 / secs;
             let left = (total - n - 1) as f32 / pr.fps.max(1e-3);
             pr.remaining = Some(Duration::from_secs_f32(left));
@@ -324,4 +409,108 @@ pub fn export_frame(
     let mut m = Muxer::create(path, Some(&v), None).map_err(|e| e.to_string())?;
     m.push_video(&[&rgba]).map_err(|e| e.to_string())?;
     m.finish().map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pause_preview_and_output_rate() {
+        let Ok(gpu) = Gpu::headless() else {
+            eprintln!("no GPU adapter: skipped");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let mut p = Project::new("E");
+        let root = p.root;
+        let (sid, _) = p.add_sequence(
+            root,
+            "S",
+            SequenceSettings {
+                width: 64,
+                height: 36,
+                rate: Rate::FPS_25,
+                ..Default::default()
+            },
+        );
+        let item = p.add_item(
+            root,
+            "Red",
+            ItemKind::Synthetic {
+                generator: Generator::ColorMatte {
+                    color: Rgba::new(1.0, 0.0, 0.0, 1.0),
+                },
+                duration: Dur::from_seconds(2.0),
+            },
+        );
+        let spec = op_timeline::SourceClip::from_item(&p, item).unwrap();
+        let patch = op_timeline::Patch {
+            video: Some(0),
+            audio: vec![],
+        };
+        let opts = op_timeline::EditOptions {
+            linked_selection: true,
+            ripple_markers: false,
+        };
+        let (p, _) = p
+            .transact(|p| op_timeline::overwrite(p, sid, &spec, SeqTime::ZERO, &patch, opts))
+            .unwrap();
+        let media = MediaService::new(dir.path().join("cache"), 64 << 20);
+        let path = dir.path().join("out.mov");
+        let settings = ExportSettings {
+            path: path.clone(),
+            sequence: sid,
+            range: SeqRange::new(SeqTime::ZERO, SeqTime::from_seconds(2.0)),
+            // the file is written at 50 fps although the sequence runs at 25
+            video: Some(VideoSettings {
+                codec: op_media::VideoCodec::Png,
+                width: 64,
+                height: 36,
+                rate: Rate::FPS_50,
+                bitrate_kbps: None,
+                quality: 0,
+                hardware: false,
+            }),
+            audio: None,
+        };
+        let job = ExportJob::start(Arc::new(p), settings, gpu, media);
+        job.set_paused(true);
+        // a frame already being rendered may still finish (slow software adapters)
+        let mut frozen = job.progress.lock().frame;
+        let start = Instant::now();
+        loop {
+            std::thread::sleep(Duration::from_millis(250));
+            let now = job.progress.lock().frame;
+            if now == frozen || start.elapsed() > Duration::from_secs(20) {
+                break;
+            }
+            frozen = now;
+        }
+        assert!(!job.finished() && frozen < 100, "the export did not pause");
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(
+            job.progress.lock().frame,
+            frozen,
+            "a paused export advanced"
+        );
+        job.set_paused(false);
+        let start = Instant::now();
+        while !job.finished() && start.elapsed() < Duration::from_secs(60) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let pr = job.progress.lock().clone();
+        assert!(pr.error.is_none(), "{:?}", pr.error);
+        assert_eq!(pr.total, 100);
+        assert_eq!(pr.frame, 100);
+        let preview = pr.preview.expect("a preview frame");
+        assert_eq!((preview.width, preview.height), (64, 36));
+        assert_eq!(preview.rgba.len(), 64 * 36 * 4);
+        // the preview shows the red matte
+        assert!(preview.rgba[0] > 200 && preview.rgba[1] < 40);
+        let probed = op_media::probe(&path).unwrap();
+        let v = probed.video.unwrap();
+        assert_eq!(v.rate, Rate::FPS_50);
+        assert!((v.frames - 100).abs() <= 1, "{} frames", v.frames);
+    }
 }

@@ -44,6 +44,7 @@ pub struct ExportForm {
     in_out: bool,
     has_in_out: bool,
     seq_size: (u32, u32),
+    seq_rate: Rate,
 }
 
 pub struct ShortcutsForm {
@@ -54,6 +55,8 @@ pub struct ShortcutsForm {
 
 pub enum Dialog {
     Unsaved(Then),
+    /// Closing the program while an export runs.
+    ExportRunning,
     Recover(PathBuf),
     ImportReport(Box<ImportReport>),
     NewSequence {
@@ -96,7 +99,14 @@ pub enum Dialog {
         alpha_ignore: bool,
     },
     Shortcuts(Box<ShortcutsForm>),
-    Preferences,
+    Preferences {
+        /// Interface scale being chosen; applied with the Apply button.
+        scale: f32,
+    },
+    Log {
+        level: usize,
+        filter: String,
+    },
     About,
 }
 
@@ -398,6 +408,7 @@ impl Dialog {
             audio_bitrate: 320,
             in_out: seq.mark_in.is_some() && seq.mark_out.is_some(),
             has_in_out: seq.mark_in.is_some() || seq.mark_out.is_some(),
+            seq_rate: seq.rate(),
             seq_size: (seq.settings.width, seq.settings.height),
         };
         apply_preset(&mut f, 0);
@@ -428,6 +439,19 @@ impl Dialog {
                 .filter_map(|c| seq.clip(*c))
                 .find(|c| !c.is_video())?;
         Some(Dialog::Gain { db: c.gain_db })
+    }
+
+    pub fn preferences(s: &State) -> Dialog {
+        Dialog::Preferences {
+            scale: s.ed.prefs.ui_scale,
+        }
+    }
+
+    pub fn log() -> Dialog {
+        Dialog::Log {
+            level: 2,
+            filter: String::new(),
+        }
     }
 
     pub fn shortcuts() -> Dialog {
@@ -491,6 +515,15 @@ pub fn show(s: &mut State, ctx: &egui::Context) {
     }
     keep.append(&mut s.dialogs);
     s.dialogs = keep;
+}
+
+/// Every window opens centered on the program window.
+fn window<'a>(ctx: &egui::Context, title: &'a str) -> egui::Window<'a> {
+    egui::Window::new(title)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center())
+        .constrain(true)
+        .collapsible(false)
 }
 
 fn buttons(ui: &mut Ui, ok: &str) -> (bool, bool) {
@@ -588,6 +621,50 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 }
             }
         }
+        Dialog::ExportRunning => {
+            let (choice, esc) = modal(
+                ctx,
+                "export-running",
+                t("An export is running"),
+                380.0,
+                |ui| {
+                    ui.label(t(
+                        "Closing the program stops the export and deletes the unfinished file.",
+                    ));
+                    ui.add_space(10.0);
+                    let mut c = 0;
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button(t("Keep Exporting")).clicked() {
+                                c = 2;
+                            }
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new(t("Stop and Exit"))
+                                            .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(theme::ACCENT_DIM),
+                                )
+                                .clicked()
+                            {
+                                c = 1;
+                            }
+                        });
+                    });
+                    c
+                },
+            );
+            if choice == 1 {
+                for job in &s.ed.exports {
+                    if !job.finished() {
+                        job.cancel();
+                    }
+                }
+                s.command("cmd.file.exit");
+            }
+            choice == 0 && !esc
+        }
         Dialog::Recover(path) => {
             let p = path.clone();
             let (choice, esc) = modal(ctx, "recover", t("Recover your work?"), 420.0, |ui| {
@@ -620,7 +697,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 c
             });
             if choice == 1 {
-                s.open_path(&p);
+                s.open_recovered(&p);
                 // the recovered copy must be saved somewhere new
                 s.ed.path = None;
             }
@@ -628,7 +705,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
         }
         Dialog::ImportReport(r) => {
             let mut open = true;
-            egui::Window::new(t("Import Report"))
+            window(ctx, t("Import Report"))
                 .open(&mut open)
                 .collapsible(false)
                 .default_width(460.0)
@@ -718,7 +795,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
         }
         Dialog::ProjectSettings => {
             let mut open = true;
-            egui::Window::new(t("Project Settings"))
+            window(ctx, t("Project Settings"))
                 .open(&mut open)
                 .collapsible(false)
                 .resizable(false)
@@ -937,21 +1014,9 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                     ui.label(t("Name"));
                     ui.text_edit_singleline(name);
                 });
-                let mut c = egui::Color32::from_rgb(
-                    (color[0] * 255.0) as u8,
-                    (color[1] * 255.0) as u8,
-                    (color[2] * 255.0) as u8,
-                );
-                if egui::color_picker::color_picker_color32(
-                    ui,
-                    &mut c,
-                    egui::color_picker::Alpha::Opaque,
-                ) {
-                    *color = [
-                        c.r() as f32 / 255.0,
-                        c.g() as f32 / 255.0,
-                        c.b() as f32 / 255.0,
-                    ];
+                let mut rgba = [color[0], color[1], color[2], 1.0];
+                if crate::color::picker(ui, egui::Id::new("matte-picker"), &mut rgba, false) {
+                    *color = [rgba[0], rgba[1], rgba[2]];
                 }
                 buttons(ui, t("OK"))
             });
@@ -1040,10 +1105,11 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             !(ok || cancel || esc)
         }
         Dialog::Shortcuts(f) => shortcuts_dialog(s, ctx, f),
-        Dialog::Preferences => preferences(s, ctx),
+        Dialog::Preferences { scale } => preferences(s, ctx, scale),
+        Dialog::Log { level, filter } => log_window(ctx, level, filter),
         Dialog::About => {
             let mut open = true;
-            egui::Window::new(t("About OpenPremier")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+            window(ctx, t("About OpenPremier")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.set_width(380.0);
                 ui.label(RichText::new(format!("OpenPremier {}", env!("CARGO_PKG_VERSION"))).size(18.0).color(theme::TEXT_BRIGHT));
                 ui.label(t("A free and open source video editor for Windows and Linux."));
@@ -1160,7 +1226,7 @@ fn sequence_form(ui: &mut Ui, st: &mut SequenceSettings, new: bool) {
 fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportForm) -> bool {
     let mut open = true;
     let mut start = false;
-    egui::Window::new(t("Export Settings"))
+    window(ctx, t("Export Settings"))
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -1252,7 +1318,22 @@ fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportForm) -> bool
                         });
                         ui.end_row();
                         ui.label(t("Frame Rate"));
-                        ui.label(format!("{} fps", f.rate.label()));
+                        egui::ComboBox::from_id_salt("exp-rate")
+                            .selected_text(format!("{} fps", f.rate.label()))
+                            .show_ui(ui, |ui| {
+                                for r in Rate::SEQUENCE_RATES {
+                                    let text = if r == f.seq_rate {
+                                        tf("{} fps (sequence)", &[&r.label()])
+                                    } else {
+                                        format!("{} fps", r.label())
+                                    };
+                                    ui.selectable_value(&mut f.rate, r, text);
+                                }
+                            })
+                            .response
+                            .on_hover_text(t(
+                                "Frames per second of the exported file. The sequence rate keeps every frame as edited.",
+                            ));
                         ui.end_row();
                         if matches!(f.codec, VideoCodec::H264 | VideoCodec::Hevc) {
                             ui.label(t("Bitrate"));
@@ -1764,7 +1845,7 @@ fn shortcuts_dialog(s: &mut State, ctx: &egui::Context, f: &mut ShortcutsForm) -
             f.capture = None;
         }
     }
-    egui::Window::new(t("Keyboard Shortcuts"))
+    window(ctx, t("Keyboard Shortcuts"))
         .open(&mut open)
         .collapsible(false)
         .default_size([640.0, 560.0])
@@ -1777,7 +1858,7 @@ fn shortcuts_dialog(s: &mut State, ctx: &egui::Context, f: &mut ShortcutsForm) -
                 );
                 if ui.button(t("Import from Premiere Pro (.kys)...")).clicked()
                     && let Some(path) = rfd::FileDialog::new()
-                        .add_filter("Keyboard Shortcuts", &["kys"])
+                        .add_filter(t("Keyboard Shortcuts"), &["kys"])
                         .pick_file()
                 {
                     match std::fs::read_to_string(&path)
@@ -1915,18 +1996,34 @@ fn shortcuts_dialog(s: &mut State, ctx: &egui::Context, f: &mut ShortcutsForm) -
 
 // ------------------------------------------------------------------------------ preferences
 
-fn preferences(s: &mut State, ctx: &egui::Context) -> bool {
+fn level_name(i: usize) -> &'static str {
+    match i {
+        0 => t("Errors only"),
+        1 => t("Warnings and errors"),
+        2 => t("Normal"),
+        3 => t("Detailed"),
+        _ => t("Everything (very detailed)"),
+    }
+}
+
+fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
     let mut open = true;
-    egui::Window::new(t("Preferences"))
+    let mut show_log = false;
+    let mut open_logs = false;
+    window(ctx, t("Preferences"))
         .open(&mut open)
-        .collapsible(false)
         .resizable(false)
-        .default_width(460.0)
+        .default_width(500.0)
         .show(ctx, |ui| {
+            ui.set_min_width(480.0);
             let p = &mut s.ed.prefs;
+            let mut log_changed = false;
+            ui.label(RichText::new(t("General")).strong().color(theme::TEXT_BRIGHT));
+            ui.add_space(2.0);
             egui::Grid::new("prefs")
                 .num_columns(2)
                 .spacing([14.0, 8.0])
+                .min_col_width(190.0)
                 .show(ui, |ui| {
                     ui.label(t("Language"));
                     let current = if p.language.is_empty() {
@@ -1957,12 +2054,35 @@ fn preferences(s: &mut State, ctx: &egui::Context) -> bool {
                             }
                         });
                     ui.end_row();
+                    // the scale is chosen first and applied on request: resizing the whole
+                    // interface while the slider moves makes the slider jump away
                     ui.label(t("Interface Scale"));
-                    ui.add(
-                        egui::Slider::new(&mut p.ui_scale, 0.75..=2.5)
-                            .step_by(0.05)
-                            .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Slider::new(scale, 0.75..=2.5)
+                                .step_by(0.05)
+                                .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                        );
+                        let differs = (*scale - p.ui_scale).abs() > 0.001;
+                        if ui
+                            .add_enabled(differs, egui::Button::new(t("Apply")))
+                            .clicked()
+                        {
+                            p.ui_scale = *scale;
+                            log::info!("interface scale {:.0} %", *scale * 100.0);
+                        }
+                        if ui
+                            .add_enabled(
+                                (p.ui_scale - 1.0).abs() > 0.001 || differs,
+                                egui::Button::new("100 %"),
+                            )
+                            .on_hover_text(t("Reset to the normal size"))
+                            .clicked()
+                        {
+                            *scale = 1.0;
+                            p.ui_scale = 1.0;
+                        }
+                    });
                     ui.end_row();
                     ui.label(t("Automatically Save Every"));
                     ui.add(
@@ -2020,7 +2140,52 @@ fn preferences(s: &mut State, ctx: &egui::Context) -> bool {
                     ui.label(t("Linked Selection"));
                     ui.checkbox(&mut p.linked_selection, "");
                     ui.end_row();
+                    // one grid for both sections keeps their columns aligned; an empty row
+                    // separates them (grids do not take plain spacing)
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(RichText::new(t("Log")).strong().color(theme::TEXT_BRIGHT));
+                    ui.end_row();
+                    ui.label(t("Logging"));
+                    log_changed |= ui
+                        .checkbox(&mut p.logging_enabled, t("Write a log file"))
+                        .on_hover_text(t(
+                            "With logging off, only errors are kept in memory; crash reports are always written.",
+                        ))
+                        .changed();
+                    ui.end_row();
+                    ui.label(t("Detail Level"));
+                    let cur = op_application::logging::LEVELS
+                        .iter()
+                        .position(|l| *l == p.log_level)
+                        .unwrap_or(2);
+                    ui.add_enabled_ui(p.logging_enabled, |ui| {
+                        egui::ComboBox::from_id_salt("pref-log")
+                            .selected_text(level_name(cur))
+                            .show_ui(ui, |ui| {
+                                for (i, l) in op_application::logging::LEVELS.iter().enumerate() {
+                                    if ui.selectable_label(i == cur, level_name(i)).clicked() {
+                                        p.log_level = l.to_string();
+                                        log_changed = true;
+                                    }
+                                }
+                            });
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.horizontal(|ui| {
+                        if ui.button(t("Show Log...")).clicked() {
+                            show_log = true;
+                        }
+                        if ui.button(t("Open Log Folder")).clicked() {
+                            open_logs = true;
+                        }
+                    });
+                    ui.end_row();
                 });
+            if log_changed {
+                op_application::logging::configure(p.logging_enabled, &p.log_level);
+            }
             ui.add_space(6.0);
             let (dev, rate, _) = s.ed.playback.device_info();
             ui.label(
@@ -2034,10 +2199,138 @@ fn preferences(s: &mut State, ctx: &egui::Context) -> bool {
                     .size(11.0),
             );
         });
+    if show_log && !s.dialogs.iter().any(|d| matches!(d, Dialog::Log { .. })) {
+        s.dialogs.push(Dialog::log());
+    }
+    if open_logs && let Some(dir) = op_application::logging::folder() {
+        crate::app::open_folder(&dir);
+    }
     if !open {
         let _ = s.ed.prefs.save(&s.ed.dirs);
     }
     open
+}
+
+/// The program log with a detail filter and a search field.
+fn log_window(ctx: &egui::Context, level: &mut usize, filter: &mut String) -> bool {
+    let mut open = true;
+    window(ctx, t("Log"))
+        .open(&mut open)
+        .resizable(true)
+        .default_size([820.0, 480.0])
+        .show(ctx, |ui| {
+            let names = [
+                t("Errors"),
+                t("Warnings"),
+                t("Information"),
+                t("Debugging"),
+                t("Everything"),
+            ];
+            let wanted = match *level {
+                0 => log::LevelFilter::Error,
+                1 => log::LevelFilter::Warn,
+                2 => log::LevelFilter::Info,
+                3 => log::LevelFilter::Debug,
+                _ => log::LevelFilter::Trace,
+            };
+            let q = filter.to_lowercase();
+            let lines: Vec<op_application::logging::Line> = op_application::logging::recent(wanted)
+                .into_iter()
+                .filter(|l| {
+                    q.is_empty()
+                        || l.message.to_lowercase().contains(&q)
+                        || l.target.to_lowercase().contains(&q)
+                })
+                .collect();
+            ui.horizontal(|ui| {
+                ui.label(t("Show"));
+                egui::ComboBox::from_id_salt("log-level")
+                    .selected_text(names[(*level).min(4)])
+                    .show_ui(ui, |ui| {
+                        for (i, n) in names.iter().enumerate() {
+                            ui.selectable_value(level, i, *n);
+                        }
+                    });
+                ui.add(
+                    egui::TextEdit::singleline(filter)
+                        .hint_text(t("Search"))
+                        .desired_width(200.0),
+                );
+                if ui.button(t("Copy All")).clicked() {
+                    let text: Vec<String> = lines.iter().map(|l| l.format()).collect();
+                    ui.ctx().copy_text(text.join("\n"));
+                }
+                if ui.button(t("Clear")).clicked() {
+                    op_application::logging::clear();
+                }
+                if ui.button(t("Open Log Folder")).clicked()
+                    && let Some(dir) = op_application::logging::folder()
+                {
+                    crate::app::open_folder(&dir);
+                }
+            });
+            ui.separator();
+            let row_h = 16.0;
+            egui::ScrollArea::both()
+                .auto_shrink(false)
+                .stick_to_bottom(true)
+                .show_rows(ui, row_h, lines.len(), |ui, range| {
+                    for l in &lines[range] {
+                        let color = match l.level {
+                            log::Level::Error => theme::ERROR,
+                            log::Level::Warn => theme::WARN,
+                            log::Level::Info => theme::TEXT,
+                            _ => theme::TEXT_DIM,
+                        };
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(l.format())
+                                    .monospace()
+                                    .size(11.5)
+                                    .color(color),
+                            )
+                            .extend(),
+                        );
+                    }
+                });
+            if lines.is_empty() {
+                ui.label(RichText::new(t("No messages")).color(theme::TEXT_DIM));
+            }
+        });
+    ctx.request_repaint_after(std::time::Duration::from_millis(500));
+    open
+}
+
+/// The notice shown while a project is read in the background.
+pub fn opening(s: &mut State, ctx: &egui::Context) {
+    let Some(o) = &s.opening else { return };
+    let name = o
+        .path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let secs = o.started.elapsed().as_secs_f32();
+    egui::Modal::new(egui::Id::new("opening-project")).show(ctx, |ui| {
+        ui.set_width(380.0);
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(
+                RichText::new(t("Opening project..."))
+                    .size(15.0)
+                    .color(theme::TEXT_BRIGHT),
+            );
+        });
+        ui.add_space(4.0);
+        ui.label(RichText::new(name).color(theme::TEXT_DIM));
+        if secs > 2.0 {
+            ui.label(
+                RichText::new(tf("{} seconds", &[&format!("{secs:.0}")]))
+                    .color(theme::TEXT_DIM)
+                    .size(11.0),
+            );
+        }
+    });
+    ctx.request_repaint_after(std::time::Duration::from_millis(100));
 }
 
 fn res_label(d: u32) -> String {

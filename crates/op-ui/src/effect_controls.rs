@@ -166,7 +166,11 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         s.ed.active_seq()
             .map(|q| q.name.clone())
             .unwrap_or_default();
-    let split = full.min.x + (full.width() * 0.6).max(260.0).min(full.width() - 60.0);
+    let split = if full.width() >= 460.0 {
+        full.min.x + (full.width() * 0.62).clamp(300.0, full.width() - 150.0)
+    } else {
+        full.max.x
+    };
     let lane = Lane {
         x0: split + 8.0,
         x1: full.max.x - 8.0,
@@ -573,18 +577,43 @@ fn param_row(
             });
         }
     }
-    let label_w = 132.0f32.min((split - left.min.x) * 0.42);
-    ui.painter().with_clip_rect(left).text(
-        pos2(left.min.x + indent + 4.0, left.min.y + 12.0),
-        Align2::LEFT_CENTER,
-        tn(spec.label),
-        FontId::proportional(12.0),
-        theme::TEXT,
+    // the name gets its own column and is cut (with the full name as a tooltip) rather than
+    // running under the values when the panel is narrow
+    let label_w = 140.0f32.min((split - left.min.x - indent) * 0.45).max(40.0);
+    let label_rect = Rect::from_min_max(
+        pos2(left.min.x + indent + 2.0, left.min.y),
+        pos2(left.min.x + indent + label_w - 4.0, left.min.y + ROW_H),
     );
+    let name = tn(spec.label);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(name.clone(), FontId::proportional(12.0), theme::TEXT);
+    let cut = galley.size().x > label_rect.width();
+    ui.painter()
+        .with_clip_rect(label_rect.intersect(ui.clip_rect()))
+        .galley(
+            pos2(
+                label_rect.min.x + 2.0,
+                label_rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            theme::TEXT,
+        );
+    if cut {
+        ui.interact(
+            label_rect,
+            ui.id().with(("lbl", comp.id.0, spec.key)),
+            Sense::hover(),
+        )
+        .on_hover_text(name);
+    }
     let nav_w = if prm.animated { 60.0 } else { 0.0 };
     let editor = Rect::from_min_max(
         pos2(left.min.x + indent + label_w, left.min.y),
-        pos2(split - 6.0 - nav_w, left.max.y),
+        pos2(
+            (split - 6.0 - nav_w).max(left.min.x + indent + label_w + 10.0),
+            left.max.y,
+        ),
     );
     let id = ui.id().with(("val", comp.id.0, spec.key));
     let new = ui
@@ -593,6 +622,8 @@ fn param_row(
                 .max_rect(editor)
                 .layout(egui::Layout::left_to_right(egui::Align::Min)),
             |ui| {
+                // values never draw over the stopwatch, the keyframe buttons or the lane
+                ui.set_clip_rect(editor.intersect(ui.clip_rect()));
                 ui.add_space(2.0);
                 value_editor(s, ui, id, cx, spec, &value)
             },
@@ -871,17 +902,9 @@ fn value_editor(
         }
         ParamKind::Color { .. } => {
             let c = value.as_color();
-            let mut rgba = c.to_u8();
-            ui.color_edit_button_srgba_unmultiplied(&mut rgba)
-                .changed()
-                .then(|| {
-                    Value::Color(Rgba::new(
-                        rgba[0] as f32 / 255.0,
-                        rgba[1] as f32 / 255.0,
-                        rgba[2] as f32 / 255.0,
-                        rgba[3] as f32 / 255.0,
-                    ))
-                })
+            let mut rgba = [c.r, c.g, c.b, c.a];
+            crate::color::button(ui, &mut rgba, true)
+                .then(|| Value::Color(Rgba::new(rgba[0], rgba[1], rgba[2], rgba[3])))
         }
         ParamKind::Point { space, .. } => {
             let p = value.as_point();

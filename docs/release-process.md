@@ -1,6 +1,6 @@
 # Release process
 
-OpenPremier 0.1.x releases are explicitly **technical-alpha prereleases**. Publishing a build
+OpenPremier 0.x releases are explicitly **technical-alpha prereleases**. Publishing a build
 does not validate Premiere feature, project, pixel, performance, or workflow parity.
 
 ## Prerequisites
@@ -16,8 +16,8 @@ does not validate Premiere feature, project, pixel, performance, or workflow par
 Create and push an annotated tag matching the workspace version:
 
 ```text
-git tag -a v0.1.0 -m "OpenPremier 0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "OpenPremier 0.2.0"
+git push origin v0.2.0
 ```
 
 The release workflow verifies the tag/version match, builds the portable Windows ZIP, builds the

@@ -50,21 +50,29 @@ fn safe_name(s: &str) -> String {
 
 /// Writes an autosave copy and prunes old ones for this project.
 pub fn write(editor: &mut Editor) -> Result<PathBuf, String> {
-    let dir = editor.dirs.autosave();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let name = safe_name(
-        &editor
-            .path
-            .as_ref()
-            .and_then(|p| p.file_stem())
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or(editor.project.name.clone()),
-    );
+    let project = editor.snapshot();
+    write_project(
+        &editor.dirs.autosave(),
+        &editor.document_name(),
+        editor.prefs.autosave_keep,
+        &project,
+    )
+}
+
+/// Writes `project` as a new autosave version in `dir` and keeps the newest `keep` versions.
+pub fn write_project(
+    dir: &Path,
+    name: &str,
+    keep: usize,
+    project: &op_core::Project,
+) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let name = safe_name(name);
     let path = dir.join(format!("{name}-{}.opproj", stamp(SystemTime::now())));
-    op_project::native::save(&path, &editor.project, &serde_json::Value::Null, GENERATOR)
+    op_project::native::save(&path, project, &serde_json::Value::Null, GENERATOR)
         .map_err(|e| e.to_string())?;
-    let keep = editor.prefs.autosave_keep.max(1);
-    let mut mine: Vec<PathBuf> = std::fs::read_dir(&dir)
+    let keep = keep.max(1);
+    let mut mine: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| e.to_string())?
         .flatten()
         .map(|e| e.path())
@@ -72,6 +80,7 @@ pub fn write(editor: &mut Editor) -> Result<PathBuf, String> {
             p.file_name()
                 .is_some_and(|n| n.to_string_lossy().starts_with(&format!("{name}-")))
                 && p.extension().is_some_and(|x| x == "opproj")
+                && !p.to_string_lossy().ends_with("-recovery.opproj")
         })
         .collect();
     mine.sort();

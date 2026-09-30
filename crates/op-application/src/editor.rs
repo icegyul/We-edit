@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use op_core::*;
@@ -44,6 +45,18 @@ pub struct SourceMonitor {
     cache: Option<(ItemId, u64, Arc<Project>, SequenceId)>,
 }
 
+/// A project read from disk, ready to become the current one. Reading does not touch the editor,
+/// so it can run on a background thread while the window stays responsive.
+pub struct LoadedProject {
+    pub path: PathBuf,
+    pub project: Project,
+    pub view: serde_json::Value,
+    /// The file is a native project: saving writes back to it.
+    pub native: bool,
+    pub report: Option<op_project::prproj::ImportReport>,
+    pub offline: usize,
+}
+
 pub struct Editor {
     pub project: Project,
     pub history: op_core::History,
@@ -74,7 +87,12 @@ pub struct Editor {
     pub exports: Vec<crate::export::ExportJob>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
+    autosaving: Arc<AtomicBool>,
     snapshot: Option<(u64, Arc<Project>)>,
+    /// Revision last handed to the crash-recovery writer, and the one last written.
+    recovery_revision: u64,
+    recovery_written: u64,
+    recovery_at: Instant,
     /// Bumped on every change that needs a redraw of the monitors.
     pub frame_generation: u64,
 }
@@ -121,7 +139,11 @@ impl Editor {
             exports: Vec::new(),
             last_import_report: None,
             autosave_at: Instant::now(),
+            autosaving: Arc::new(AtomicBool::new(false)),
             snapshot: None,
+            recovery_revision: u64::MAX,
+            recovery_written: u64::MAX,
+            recovery_at: Instant::now(),
             frame_generation: 0,
         }
     }
@@ -285,6 +307,8 @@ impl Editor {
 
     pub fn new_project(&mut self, name: &str) {
         self.stop();
+        crate::recovery::forget();
+        log::info!("new project");
         self.project = Project::new(name);
         apply_prefs(&mut self.project, &self.prefs);
         self.history.clear();
@@ -306,9 +330,11 @@ impl Editor {
         self.clipboard = Clipboard::default();
     }
 
-    /// Opens a native project, or imports a Premiere Pro / FCP XML / OTIO file as a new project.
-    pub fn open(&mut self, path: &Path) -> Result<(), String> {
-        self.stop();
+    /// Reads a native project, or imports a Premiere Pro / FCP XML / OTIO file as a new project.
+    /// Pure: it can run on any thread (see `install`).
+    pub fn load_project(path: &Path) -> Result<LoadedProject, String> {
+        let started = Instant::now();
+        log::info!("opening {}", path.display());
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
@@ -318,12 +344,14 @@ impl Editor {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let (project, view, native) = match ext.as_str() {
+        let mut report = None;
+        let mut offline = 0;
+        let (mut project, view, native) = match ext.as_str() {
             "prproj" => {
                 let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-                let (p, report) =
+                let (p, r) =
                     op_project::prproj::import(&bytes, &name).map_err(|e| e.to_string())?;
-                self.last_import_report = Some(report);
+                report = Some(r);
                 (p, serde_json::Value::Null, false)
             }
             "xml" => {
@@ -353,25 +381,52 @@ impl Editor {
                     }
                     e => e.to_string(),
                 })?;
-                if !loaded.offline.is_empty() {
-                    self.error(format!("{} media files are offline", loaded.offline.len()));
-                }
+                offline = loaded.offline.len();
                 (loaded.project, loaded.view, true)
             }
         };
-        self.project = project;
+        if !native {
+            refresh_media(&mut project);
+            project.name = name;
+        }
+        log::info!(
+            "read {} in {} ms: {} items, {} media, {} sequences, {} offline",
+            path.display(),
+            started.elapsed().as_millis(),
+            project.items.len(),
+            project.assets.len(),
+            project.sequences.len(),
+            offline
+        );
+        Ok(LoadedProject {
+            path: path.to_path_buf(),
+            project,
+            view,
+            native,
+            report,
+            offline,
+        })
+    }
+
+    /// Makes a loaded project the current one.
+    pub fn install(&mut self, loaded: LoadedProject) {
+        self.stop();
+        crate::recovery::forget();
+        self.project = loaded.project;
         self.history.clear();
         self.history.mark_saved();
-        self.path = native.then(|| path.to_path_buf());
+        self.path = loaded.native.then(|| loaded.path.clone());
         self.reset_session();
-        self.restore_view(&view);
-        if !native {
-            self.refresh_media();
-            self.project.name = name;
+        self.restore_view(&loaded.view);
+        if loaded.report.is_some() {
+            self.last_import_report = loaded.report;
         }
         self.changed();
-        if native {
-            self.prefs.add_recent(path);
+        if loaded.offline > 0 {
+            self.error(format!("{} media files are offline", loaded.offline));
+        }
+        if loaded.native {
+            self.prefs.add_recent(&loaded.path);
             let _ = self.prefs.save(&self.dirs);
         }
         // open the first sequence when nothing was open
@@ -380,29 +435,18 @@ impl Editor {
         {
             self.open_sequence(first);
         }
+    }
+
+    /// Opens a project on the calling thread (`load_project` + `install`).
+    pub fn open(&mut self, path: &Path) -> Result<(), String> {
+        let loaded = Self::load_project(path)?;
+        self.install(loaded);
         Ok(())
     }
 
     /// Re-probes media that exists on disk to complete descriptors made by importers.
     pub fn refresh_media(&mut self) {
-        let ids: Vec<AssetId> = self.project.assets.keys().copied().collect();
-        for id in ids {
-            let a = self.project.asset(id).unwrap().clone();
-            if !Path::new(&a.path).exists() {
-                continue;
-            }
-            if let Ok(mut probed) = op_media::probe(Path::new(&a.path)) {
-                probed.id = id;
-                probed.interpretation = a.interpretation.clone();
-                // keep ranges used by clips valid if the file is shorter than recorded
-                if let (Some(old), Some(new)) = (a.available(), probed.available())
-                    && new.end < old.end
-                {
-                    continue;
-                }
-                self.project.assets.insert(id, Arc::new(probed));
-            }
-        }
+        refresh_media(&mut self.project);
     }
 
     pub fn save(&mut self) -> Result<(), String> {
@@ -431,8 +475,11 @@ impl Editor {
             .map_err(|e| e.to_string())?;
         self.path = Some(path.clone());
         self.history.mark_saved();
+        crate::recovery::discard();
+        self.recovery_written = self.history.revision();
         self.prefs.add_recent(&path);
         let _ = self.prefs.save(&self.dirs);
+        log::info!("saved {}", path.display());
         self.info(format!("Saved {}", path.display()));
         Ok(())
     }
@@ -1028,6 +1075,7 @@ impl Editor {
         self.poll_imports();
         self.poll_exports();
         self.autosave();
+        self.keep_recovery();
         if let Some(monitor) = self.transport.playing {
             if !self.playback.is_playing() {
                 self.transport.playing = None;
@@ -1093,22 +1141,97 @@ impl Editor {
 
     // ------------------------------------------------------------------------------ autosave
 
+    /// Periodic autosave versions, written on a background thread from a snapshot.
     fn autosave(&mut self) {
         let every = Duration::from_secs(self.prefs.autosave_minutes.max(1) as u64 * 60);
         if self.prefs.autosave_minutes == 0 || self.autosave_at.elapsed() < every {
             return;
         }
         self.autosave_at = Instant::now();
-        if !self.history.is_dirty() {
+        if !self.history.is_dirty() || self.autosaving.swap(true, Ordering::AcqRel) {
             return;
         }
-        if let Err(e) = crate::autosave::write(self) {
-            log::warn!("autosave failed: {e}");
+        let project = self.snapshot();
+        let dir = self.dirs.autosave();
+        let name = self.document_name();
+        let keep = self.prefs.autosave_keep;
+        let busy = self.autosaving.clone();
+        let spawned = std::thread::Builder::new()
+            .name("autosave".into())
+            .spawn(move || {
+                match crate::autosave::write_project(&dir, &name, keep, &project) {
+                    Ok(p) => log::info!("autosaved {}", p.display()),
+                    Err(e) => log::warn!("autosave failed: {e}"),
+                }
+                busy.store(false, Ordering::Release);
+            });
+        if spawned.is_err() {
+            self.autosaving.store(false, Ordering::Release);
+        }
+    }
+
+    /// The name autosave and recovery files use.
+    pub fn document_name(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_stem())
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.project.name.clone())
+    }
+
+    /// Keeps the crash-recovery copy current: unsaved changes reach disk within seconds, on a
+    /// background thread, and the copy disappears once there is nothing unsaved.
+    fn keep_recovery(&mut self) {
+        let rev = self.history.revision();
+        if !self.history.is_dirty() {
+            if self.recovery_written != rev {
+                crate::recovery::discard();
+                self.recovery_written = rev;
+            }
+            return;
+        }
+        if rev != self.recovery_revision {
+            let project = self.snapshot();
+            let file = crate::recovery::file_for(&self.dirs.autosave(), &self.document_name());
+            crate::recovery::remember(project, rev, file);
+            self.recovery_revision = rev;
+        }
+        if self.recovery_written != rev
+            && self.recovery_at.elapsed() >= crate::recovery::INTERVAL
+            && let Some(written) = crate::recovery::write_in_background()
+        {
+            self.recovery_written = written;
+            self.recovery_at = Instant::now();
         }
     }
 
     pub fn autosave_now(&mut self) -> Result<PathBuf, String> {
         crate::autosave::write(self)
+    }
+}
+
+/// Re-probes media that exists on disk to complete descriptors made by importers.
+pub fn refresh_media(project: &mut Project) {
+    let ids: Vec<AssetId> = project.assets.keys().copied().collect();
+    for id in ids {
+        let a = project.asset(id).unwrap().clone();
+        if !Path::new(&a.path).exists() {
+            continue;
+        }
+        match op_media::probe(Path::new(&a.path)) {
+            Ok(mut probed) => {
+                probed.id = id;
+                probed.interpretation = a.interpretation.clone();
+                // keep ranges used by clips valid if the file is shorter than recorded
+                if let (Some(old), Some(new)) = (a.available(), probed.available())
+                    && new.end < old.end
+                {
+                    continue;
+                }
+                project.assets.insert(id, Arc::new(probed));
+            }
+            Err(e) => log::warn!("could not probe {}: {e}", a.path),
+        }
     }
 }
 

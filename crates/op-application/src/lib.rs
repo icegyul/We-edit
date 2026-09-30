@@ -6,13 +6,15 @@ pub mod commands;
 pub mod editor;
 pub mod export;
 pub mod keymap;
+pub mod logging;
 pub mod media;
 pub mod merge;
 pub mod prefs;
+pub mod recovery;
 pub mod session;
 
-pub use editor::{APP_NAME, Editor, Status, Transport};
-pub use export::{ExportJob, ExportSettings, Progress};
+pub use editor::{APP_NAME, Editor, LoadedProject, Status, Transport};
+pub use export::{ExportJob, ExportSettings, PreviewImage, Progress};
 pub use keymap::{Binding, Chord, Keymap};
 pub use media::MediaService;
 pub use prefs::{Dirs, Preferences};

@@ -1399,6 +1399,7 @@ mod tests {
 
     #[test]
     fn save_and_reopen_keeps_session() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, d) = editor();
         let item = matte(&mut e);
         e.new_sequence("S", SequenceSettings::default());
