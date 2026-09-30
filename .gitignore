@@ -35,22 +35,6 @@ research-private/
 logs/
 *.log
 
-# Local assistant/editor state and private conversations (never project source)
-/.agents
-/.codex
-/.claude
-/.cursor
-/.continue
-/.windsurf
-/.ai
-/.aider*
-/AGENTS.md
-/CLAUDE.md
-/GEMINI.md
-/.github/copilot-instructions.md
-/.github/instructions/
-*.chatlog
-
 # Local secrets and coverage/profiling output
 .env
 .env.*

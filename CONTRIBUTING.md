@@ -25,7 +25,7 @@ and run lint plus the full test suite. Packaging changes must also pass the fina
 `--self-test`. User-facing changes belong under `Unreleased` in `CHANGELOG.md`.
 
 Do not commit build output, downloaded dependencies, private media, local tool configuration,
-credentials, crash dumps, or assistant transcripts.
+credentials, crash dumps, or personal notes.
 
 ## Clean-room compatibility work
 
