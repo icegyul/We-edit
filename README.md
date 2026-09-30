@@ -18,6 +18,9 @@ OpenPremier busca ofrecer un entorno de edición profesional con una organizaci�
 trabajo familiares para quienes vienen de otros editores no lineales. El proyecto es independiente,
 no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
+<p align="center">
+  <img src="assets/branding/Windows.png" width="80" alt="Logowindows"> <img src="assets/branding/Linux.png" width="80" alt="Logolinux"> <img src="assets/branding/macOS.png" width="80" alt="Logomac">
+</p>
 ## Estado actual
 
 La versión `0.2.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
