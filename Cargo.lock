@@ -2683,6 +2683,7 @@ name = "op-media"
 version = "0.5.1"
 dependencies = [
  "ffmpeg-next",
+ "libc",
  "log",
  "memmap2",
  "op-core",

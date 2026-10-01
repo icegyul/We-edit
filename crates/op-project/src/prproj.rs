@@ -930,6 +930,12 @@ impl<'a> Importer<'a> {
                     .warn("clip speed was derived from source and timeline durations");
             }
         }
+        // reverse playback (Clip Speed/Duration > Reverse Speed)
+        if self.text(clip_node, "Clip/PlayBackwards") == Some("true") {
+            clip.reverse = true;
+            self.report
+                .warn("reversed clips were imported; their source range is not yet verified");
+        }
         if let Some(chain) = self.deref_path(node, "ClipTrackItem/ComponentOwner/Components") {
             self.components(chain, &mut clip);
         }
@@ -1434,7 +1440,7 @@ mod tests {
     </ClipTrackItem>
   </VideoClipTrackItem>
   <SubClip ObjectID="51" ClassID="sc" Version="5"><Clip ObjectRef="52"/><MasterClip ObjectURef="mc1"/><Name>interview.mov</Name></SubClip>
-  <VideoClip ObjectID="52" ClassID="vc" Version="11"><Clip><Source ObjectRef="11"/><InPoint>508032000000</InPoint><OutPoint>1016064000000</OutPoint></Clip></VideoClip>
+  <VideoClip ObjectID="52" ClassID="vc" Version="11"><Clip><Source ObjectRef="11"/><InPoint>508032000000</InPoint><OutPoint>1016064000000</OutPoint><PlayBackwards>true</PlayBackwards></Clip></VideoClip>
   <VideoComponentChain ObjectID="60" ClassID="vcc" Version="3"><ComponentChain><Components><Component Index="0" ObjectRef="61"/><Component Index="1" ObjectRef="62"/></Components></ComponentChain></VideoComponentChain>
   <VideoFilterComponent ObjectID="61" ClassID="vfc" Version="9">
     <Component><Params><Param Index="0" ObjectRef="70"/><Param Index="1" ObjectRef="71"/></Params></Component>
@@ -1467,6 +1473,7 @@ mod tests {
         assert_eq!(clip.start, SeqTime::from_seconds(1.0));
         assert_eq!(clip.duration, Dur::from_seconds(2.0));
         assert_eq!(clip.source_in, SrcTime::from_seconds(2.0));
+        assert!(clip.reverse);
         let motion = clip.component(catalog::MOTION).unwrap();
         assert_eq!(
             motion.param("position").unwrap().value,

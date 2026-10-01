@@ -32,8 +32,9 @@
     <release version="0.5.1" date="2026-10-01">
       <description>
         <p>
-          Fixes exporting on macOS, retries a failed hardware export with the software encoder,
-          and uses the system videos and pictures folders on every platform.
+          Fixes exporting on macOS and a crash on Linux systems without VAAPI, retries a failed
+          hardware export with the software encoder, and uses the system videos and pictures
+          folders on every platform.
         </p>
       </description>
     </release>

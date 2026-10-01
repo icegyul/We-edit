@@ -11,6 +11,8 @@ OpenPremier follows semantic versioning. User-visible changes are grouped by rel
 - Export errors name the step that failed (for example the video encoder in use) instead of only FFmpeg's short message, and the log records which encoder an export uses.
 - The default export folder is the user's videos folder on every system (Movies on macOS, the localized XDG folder on Linux) instead of the home folder when no folder is named "Videos"; pasted images default to the pictures folder in the same way.
 - The empty Project panel shows Cmd+I instead of Ctrl+I on macOS.
+- On Linux systems without the VAAPI libraries (libva), hardware decoding could close the program; it is now only tried when those libraries are installed, and the processor decodes otherwise.
+- Premiere Pro project import reads reversed clips (Reverse Speed).
 
 ### Changed
 

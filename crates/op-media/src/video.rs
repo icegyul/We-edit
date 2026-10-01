@@ -361,9 +361,35 @@ fn hw_device_types() -> &'static [ff::ffi::AVHWDeviceType] {
         &[AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2]
     } else if cfg!(target_os = "macos") {
         &[AV_HWDEVICE_TYPE_VIDEOTOOLBOX]
-    } else {
+    } else if vaapi_installed() {
         &[AV_HWDEVICE_TYPE_VAAPI]
+    } else {
+        &[]
     }
+}
+
+/// The packaged FFmpeg loads libva on first use and aborts the whole process when it is
+/// missing, so VAAPI is only tried when its libraries can be loaded.
+#[cfg(target_os = "linux")]
+fn vaapi_installed() -> bool {
+    static FOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FOUND.get_or_init(|| {
+        let found = [c"libva.so.2", c"libva-drm.so.2", c"libva-x11.so.2"]
+            .iter()
+            .all(|name| {
+                // SAFETY: dlopen with a valid C string; the handle stays loaded on purpose.
+                !unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL) }.is_null()
+            });
+        if !found {
+            log::info!("VAAPI libraries not installed: hardware decoding uses the processor");
+        }
+        found
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn vaapi_installed() -> bool {
+    false
 }
 
 /// Chooses the hardware surface format picked at open time (kept in `opaque`), else lets

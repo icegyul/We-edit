@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/openpremier.svg" width="200" alt="Logo de OpenPremier">
+  <img src="assets/icons/openpremier-512.png" width="200" alt="Logo de OpenPremier">
 </p>
 
 <h1 align="center">OpenPremier</h1>
