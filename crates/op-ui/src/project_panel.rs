@@ -301,7 +301,11 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         ui.painter().text(
             content.center(),
             Align2::CENTER_CENTER,
-            t("Import media to start (Ctrl+I) or drop files here"),
+            if cfg!(target_os = "macos") {
+                t("Import media to start (Cmd+I) or drop files here")
+            } else {
+                t("Import media to start (Ctrl+I) or drop files here")
+            },
             FontId::proportional(12.5),
             theme::TEXT_DIM,
         );

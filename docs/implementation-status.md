@@ -1,7 +1,7 @@
 # Implementation status
 
-**Snapshot:** 2026-09-30<br>
-**Application version:** 0.5.0 technical alpha<br>
+**Snapshot:** 2026-10-01<br>
+**Application version:** 0.5.1 technical alpha<br>
 **Primary language/UI:** Rust 2024 / egui 0.36<br>
 **Compatibility validation:** in progress; full parity has not been established
 
@@ -16,7 +16,7 @@ flow:
 | Check | Result |
 |---|---|
 | `cargo xtask lint` | rustfmt and Clippy passed with warnings denied |
-| `cargo xtask test` | 133 tests passed; no failures or ignored tests |
+| `cargo xtask test` | 134 tests passed on Windows; the same suite runs on Linux (software Vulkan) and macOS (Metal) in CI with the GPU tests required |
 | Windows release package | final-layout `--self-test` passed |
 | Linux AppImage | WSL `--self-test` passed; startup passed in Ubuntu 22.04 and Fedora 42 containers |
 

@@ -2,6 +2,20 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.5.1 - 2026-10-01
+
+### Fixed
+
+- Exporting H.264 or HEVC on a Mac failed with "Invalid argument" from the VideoToolbox encoder. It now runs without B-frames (the likely cause) and may use its software path; if it still fails, the software encoder takes over (below).
+- When a hardware encoder fails during an export on any platform, the export starts again with the software encoder instead of stopping.
+- Export errors name the step that failed (for example the video encoder in use) instead of only FFmpeg's short message, and the log records which encoder an export uses.
+- The default export folder is the user's videos folder on every system (Movies on macOS, the localized XDG folder on Linux) instead of the home folder when no folder is named "Videos"; pasted images default to the pictures folder in the same way.
+- The empty Project panel shows Cmd+I instead of Ctrl+I on macOS.
+
+### Changed
+
+- A new end-to-end test exports a clip with sound and effects in every format (H.264, HEVC, ProRes 422 HQ, ProRes 4444, DNxHR HQ and PNG) and reads each file back. Continuous integration runs it, and the effect and transition pixel tests, on a real graphics adapter on Linux and macOS instead of skipping them.
+
 ## 0.5.0 - 2026-09-30
 
 ### Added

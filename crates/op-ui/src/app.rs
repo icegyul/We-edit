@@ -1169,12 +1169,12 @@ impl State {
         if let Some(dir) = self.ed.path.as_ref().and_then(|p| p.parent()) {
             return dir.join(t("Pasted Media"));
         }
-        let home = std::env::var_os("USERPROFILE")
-            .or_else(|| std::env::var_os("HOME"))
-            .map(PathBuf::from)
-            .unwrap_or_default();
-        let pictures = home.join("Pictures");
-        if pictures.is_dir() { pictures } else { home }.join("OpenPremier")
+        // Pictures on Windows and macOS, the XDG pictures folder on Linux
+        dirs::picture_dir()
+            .filter(|p| p.is_dir())
+            .or_else(dirs::home_dir)
+            .unwrap_or_default()
+            .join("OpenPremier")
     }
 
     /// Saves and imports pasted images whose folder is known and whose data is ready.

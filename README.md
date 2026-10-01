@@ -24,7 +24,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.5.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
+La versión `0.5.1` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -102,7 +102,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.5.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.5.1-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

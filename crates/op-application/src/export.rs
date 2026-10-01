@@ -102,17 +102,44 @@ impl ExportJob {
             .name("export".into())
             .spawn(move || {
                 let started = Instant::now();
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run(&project, &s, gpu, media, &p, &c, &pa)
-                }))
-                .unwrap_or_else(|panic| {
-                    let what = panic
-                        .downcast_ref::<String>()
-                        .cloned()
-                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
-                        .unwrap_or_else(|| "internal error".into());
-                    Err(format!("the export stopped unexpectedly ({what})"))
-                });
+                let attempt = |s: &ExportSettings| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        run(&project, s, gpu.clone(), media.clone(), &p, &c, &pa)
+                    }))
+                    .unwrap_or_else(|panic| {
+                        let what = panic
+                            .downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                            .unwrap_or_else(|| "internal error".into());
+                        Err(format!("the export stopped unexpectedly ({what})"))
+                    })
+                };
+                let mut result = attempt(&s);
+                // a hardware encoder that fails (driver, media engine, unusual size) must not
+                // stop the export: start again with the software encoder
+                let encoder = p.lock().encoder.clone();
+                if result.is_err()
+                    && !c.load(Ordering::Relaxed)
+                    && op_media::encode::is_hardware_encoder(&encoder)
+                {
+                    log::warn!(
+                        "hardware encoder {encoder} failed ({}); exporting again with the software encoder",
+                        result.as_ref().err().map(String::as_str).unwrap_or_default()
+                    );
+                    let mut soft = s.clone();
+                    if let Some(v) = soft.video.as_mut() {
+                        v.hardware = false;
+                    }
+                    {
+                        let mut pr = p.lock();
+                        *pr = Progress {
+                            paused: pr.paused,
+                            ..Progress::default()
+                        };
+                    }
+                    result = attempt(&soft);
+                }
                 let mut pr = p.lock();
                 pr.done = true;
                 pr.preparing = false;
@@ -254,6 +281,7 @@ fn run(
     std::fs::File::create(&s.path)
         .map_err(|e| format!("cannot write {}: {e}", s.path.display()))?;
     let (mut writer, encoder) = Writer::start(s)?;
+    log::info!("export encoder: {encoder}");
     progress.lock().encoder = encoder;
     progress.lock().total = total;
     let mut renderer = s.video.as_ref().map(|_| Renderer::new(gpu));

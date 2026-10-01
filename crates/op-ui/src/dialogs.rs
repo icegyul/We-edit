@@ -470,14 +470,12 @@ impl Dialog {
     }
 }
 
+/// The user's videos folder (Videos on Windows, Movies on macOS, the XDG folder on Linux in the
+/// user's language), else the home folder.
 fn dirs_video() -> Option<PathBuf> {
-    std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map(PathBuf::from)
-        .map(|h| {
-            let v = h.join("Videos");
-            if v.is_dir() { v } else { h }
-        })
+    dirs::video_dir()
+        .filter(|v| v.is_dir())
+        .or_else(dirs::home_dir)
 }
 
 fn apply_preset(f: &mut ExportForm, i: usize) {

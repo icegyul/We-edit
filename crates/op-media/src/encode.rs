@@ -98,6 +98,19 @@ impl VideoCodec {
     }
 }
 
+/// True for encoders that run on the graphics card or a media engine (their failures are
+/// worth retrying with the software encoder).
+pub fn is_hardware_encoder(name: &str) -> bool {
+    ["nvenc", "amf", "qsv", "_mf", "videotoolbox", "vaapi"]
+        .iter()
+        .any(|k| name.contains(k))
+}
+
+/// Adds which step failed to an FFmpeg error ("Invalid argument" alone says little).
+fn step(what: impl std::fmt::Display) -> impl FnOnce(MediaError) -> MediaError {
+    move |e| MediaError::Failed(format!("{what}: {e}"))
+}
+
 /// Layout of the frames given to `Muxer::push_video`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum VideoInput {
@@ -253,7 +266,10 @@ impl Muxer {
             audio: audio_out,
             header_written: false,
         };
-        m.octx.write_header()?;
+        m.octx
+            .write_header()
+            .map_err(MediaError::from)
+            .map_err(step("writing the file header"))?;
         m.header_written = true;
         // the muxer may change stream time bases while writing the header
         if let Some(v) = &mut m.video {
@@ -297,11 +313,17 @@ impl Muxer {
             }
         }
         if let (Some(scaler), Some(staging)) = (&mut v.scaler, &v.staging) {
-            scaler.run(staging, &mut v.frame)?;
+            scaler
+                .run(staging, &mut v.frame)
+                .map_err(MediaError::from)
+                .map_err(step("converting the frame"))?;
         }
         v.frame.set_pts(Some(v.next_pts));
         v.next_pts += 1;
-        v.encoder.send_frame(&v.frame)?;
+        v.encoder
+            .send_frame(&v.frame)
+            .map_err(MediaError::from)
+            .map_err(step(format!("video encoder {}", v.name)))?;
         drain_video(&mut self.octx, v)?;
         Ok(())
     }
@@ -326,14 +348,23 @@ impl Muxer {
                 let chunk = std::mem::take(&mut a.pending);
                 encode_audio(&mut self.octx, a, &chunk)?;
             }
-            a.encoder.send_eof()?;
+            a.encoder
+                .send_eof()
+                .map_err(MediaError::from)
+                .map_err(step("audio encoder"))?;
             drain_audio(&mut self.octx, a)?;
         }
         if let Some(v) = &mut self.video {
-            v.encoder.send_eof()?;
+            v.encoder
+                .send_eof()
+                .map_err(MediaError::from)
+                .map_err(step(format!("video encoder {}", v.name)))?;
             drain_video(&mut self.octx, v)?;
         }
-        self.octx.write_trailer()?;
+        self.octx
+            .write_trailer()
+            .map_err(MediaError::from)
+            .map_err(step("finishing the file"))?;
         Ok(())
     }
 }
@@ -403,7 +434,13 @@ fn try_video(
     let delivery = matches!(s.codec, VideoCodec::H264 | VideoCodec::Hevc);
     if delivery {
         enc.set_gop((s.rate.as_f64() * 2.0).round() as u32);
-        enc.set_max_b_frames(2);
+        // VideoToolbox can give B-frame timestamps the MP4 muxer rejects ("Invalid argument")
+        let videotoolbox = name.contains("videotoolbox");
+        enc.set_max_b_frames(if videotoolbox { 0 } else { 2 });
+        if videotoolbox {
+            // the software path of VideoToolbox when the media engine is busy or missing
+            opts.set("allow_sw", "1");
+        }
         match s.bitrate_kbps {
             Some(kbps) => {
                 enc.set_bit_rate(kbps as usize * 1000);
@@ -596,7 +633,10 @@ fn encode_audio(
     }
     frame.set_pts(Some(a.next_pts));
     a.next_pts += n as i64;
-    a.encoder.send_frame(&frame)?;
+    a.encoder
+        .send_frame(&frame)
+        .map_err(MediaError::from)
+        .map_err(step("audio encoder"))?;
     drain_audio(octx, a)
 }
 
@@ -611,11 +651,14 @@ fn drain_video(octx: &mut ff::format::context::Output, v: &mut VideoOut) -> Resu
                     packet.set_duration(1);
                 }
                 packet.rescale_ts(v.encoder.time_base(), v.time_base);
-                packet.write_interleaved(octx)?;
+                packet
+                    .write_interleaved(octx)
+                    .map_err(MediaError::from)
+                    .map_err(step(format!("writing video from {}", v.name)))?;
             }
             Err(ff::Error::Eof) => return Ok(()),
             Err(ff::Error::Other { errno }) if errno == ff::error::EAGAIN => return Ok(()),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(step(format!("video encoder {}", v.name))(e.into())),
         }
     }
 }
@@ -627,11 +670,14 @@ fn drain_audio(octx: &mut ff::format::context::Output, a: &mut AudioOut) -> Resu
             Ok(()) => {
                 packet.set_stream(a.stream);
                 packet.rescale_ts(a.encoder.time_base(), a.time_base);
-                packet.write_interleaved(octx)?;
+                packet
+                    .write_interleaved(octx)
+                    .map_err(MediaError::from)
+                    .map_err(step("writing audio"))?;
             }
             Err(ff::Error::Eof) => return Ok(()),
             Err(ff::Error::Other { errno }) if errno == ff::error::EAGAIN => return Ok(()),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(step("audio encoder")(e.into())),
         }
     }
 }

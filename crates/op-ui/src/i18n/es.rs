@@ -642,6 +642,10 @@ pub static ES: &[(&str, &str)] = &[
         "Import media to start (Ctrl+I) or drop files here",
         "Importe medios para empezar (Ctrl+I) o suelte archivos aquí",
     ),
+    (
+        "Import media to start (Cmd+I) or drop files here",
+        "Importe medios para empezar (Cmd+I) o suelte archivos aquí",
+    ),
     ("List View", "Vista de lista"),
     ("Icon View", "Vista de iconos"),
     ("New Sequence From Clip", "Nueva secuencia a partir de clip"),

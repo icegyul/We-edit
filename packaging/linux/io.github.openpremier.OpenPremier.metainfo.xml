@@ -29,6 +29,14 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.1" date="2026-10-01">
+      <description>
+        <p>
+          Fixes exporting on macOS, retries a failed hardware export with the software encoder,
+          and uses the system videos and pictures folders on every platform.
+        </p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-09-30">
       <description>
         <p>

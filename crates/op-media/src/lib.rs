@@ -27,6 +27,9 @@ pub enum MediaError {
     Io(#[from] std::io::Error),
     #[error("{0}")]
     Unsupported(String),
+    /// A step of encoding or writing failed; the text says which.
+    #[error("{0}")]
+    Failed(String),
     #[error("cancelled")]
     Cancelled,
 }
