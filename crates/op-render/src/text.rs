@@ -80,6 +80,8 @@ impl Fonts {
     pub fn default_family() -> &'static str {
         if cfg!(windows) {
             "Arial"
+        } else if cfg!(target_os = "macos") {
+            "Helvetica"
         } else {
             "DejaVu Sans"
         }

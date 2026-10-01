@@ -163,7 +163,12 @@ fn main() {
         .filter(|a| !a.starts_with("--"))
         .map(PathBuf::from)
         .collect();
-    if let Err(e) = op_ui::run(op_ui::Options { open, portable }) {
+    let backend = op_application::Preferences::load(&dirs).graphics_backend;
+    if let Err(e) = op_ui::run(op_ui::Options {
+        open,
+        portable,
+        backend,
+    }) {
         log::error!("{e}");
         eprintln!("OpenPremier could not start: {e}");
         std::process::exit(1);

@@ -391,3 +391,133 @@ fn graphics_and_delivery() {
     assert_eq!(scope_px.len(), 256 * 128 * 4);
     r.recycle(frame);
 }
+
+/// A media clip whose frames are one fixed decoded frame.
+struct OneFrame(Arc<op_media::VideoFrame>);
+
+impl FrameSource for OneFrame {
+    fn video_frame(&self, _a: &MediaAsset, _t: SrcTime) -> Option<Arc<op_media::VideoFrame>> {
+        Some(self.0.clone())
+    }
+}
+
+/// Hardware decoders deliver NV12 / P010: the GPU conversion matches the reference one.
+#[test]
+fn semi_planar_frames_convert_like_the_reference() {
+    let Some(gpu) = gpu() else { return };
+    let mut r = Renderer::new(gpu);
+    let (w, h) = (64u32, 36u32);
+    for wide in [false, true] {
+        // limited-range BT.709 orange-ish: Y=150, Cb=80, Cr=190 (8-bit codes)
+        let (yv, cb, cr) = (150u16, 80u16, 190u16);
+        let put = |v: u16| -> Vec<u8> {
+            if wide {
+                ((v as u32) << 8).min(65535).to_le_bytes()[..2].to_vec()
+            } else {
+                vec![v as u8]
+            }
+        };
+        let bpp = if wide { 2 } else { 1 };
+        let luma: Vec<u8> = (0..w * h).flat_map(|_| put(yv)).collect();
+        let chroma: Vec<u8> = (0..(w / 2) * (h / 2))
+            .flat_map(|_| [put(cb), put(cr)].concat())
+            .collect();
+        let frame = op_media::VideoFrame {
+            width: w,
+            height: h,
+            layout: op_media::PixelLayout::Nv12 { wide },
+            planes: vec![
+                op_media::Plane {
+                    data: luma,
+                    width: w,
+                    height: h,
+                    bytes_per_row: w * bpp,
+                },
+                op_media::Plane {
+                    data: chroma,
+                    width: w / 2,
+                    height: h / 2,
+                    bytes_per_row: w / 2 * 2 * bpp,
+                },
+            ],
+            color: ColorInfo::default(),
+            index: 0,
+        };
+        let reference = frame.to_rgba8();
+        let mut p = Project::new("nv12");
+        let asset = MediaAsset {
+            id: AssetId(0),
+            path: "x.mp4".into(),
+            proxy: None,
+            kind: MediaKind::Video,
+            video: Some(VideoStream {
+                index: 0,
+                codec: "h264".into(),
+                width: w,
+                height: h,
+                pixel_aspect: (1, 1),
+                rate: Rate::FPS_25,
+                frames: 250,
+                pixel_format: "nv12".into(),
+                bit_depth: 8,
+                alpha: AlphaMode::None,
+                color: ColorInfo::default(),
+                field_order: FieldOrder::Progressive,
+                start: Dur::ZERO,
+                rotation: 0,
+                timecode: None,
+            }),
+            audio: vec![],
+            duration: Dur::from_seconds(10.0),
+            interpretation: Interpretation::default(),
+            file_size: 0,
+            modified_unix: 0,
+        };
+        let (_, item) = p.add_asset(p.root, asset);
+        let (seq, _) = p.add_sequence(
+            p.root,
+            "S",
+            SequenceSettings {
+                width: w,
+                height: h,
+                rate: Rate::FPS_25,
+                ..SequenceSettings::default()
+            },
+        );
+        let spec = SourceClip::from_item(&p, item).unwrap();
+        let (p, _) = p
+            .transact(|p| {
+                overwrite(
+                    p,
+                    seq,
+                    &spec,
+                    SeqTime::ZERO,
+                    &Patch {
+                        video: Some(0),
+                        audio: vec![],
+                    },
+                    EditOptions::default(),
+                )
+            })
+            .unwrap();
+        let src = OneFrame(Arc::new(frame));
+        let out = r.render(&Request {
+            project: &p,
+            sequence: seq,
+            time: SeqTime::from_seconds(1.0),
+            scale: 1.0,
+            source: &src,
+        });
+        let px = r.rgba8(&out);
+        r.recycle(out);
+        let i = ((h / 2) * w + w / 2) as usize * 4;
+        for k in 0..3 {
+            assert!(
+                (px[i + k] as i32 - reference[i + k] as i32).abs() <= 3,
+                "wide={wide}: {:?} vs {:?}",
+                &px[i..i + 4],
+                &reference[i..i + 4]
+            );
+        }
+    }
+}

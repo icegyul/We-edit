@@ -85,60 +85,101 @@ impl Renderer {
 
     /// Reads a texture back as tightly packed rows (blocking).
     pub fn read_texture(&mut self, t: &Tex, bytes_per_pixel: u32) -> Vec<u8> {
-        let unpadded = t.width * bytes_per_pixel;
-        let padded = unpadded.div_ceil(256) * 256;
-        let size = padded as u64 * t.height as u64;
-        let buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
-            label: Some("readback"),
-            size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        self.read_textures(&[(t, bytes_per_pixel)])
+            .pop()
+            .unwrap_or_default()
+    }
+
+    /// Reads several textures back with one submission and one wait (blocking). Buffers are
+    /// reused between calls.
+    pub fn read_textures(&mut self, list: &[(&Tex, u32)]) -> Vec<Vec<u8>> {
         let mut enc = self
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("readback"),
             });
-        enc.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &t.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded),
-                    rows_per_image: Some(t.height),
+        let mut jobs = Vec::with_capacity(list.len());
+        for (t, bpp) in list {
+            let unpadded = t.width * bpp;
+            let padded = unpadded.div_ceil(256) * 256;
+            let size = padded as u64 * t.height as u64;
+            let buffer = self
+                .readbacks
+                .get_mut(&size)
+                .and_then(|v| v.pop())
+                .unwrap_or_else(|| {
+                    self.device().create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("readback"),
+                        size,
+                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                        mapped_at_creation: false,
+                    })
+                });
+            enc.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &t.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-            },
-            wgpu::Extent3d {
-                width: t.width,
-                height: t.height,
-                depth_or_array_layers: 1,
-            },
-        );
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(padded),
+                        rows_per_image: Some(t.height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: t.width,
+                    height: t.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            jobs.push((buffer, size, unpadded, padded, t.height));
+        }
         // pending passes must run first
         self.submit();
         self.gpu.queue.submit(Some(enc.finish()));
-        let slice = buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |r| {
-            let _ = tx.send(r);
-        });
+        for (i, (buffer, ..)) in jobs.iter().enumerate() {
+            let tx = tx.clone();
+            buffer.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+                let _ = tx.send((i, r.is_ok()));
+            });
+        }
+        drop(tx);
         let _ = self.device().poll(wgpu::PollType::wait_indefinitely());
-        let ok = rx.recv().map(|r| r.is_ok()).unwrap_or(false);
-        let mut out = vec![0u8; (unpadded * t.height) as usize];
-        if ok && let Ok(data) = slice.get_mapped_range() {
-            for y in 0..t.height as usize {
-                out[y * unpadded as usize..(y + 1) * unpadded as usize].copy_from_slice(
-                    &data[y * padded as usize..y * padded as usize + unpadded as usize],
-                );
+        let mut ok = vec![false; jobs.len()];
+        for (i, r) in rx.iter() {
+            ok[i] = r;
+        }
+        let mut out = Vec::with_capacity(jobs.len());
+        for (i, (buffer, size, unpadded, padded, height)) in jobs.into_iter().enumerate() {
+            let mut data = vec![0u8; (unpadded * height) as usize];
+            if ok[i] {
+                let slice = buffer.slice(..);
+                if let Ok(mapped) = slice.get_mapped_range() {
+                    if unpadded == padded {
+                        let n = data.len();
+                        data.copy_from_slice(&mapped[..n]);
+                    } else {
+                        for y in 0..height as usize {
+                            data[y * unpadded as usize..(y + 1) * unpadded as usize]
+                                .copy_from_slice(
+                                    &mapped[y * padded as usize
+                                        ..y * padded as usize + unpadded as usize],
+                                );
+                        }
+                    }
+                }
+                buffer.unmap();
             }
-            drop(data);
-            buffer.unmap();
+            let pool = self.readbacks.entry(size).or_default();
+            if pool.len() < 4 {
+                pool.push(buffer);
+            }
+            out.push(data);
         }
         out
     }
@@ -179,8 +220,7 @@ impl Renderer {
             frame.size(),
             &y,
         );
-        out.push(self.read_texture(&y, luma_bpp));
-        self.put(y);
+
         // chroma, interleaved on the GPU and split here
         let (chroma_entry, chroma_fmt, chroma_bpp) = if wide {
             ("fs_chroma16", wgpu::TextureFormat::Rg16Uint, 4)
@@ -195,8 +235,31 @@ impl Renderer {
             frame.size(),
             &c,
         );
-        let inter = self.read_texture(&c, chroma_bpp);
+        // the alpha plane (if any) is drawn too, then everything is read back at once
+        let a = (planes == 4).then(|| {
+            let a = self.target(w, h, wgpu::TextureFormat::R16Uint);
+            self.pass(
+                "fs_alpha16",
+                &[&frame.view],
+                P::new().b(true).f(bits),
+                frame.size(),
+                &a,
+            );
+            a
+        });
+        let mut list: Vec<(&Tex, u32)> = vec![(&y, luma_bpp), (&c, chroma_bpp)];
+        if let Some(a) = &a {
+            list.push((a, 2));
+        }
+        let mut data = self.read_textures(&list);
+        let alpha = (planes == 4).then(|| data.pop().unwrap_or_default());
+        let inter = data.pop().unwrap_or_default();
+        out.push(data.pop().unwrap_or_default());
+        self.put(y);
         self.put(c);
+        if let Some(a) = a {
+            self.put(a);
+        }
         let s = bytes;
         let mut u = Vec::with_capacity(inter.len() / 2);
         let mut v = Vec::with_capacity(inter.len() / 2);
@@ -206,17 +269,8 @@ impl Renderer {
         }
         out.push(u);
         out.push(v);
-        if planes == 4 {
-            let a = self.target(w, h, wgpu::TextureFormat::R16Uint);
-            self.pass(
-                "fs_alpha16",
-                &[&frame.view],
-                P::new().b(true).f(bits),
-                frame.size(),
-                &a,
-            );
-            out.push(self.read_texture(&a, 2));
-            self.put(a);
+        if let Some(alpha) = alpha {
+            out.push(alpha);
         }
         out
     }

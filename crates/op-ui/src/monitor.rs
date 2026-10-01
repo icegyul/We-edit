@@ -188,10 +188,10 @@ fn render(
         } else {
             Duration::from_millis(25)
         },
+        // decode about half a second ahead in the playing direction
         ahead: if playing {
-            (speed.round() as i64)
-                .clamp(-8, 8)
-                .max(if speed < 0.0 { -8 } else { 1 })
+            let k = op_application::media::PLAYBACK_AHEAD;
+            if speed < 0.0 { -k } else { k }
         } else {
             0
         },

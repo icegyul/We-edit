@@ -66,6 +66,7 @@ pub(crate) struct State {
     /// Pasted images waiting to be saved and imported.
     pub pastes: Vec<crate::paste::Job>,
     next_paste: u64,
+    performance_applied: Option<bool>,
     pub loop_playback: bool,
     pub workspace: Workspace,
     pub program: monitor::MonitorView,
@@ -173,6 +174,8 @@ pub fn open_folder(path: &Path) {
     let _ = std::fs::create_dir_all(path);
     let program = if cfg!(windows) {
         "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
     } else {
         "xdg-open"
     };
@@ -235,6 +238,7 @@ impl App {
             paste_seen: false,
             pastes: Vec::new(),
             next_paste: 1,
+            performance_applied: None,
             loop_playback: false,
             workspace,
             program: monitor::MonitorView::new(Monitor::Program),
@@ -1059,6 +1063,37 @@ impl State {
         }
     }
 
+    /// Time until the playing sequence shows its next frame.
+    fn next_frame_delay(&self) -> Duration {
+        let max = Duration::from_secs_f64(1.0 / 60.0);
+        let Some(seq) = self.ed.active_seq() else {
+            return max;
+        };
+        let fd = seq.rate().frame_duration().seconds().max(1e-3);
+        let speed = self.ed.transport.speed.abs().max(0.01);
+        let t = self.ed.playhead().seconds();
+        let next = ((t / fd).floor() + 1.0) * fd;
+        Duration::from_secs_f64(((next - t) / speed).max(0.001)).min(max)
+    }
+
+    /// Animations follow the light mode preference.
+    fn apply_performance_mode(&mut self, ctx: &egui::Context) {
+        let on = self.ed.prefs.performance_mode;
+        if self.performance_applied == Some(on) {
+            return;
+        }
+        self.performance_applied = Some(on);
+        ctx.all_styles_mut(|st| {
+            st.animation_time = if on { 0.0 } else { 1.0 / 12.0 };
+            st.scroll_animation = if on {
+                egui::style::ScrollAnimation::none()
+            } else {
+                egui::style::ScrollAnimation::default()
+            };
+        });
+        log::info!("performance mode {}", if on { "on" } else { "off" });
+    }
+
     /// Pastes media from the system clipboard. Returns false when it holds none.
     fn paste_media(&mut self) -> bool {
         use crate::paste::{self, Found, Job, Payload};
@@ -1735,10 +1770,19 @@ impl State {
         self.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
         self.tab_rects.clear();
         let busy = self.ed.tick() || self.opening.is_some();
+        self.apply_performance_mode(ctx);
         if self.ed.is_playing() {
-            ctx.request_repaint();
+            // redraw when the next frame of the sequence is due (at most 60 times a second)
+            // rather than at the display's refresh rate: a 144 Hz screen would otherwise
+            // redraw the whole interface 144 times a second for a 30 fps video
+            ctx.request_repaint_after(self.next_frame_delay());
         } else if busy {
-            ctx.request_repaint_after(Duration::from_millis(60));
+            let every = if self.ed.prefs.performance_mode {
+                200
+            } else {
+                60
+            };
+            ctx.request_repaint_after(Duration::from_millis(every));
         }
         if self
             .ed

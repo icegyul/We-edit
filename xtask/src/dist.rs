@@ -4,6 +4,7 @@
 //!   FFmpeg libraries it links, the licenses and the third-party notices. It runs from any
 //!   folder; a `portable.txt` file next to the program keeps settings in that folder.
 //! * Linux: the AppImage (see `linux.rs`).
+//! * macOS: a disk image with the app bundle (see `macos.rs`).
 //!
 //! Each package is started with `--self-test` from its final layout before it is accepted.
 
@@ -19,7 +20,14 @@ use crate::{configured_cargo, deps};
 pub const FFMPEG_LIBS: [&str; 5] = ["avcodec", "avformat", "avutil", "swresample", "swscale"];
 
 pub fn dist(args: &[String]) -> Result {
-    if cfg!(windows) {
+    if cfg!(target_os = "macos") {
+        let dmg = crate::macos::package()?;
+        eprintln!(
+            "\nmacOS package: {} ({})",
+            dmg.display(),
+            util::size_text(&dmg)
+        );
+    } else if cfg!(windows) {
         let zip = windows_zip()?;
         if !args.iter().any(|a| a == "--windows-only") {
             crate::linux::appimage_task()?;
@@ -86,6 +94,11 @@ pub fn write_docs(dir: &Path, platform: &str) -> Result {
         format!(
             "Start {}.exe. To keep settings, caches and autosaves in this folder instead of your user profile, create an empty file named portable.txt next to it.",
             util::APP_NAME
+        )
+    } else if platform == "macos" {
+        format!(
+            "Drag {name}.app to Applications and open it. The app is not notarized: the first time, right-click it and choose Open (or allow it in System Settings > Privacy & Security).",
+            name = util::APP_NAME
         )
     } else {
         "Make the AppImage executable (chmod +x) and start it. Integrate it with your desktop using your AppImage launcher of choice.".to_string()
@@ -172,6 +185,8 @@ pub fn self_test(program: &Path) -> Result {
         cmd.env("PATH", system.join("System32"));
     } else {
         cmd.env_remove("LD_LIBRARY_PATH");
+        cmd.env_remove("DYLD_LIBRARY_PATH");
+        cmd.env_remove("DYLD_FALLBACK_LIBRARY_PATH");
     }
     let out = cmd
         .output()
@@ -231,7 +246,7 @@ pub fn write_checksums() -> Result {
     entries.sort();
     for p in entries {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
-        if name.ends_with(".zip") || name.ends_with(".AppImage") {
+        if name.ends_with(".zip") || name.ends_with(".AppImage") || name.ends_with(".dmg") {
             lines.push(format!("{}  {name}", util::sha256_file(&p)?));
         }
     }

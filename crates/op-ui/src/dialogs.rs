@@ -2203,6 +2203,84 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     ui.label("");
                     ui.end_row();
                     ui.label(
+                        RichText::new(t("Performance"))
+                            .strong()
+                            .color(theme::TEXT_BRIGHT),
+                    );
+                    ui.end_row();
+                    ui.label(t("Performance Mode"));
+                    ui.checkbox(
+                        &mut p.performance_mode,
+                        t("No animations and fewer redraws"),
+                    )
+                    .on_hover_text(t(
+                        "For slower computers and laptops on battery. Editing and rendering are not affected.",
+                    ));
+                    ui.end_row();
+                    ui.label(t("Hardware Decoding"));
+                    let modes = [
+                        ("auto", t("Automatic")),
+                        ("always", t("Always (graphics card)")),
+                        ("never", t("Never (processor only)")),
+                    ];
+                    let current = modes
+                        .iter()
+                        .find(|(k, _)| *k == p.hardware_decoding)
+                        .map(|(_, l)| *l)
+                        .unwrap_or(modes[0].1);
+                    egui::ComboBox::from_id_salt("pref-hwdec")
+                        .selected_text(current)
+                        .show_ui(ui, |ui| {
+                            for (k, l) in modes {
+                                if ui.selectable_label(p.hardware_decoding == k, l).clicked() {
+                                    p.hardware_decoding = k.to_string();
+                                    s.ed.media.set_hardware_decoding(
+                                        op_application::media::HardwareDecoding::from_pref(k),
+                                    );
+                                }
+                            }
+                        })
+                        .response
+                        .on_hover_text(t(
+                            "Automatic uses the processor and moves a video to the graphics card's decoder when the processor cannot play it in real time.",
+                        ));
+                    ui.end_row();
+                    ui.label(t("Graphics API"));
+                    let mut apis = vec![("auto", t("Automatic"))];
+                    if cfg!(windows) {
+                        apis.push(("dx12", "Direct3D 12"));
+                    }
+                    if cfg!(target_os = "macos") {
+                        apis.push(("metal", "Metal"));
+                    } else {
+                        apis.push(("vulkan", "Vulkan"));
+                    }
+                    apis.push(("gl", "OpenGL"));
+                    let current = apis
+                        .iter()
+                        .find(|(k, _)| *k == p.graphics_backend)
+                        .map(|(_, l)| *l)
+                        .unwrap_or(apis[0].1);
+                    ui.horizontal(|ui| {
+                        egui::ComboBox::from_id_salt("pref-api")
+                            .selected_text(current)
+                            .show_ui(ui, |ui| {
+                                for (k, l) in &apis {
+                                    if ui.selectable_label(p.graphics_backend == *k, *l).clicked() {
+                                        p.graphics_backend = k.to_string();
+                                    }
+                                }
+                            });
+                        ui.label(
+                            RichText::new(t("Applied at the next start"))
+                                .size(11.0)
+                                .color(theme::TEXT_DIM),
+                        );
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(
                         RichText::new(t("Pasted Images"))
                             .strong()
                             .color(theme::TEXT_BRIGHT),

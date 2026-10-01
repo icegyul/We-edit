@@ -250,7 +250,13 @@ pub fn handle(s: &mut State, ctx: &egui::Context) {
 
 /// Formats a chord for display with the platform's modifier names.
 pub fn display(keys: &str) -> String {
-    Chord::parse(keys).map(|c| c.format()).unwrap_or_default()
+    let text = Chord::parse(keys).map(|c| c.format()).unwrap_or_default();
+    if cfg!(target_os = "macos") {
+        // Ctrl in a binding is the Command key on a Mac
+        text.replace("Ctrl+", "Cmd+").replace("Alt+", "Option+")
+    } else {
+        text
+    }
 }
 
 /// The chord for a key pressed in the shortcut editor.

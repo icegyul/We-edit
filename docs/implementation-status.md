@@ -1,7 +1,7 @@
 # Implementation status
 
 **Snapshot:** 2026-09-30<br>
-**Application version:** 0.4.0 technical alpha<br>
+**Application version:** 0.5.0 technical alpha<br>
 **Primary language/UI:** Rust 2024 / egui 0.36<br>
 **Compatibility validation:** in progress; full parity has not been established
 
@@ -16,7 +16,7 @@ flow:
 | Check | Result |
 |---|---|
 | `cargo xtask lint` | rustfmt and Clippy passed with warnings denied |
-| `cargo xtask test` | 131 tests passed; no failures or ignored tests |
+| `cargo xtask test` | 133 tests passed; no failures or ignored tests |
 | Windows release package | final-layout `--self-test` passed |
 | Linux AppImage | WSL `--self-test` passed; startup passed in Ubuntu 22.04 and Fedora 42 containers |
 
@@ -30,12 +30,12 @@ known compositor pixel. It is a startup/integration check, not a performance or 
 | Core model | Exact rational time, items/bins, tracks, clips, transitions, links, parameters, validation, undo/redo | Foreign concepts not represented by the canonical model remain incomplete |
 | Timeline | Selection, insert/overwrite, razor, lift/extract, ripple delete/trim, roll, slip, slide, rate stretch, nesting, snapping, track controls | Premiere cross-product behavior is not fully measured |
 | Project I/O | Atomic native `.opproj` read/write; OTIO/FCP XML/EDL interchange; gzip/XML `.prproj` import; foreign effects and transitions replaced by the closest implemented equivalent | `.prproj` is read-only and mappings are intentionally partial |
-| Media | FFmpeg probe, software decode, audio conform/peaks, thumbnails, proxy paths; pausable export with live preview and a selectable output frame rate; optional hardware encoders | Hardware decode/interoperability and codec coverage are not yet validated as a matrix |
+| Media | FFmpeg probe, software and hardware decode (automatic switch when the processor falls behind), NV12/P010 GPU conversion, audio conform/peaks, thumbnails, proxy paths; pausable export with live preview and a selectable output frame rate; optional hardware encoders | Zero-copy decoder/GPU interop is pending; hardware decode and codec coverage are not yet validated as a matrix |
 | Rendering | wgpu compositor, color conversion, blend modes, implemented effects/transitions (including original looks such as multi-octave glow, glitch, shake, grain and light leaks, and mirrored-edge motion transitions), animation presets, graphics, scopes | No differential pixel-parity corpus; OpenColorIO integration remains pending |
 | Audio | Sample-accurate floating-point mixer, meters, device output, EQ/dynamics/delay/reverb foundations | VST3 hosting, exhaustive routing, 5.1/adaptive parity, and DSP oracle tests remain pending |
 | UI | Fifteen dockable panels, saved workspace layouts, monitors, timeline, effect controls, color picker, centered dialogs, in-app log viewer, English/Spanish catalogs | Multi-monitor, accessibility, IME, HiDPI edge cases, and automated interaction coverage remain incomplete |
 | Reliability | Panels, dialogs, decoders, thumbnails, audio mixing and exports run behind panic boundaries; background recovery file, emergency save and crash reports; program log with runtime level and file switch | Recovery covers the project state, not unfinished exports; no automated crash-injection suite yet |
-| Packaging | Portable Windows ZIP, Linux AppImage, checksums, licenses, final-layout self-test | No macOS package is currently available |
+| Packaging | Portable Windows ZIP, Linux AppImage, macOS disk images (arm64 and x86_64, built in CI), checksums, licenses, final-layout self-test | The macOS app is signed ad hoc and not notarized |
 
 ## Highest-priority pending work
 
@@ -51,9 +51,9 @@ known compositor pixel. It is a startup/integration check, not a performance or 
    budgets.
 4. Implement and conformance-test the missing extensibility layer: isolated OpenFX hosting and a
    capability-based WebAssembly scripting API. VST3 requires a separate ABI/license decision.
-5. Finish production platform work: hardware decode, zero-copy decoder/GPU interop, cache pressure
+5. Finish production platform work: zero-copy decoder/GPU interop, cache pressure
    tests, crash-injection tests for the recovery path, accessibility, multi-monitor docking, and
-   macOS dependency packaging.
+   macOS notarization.
 6. Run the clean-room observations against a licensed official Premiere Pro 2024 installation and
    obtain legal/dependency-license review before any public compatibility release.
 

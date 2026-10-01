@@ -1493,4 +1493,27 @@ pub static ES: &[(&str, &str)] = &[
         "Could not get the image: {}",
         "No se pudo obtener la imagen: {}",
     ),
+    ("Performance", "Rendimiento"),
+    ("Performance Mode", "Modo de rendimiento"),
+    (
+        "No animations and fewer redraws",
+        "Sin animaciones y con menos redibujados",
+    ),
+    (
+        "For slower computers and laptops on battery. Editing and rendering are not affected.",
+        "Para equipos más lentos y portátiles con batería. No afecta a la edición ni al renderizado.",
+    ),
+    ("Hardware Decoding", "Decodificación por hardware"),
+    ("Automatic", "Automática"),
+    ("Always (graphics card)", "Siempre (tarjeta gráfica)"),
+    ("Never (processor only)", "Nunca (solo procesador)"),
+    (
+        "Automatic uses the processor and moves a video to the graphics card's decoder when the processor cannot play it in real time.",
+        "Automática usa el procesador y pasa un vídeo al decodificador de la tarjeta gráfica cuando el procesador no puede reproducirlo en tiempo real.",
+    ),
+    ("Graphics API", "Motor gráfico"),
+    (
+        "Applied at the next start",
+        "Se aplica al volver a abrir el programa",
+    ),
 ];

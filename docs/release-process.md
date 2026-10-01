@@ -16,12 +16,13 @@ does not validate Premiere feature, project, pixel, performance, or workflow par
 Create and push an annotated tag matching the workspace version:
 
 ```text
-git tag -a v0.4.0 -m "OpenPremier 0.4.0"
-git push origin v0.4.0
+git tag -a v0.5.0 -m "OpenPremier 0.5.0"
+git push origin v0.5.0
 ```
 
 The release workflow verifies the tag/version match, builds the portable Windows ZIP, builds the
-AppImage in manylinux_2_28, runs package startup checks, generates `SHA256SUMS.txt`, and publishes a
+AppImage in manylinux_2_28, builds the macOS disk images on Apple silicon and Intel runners, runs
+package startup checks, generates `SHA256SUMS.txt`, and publishes a
 GitHub prerelease with generated notes. A failed job must be fixed and rerun; never upload an
 untested replacement manually under the same filename.
 

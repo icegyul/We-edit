@@ -1364,6 +1364,8 @@ mod tests {
     use super::*;
     use crate::prefs::{Dirs, Preferences};
 
+    /// Tests that create an editor hold `recovery::TEST_GUARD`: an editor resets the shared
+    /// recovery state.
     fn editor() -> (Editor, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let e = Editor::new(Dirs::portable(dir.path()), Preferences::default(), false);
@@ -1389,6 +1391,7 @@ mod tests {
 
     #[test]
     fn three_point_edits_and_undo() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, _d) = editor();
         let item = matte(&mut e);
         e.new_sequence("S", SequenceSettings::default());
@@ -1418,6 +1421,7 @@ mod tests {
 
     #[test]
     fn presets_and_effects_apply_to_clips() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, _d) = editor();
         let item = matte(&mut e);
         e.new_sequence("S", SequenceSettings::default());
@@ -1450,6 +1454,7 @@ mod tests {
 
     #[test]
     fn pasted_images_land_on_top_of_the_timeline() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, d) = editor();
         let item = matte(&mut e);
         e.new_sequence("S", SequenceSettings::default());
@@ -1486,6 +1491,7 @@ mod tests {
 
     #[test]
     fn add_edit_lift_markers_graphics_and_transport() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, _d) = editor();
         let item = matte(&mut e);
         e.new_sequence("S", SequenceSettings::default());

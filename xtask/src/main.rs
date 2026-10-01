@@ -3,6 +3,7 @@
 mod deps;
 mod dist;
 mod linux;
+mod macos;
 mod release;
 mod util;
 

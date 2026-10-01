@@ -29,6 +29,14 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.0" date="2026-09-30">
+      <description>
+        <p>
+          A macOS package, a performance mode, automatic hardware video decoding, a choice of
+          graphics API, and much faster playback and export of camera files.
+        </p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-09-30">
       <description>
         <p>

@@ -19,9 +19,17 @@ const LIBCLANG_WHEEL: (&str, &str) = (
 const WHEEL_DLL: &str = "libclang-18.1.1.data/platlib/clang/native/libclang.dll";
 
 pub fn ffmpeg_dir() -> PathBuf {
-    std::env::var_os("FFMPEG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| third_party().join("ffmpeg"))
+    if let Some(d) = std::env::var_os("FFMPEG_DIR") {
+        return PathBuf::from(d);
+    }
+    // on macOS the Homebrew FFmpeg is used (`brew install ffmpeg`)
+    if cfg!(target_os = "macos")
+        && let Ok(out) = Command::new("brew").args(["--prefix", "ffmpeg"]).output()
+        && out.status.success()
+    {
+        return PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    }
+    third_party().join("ffmpeg")
 }
 
 fn ffmpeg_archive() -> Result<(String, &'static str)> {
@@ -43,6 +51,13 @@ fn ffmpeg_archive() -> Result<(String, &'static str)> {
 pub fn ensure_ffmpeg() -> Result {
     if std::env::var_os("FFMPEG_DIR").is_some() {
         return Ok(());
+    }
+    if cfg!(target_os = "macos") {
+        return if ffmpeg_dir().join("include").join("libavcodec").exists() {
+            Ok(())
+        } else {
+            Err("FFmpeg 8 is needed: brew install ffmpeg".into())
+        };
     }
     let dest = ffmpeg_dir();
     if dest.join("include").join("libavcodec").exists() {
@@ -112,6 +127,11 @@ pub fn configure(cmd: &mut Command) -> Result {
 pub fn runtime_env(cmd: &mut Command, ff: &Path) {
     if cfg!(windows) {
         cmd.env("PATH", util::prepend_path("PATH", &ff.join("bin")));
+    } else if cfg!(target_os = "macos") {
+        cmd.env(
+            "DYLD_FALLBACK_LIBRARY_PATH",
+            util::prepend_path("DYLD_FALLBACK_LIBRARY_PATH", &ff.join("lib")),
+        );
     } else {
         cmd.env(
             "LD_LIBRARY_PATH",

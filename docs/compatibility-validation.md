@@ -1,7 +1,7 @@
 # Compatibility validation
 
 **Status: IN PROGRESS**<br>
-**Application version: 0.4.0 alpha**<br>
+**Application version: 0.5.0 alpha**<br>
 **Full compatibility claim: not yet validated**<br>
 **Last audit: 2026-09-29**
 

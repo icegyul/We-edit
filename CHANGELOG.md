@@ -2,7 +2,23 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
-## 0.4.0 - 2026-09-30
+## 0.5.0 - 2026-09-30
+
+### Added
+
+- macOS package: a disk image (`.dmg`) with `OpenPremier.app` for Apple silicon (arm64) and Intel (x86_64) Macs, with FFmpeg bundled inside the app. Keyboard shortcuts are shown with Cmd and Option, and Show in Folder opens Finder.
+- Performance Mode in Preferences (Performance): turns off interface animations and smooth scrolling and redraws the interface less often while waiting for background work. Editing and rendering are not affected.
+- Hardware decoding in Preferences: Automatic (the default) decodes on the processor and moves a video to the graphics card's decoder when the processor cannot keep up in real time; Always and Never force one or the other. Hardware decoding uses Direct3D 11/DXVA2 on Windows, VideoToolbox on macOS and VAAPI on Linux, and falls back to the processor when the card cannot decode a file.
+- Graphics API choice in Preferences: Automatic, Direct3D 12 (Windows), Metal (macOS), Vulkan or OpenGL. If the chosen API cannot start, the next one is tried.
+
+### Changed
+
+- Much faster playback and export of camera files: the decoder keeps a longer read-ahead and decodes every frame in order instead of skipping ahead, which made it seek back to the previous keyframe again and again. Exporting a 4K HEVC 10-bit clip to 1080p went from about 4 to about 80 frames per second on the test machine.
+- Export encodes on its own thread while the next frame renders, and reads the rendered planes back from the graphics card in one batch with reused buffers.
+- 8-bit and 10-bit semi-planar frames (NV12/P010, what hardware decoders produce) are converted to RGB on the graphics card.
+- During playback the interface is redrawn when the next video frame is due (at most 60 times a second) instead of at the screen's refresh rate, which lowers processor and graphics card use on high refresh rate screens.
+
+
 
 ### Added
 

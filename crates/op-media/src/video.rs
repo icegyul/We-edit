@@ -31,6 +31,10 @@ pub enum PixelLayout {
         alpha: bool,
         bits: u8,
     },
+    /// A Y plane and one interleaved Cb/Cr plane at half size in both directions (NV12, and
+    /// P010/P016 when `wide`: 16-bit samples with the value in the high bits). Hardware
+    /// decoders deliver this.
+    Nv12 { wide: bool },
     /// One packed RGBA plane, 8 bits per channel.
     Rgba8,
     /// One packed RGBA plane, 16 bits per channel.
@@ -120,6 +124,37 @@ impl VideoFrame {
                     u16::from_le_bytes([p.data[i + k * 2], p.data[i + k * 2 + 1]]) as f32 / 65535.0
                 })
             }
+            PixelLayout::Nv12 { wide } => {
+                let max = if wide { 65535.0 } else { 255.0 };
+                let sample = |p: &Plane, x: usize, y: usize, k: usize, n: usize| -> f32 {
+                    let x = x.min(p.width as usize - 1);
+                    let y = y.min(p.height as usize - 1);
+                    if wide {
+                        let i = y * p.bytes_per_row as usize + (x * n + k) * 2;
+                        u16::from_le_bytes([p.data[i], p.data[i + 1]]) as f32 / max
+                    } else {
+                        p.data[y * p.bytes_per_row as usize + x * n + k] as f32 / max
+                    }
+                };
+                let (kr, kb) = match self.color.matrix {
+                    ColorMatrix::Bt601 => (0.299, 0.114),
+                    ColorMatrix::Bt2020 => (0.2627, 0.0593),
+                    _ => (0.2126, 0.0722),
+                };
+                let kg = 1.0 - kr - kb;
+                let mut yv = sample(&self.planes[0], x, y, 0, 1);
+                let mut u = sample(&self.planes[1], x / 2, y / 2, 0, 2) - 0.5;
+                let mut v = sample(&self.planes[1], x / 2, y / 2, 1, 2) - 0.5;
+                if self.color.range == ColorRange::Limited {
+                    yv = (yv - 16.0 / 255.0) * 255.0 / 219.0;
+                    u *= 255.0 / 224.0;
+                    v *= 255.0 / 224.0;
+                }
+                let r = yv + 2.0 * (1.0 - kr) * v;
+                let b = yv + 2.0 * (1.0 - kb) * u;
+                let g = (yv - kr * r - kb * b) / kg;
+                [r, g, b, 1.0]
+            }
             PixelLayout::Yuv8 {
                 chroma_w,
                 chroma_h,
@@ -194,6 +229,8 @@ fn direct_layout(fmt: Pixel) -> Option<PixelLayout> {
         })
     };
     match fmt {
+        NV12 => Some(PixelLayout::Nv12 { wide: false }),
+        P010LE | P016LE => Some(PixelLayout::Nv12 { wide: true }),
         YUV420P | YUVJ420P => yuv8(1, 1),
         YUV422P | YUVJ422P => yuv8(1, 0),
         YUV444P | YUVJ444P => yuv8(0, 0),
@@ -289,6 +326,10 @@ fn copy_planes(frame: &ff::frame::Video, layout: PixelLayout) -> Vec<Plane> {
             }
             v
         }
+        PixelLayout::Nv12 { wide } => {
+            let b = if wide { 2 } else { 1 };
+            vec![(w, h, b), (w.div_ceil(2), h.div_ceil(2), 2 * b)]
+        }
         PixelLayout::Rgba8 => vec![(w, h, 4)],
         PixelLayout::Rgba16 => vec![(w, h, 8)],
     };
@@ -313,7 +354,101 @@ fn copy_planes(frame: &ff::frame::Video, layout: PixelLayout) -> Vec<Plane> {
     planes
 }
 
+/// Hardware decoding devices tried in order on this platform.
+fn hw_device_types() -> &'static [ff::ffi::AVHWDeviceType] {
+    use ff::ffi::AVHWDeviceType::*;
+    if cfg!(windows) {
+        &[AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2]
+    } else if cfg!(target_os = "macos") {
+        &[AV_HWDEVICE_TYPE_VIDEOTOOLBOX]
+    } else {
+        &[AV_HWDEVICE_TYPE_VAAPI]
+    }
+}
+
+/// Chooses the hardware surface format picked at open time (kept in `opaque`), else lets
+/// FFmpeg fall back to a software format.
+unsafe extern "C" fn pick_hw_format(
+    ctx: *mut ff::ffi::AVCodecContext,
+    fmts: *const ff::ffi::AVPixelFormat,
+) -> ff::ffi::AVPixelFormat {
+    // SAFETY: FFmpeg passes a valid context and a list terminated by AV_PIX_FMT_NONE.
+    unsafe {
+        let want = (*ctx).opaque as isize as i32;
+        let mut p = fmts;
+        while *p != ff::ffi::AVPixelFormat::AV_PIX_FMT_NONE {
+            if *p as i32 == want {
+                return *p;
+            }
+            p = p.add(1);
+        }
+        ff::ffi::avcodec_default_get_format(ctx, fmts)
+    }
+}
+
+/// Sets up hardware decoding on a codec context that is not open yet. Returns the device name.
+fn attach_hardware(
+    ctx: &mut ff::codec::context::Context,
+    id: ff::codec::Id,
+) -> Option<&'static str> {
+    use ff::ffi;
+    // SAFETY: the context is not open; FFmpeg owns the device reference we hand over.
+    unsafe {
+        let codec = ffi::avcodec_find_decoder(id.into());
+        if codec.is_null() {
+            return None;
+        }
+        for &kind in hw_device_types() {
+            let mut fmt = None;
+            for i in 0.. {
+                let cfg = ffi::avcodec_get_hw_config(codec, i);
+                if cfg.is_null() {
+                    break;
+                }
+                let by_device =
+                    (*cfg).methods & ffi::AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX as i32 != 0;
+                if by_device && (*cfg).device_type == kind {
+                    fmt = Some((*cfg).pix_fmt);
+                    break;
+                }
+            }
+            let Some(fmt) = fmt else { continue };
+            let mut dev: *mut ffi::AVBufferRef = std::ptr::null_mut();
+            if ffi::av_hwdevice_ctx_create(
+                &mut dev,
+                kind,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                0,
+            ) < 0
+            {
+                continue;
+            }
+            let raw = ctx.as_mut_ptr();
+            (*raw).hw_device_ctx = ffi::av_buffer_ref(dev);
+            ffi::av_buffer_unref(&mut dev);
+            (*raw).opaque = fmt as i32 as isize as *mut std::ffi::c_void;
+            (*raw).get_format = Some(pick_hw_format);
+            let name = ffi::av_hwdevice_get_type_name(kind);
+            return Some(if name.is_null() {
+                "hardware"
+            } else {
+                match std::ffi::CStr::from_ptr(name).to_str() {
+                    Ok("d3d11va") => "d3d11va",
+                    Ok("dxva2") => "dxva2",
+                    Ok("vaapi") => "vaapi",
+                    Ok("videotoolbox") => "videotoolbox",
+                    _ => "hardware",
+                }
+            });
+        }
+        None
+    }
+}
+
 pub struct VideoDecoder {
+    /// The hardware device decoding this stream, if any.
+    hardware: Option<&'static str>,
     input: ff::format::context::Input,
     decoder: ff::decoder::Video,
     stream: usize,
@@ -343,6 +478,19 @@ impl VideoDecoder {
         color: ColorInfo,
         is_still: bool,
     ) -> Result<VideoDecoder> {
+        Self::open_with(path, stream, rate, color, is_still, false)
+    }
+
+    /// Like `open`; `hardware` tries the platform's hardware decoder first (D3D11VA/DXVA2,
+    /// VAAPI or VideoToolbox) and silently uses software decoding where it is not available.
+    pub fn open_with(
+        path: &Path,
+        stream: Option<usize>,
+        rate: Option<Rate>,
+        color: ColorInfo,
+        is_still: bool,
+        hardware: bool,
+    ) -> Result<VideoDecoder> {
         init();
         let input = ff::format::input(path)?;
         let st = match stream {
@@ -366,12 +514,19 @@ impl VideoDecoder {
         let frames = st.frames();
         let _ = codec_params(&st);
         let mut ctx = ff::codec::context::Context::from_parameters(st.parameters())?;
+        let hw = if hardware && !is_still {
+            attach_hardware(&mut ctx, st.parameters().id())
+        } else {
+            None
+        };
         ctx.set_threading(ff::threading::Config {
             kind: ff::threading::Type::Frame,
-            count: 0,
+            // hardware decoders work frame by frame; more threads only add latency
+            count: if hw.is_some() { 1 } else { 0 },
         });
         let decoder = ctx.decoder().video()?;
         Ok(VideoDecoder {
+            hardware: hw,
             input,
             decoder,
             stream: index,
@@ -392,6 +547,11 @@ impl VideoDecoder {
 
     pub fn rate(&self) -> Rate {
         self.rate
+    }
+
+    /// The hardware device in use ("d3d11va", "vaapi", ...), or None for software decoding.
+    pub fn hardware(&self) -> Option<&'static str> {
+        self.hardware
     }
 
     fn index_of(&self, pts: i64) -> i64 {
@@ -448,6 +608,22 @@ impl VideoDecoder {
                 Ok(()) => {
                     let pts = raw.timestamp().or(raw.pts()).unwrap_or(self.start_pts);
                     let idx = self.index_of(pts);
+                    // SAFETY: reading a field of a frame we own
+                    let on_device = unsafe { !(*raw.as_ptr()).hw_frames_ctx.is_null() };
+                    if on_device {
+                        // copy the surface to memory (NV12, P010, ...)
+                        let mut sw = ff::frame::Video::empty();
+                        // SAFETY: both frames are valid; FFmpeg allocates the destination
+                        let r = unsafe {
+                            ff::ffi::av_hwframe_transfer_data(sw.as_mut_ptr(), raw.as_ptr(), 0)
+                        };
+                        if r < 0 {
+                            return Err(MediaError::Unsupported(
+                                "the hardware decoder could not hand over a frame".into(),
+                            ));
+                        }
+                        return self.convert(&sw, idx).map(Some);
+                    }
                     return self.convert(&raw, idx).map(Some);
                 }
                 Err(ff::Error::Eof) => return Ok(None),

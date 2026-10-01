@@ -15,6 +15,48 @@ use parking_lot::{Condvar, Mutex};
 
 type AssetMap = HashMap<AssetId, Arc<MediaAsset>>;
 
+/// Frames decoded in order (and cached) to reach a target this close after the last one.
+const GAP_FILL: i64 = 32;
+
+/// Frames decoded ahead of the play position (about half a second at common rates).
+pub const PLAYBACK_AHEAD: i64 = 12;
+
+/// How video is decoded.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HardwareDecoding {
+    /// Software first; a stream that the processor cannot decode in real time moves to the
+    /// graphics card's decoder.
+    Auto,
+    /// The graphics card's decoder whenever it supports the stream.
+    Always,
+    Never,
+}
+
+impl HardwareDecoding {
+    pub fn from_pref(s: &str) -> HardwareDecoding {
+        match s {
+            "always" => HardwareDecoding::Always,
+            "never" => HardwareDecoding::Never,
+            _ => HardwareDecoding::Auto,
+        }
+    }
+
+    fn code(self) -> u8 {
+        self as u8
+    }
+
+    fn from_code(c: u8) -> HardwareDecoding {
+        match c {
+            1 => HardwareDecoding::Always,
+            2 => HardwareDecoding::Never,
+            _ => HardwareDecoding::Auto,
+        }
+    }
+}
+
+/// Sequential frames timed before Auto decides whether software decoding keeps up.
+const SPEED_SAMPLE: usize = 24;
+
 /// Identity of media content for caches: path, size and modification time.
 fn content_key(a: &MediaAsset, stream: usize) -> String {
     use std::hash::{Hash, Hasher};
@@ -94,6 +136,7 @@ pub struct MediaService {
     frames: Mutex<FrameCache>,
     frame_ready: Condvar,
     workers: Mutex<HashMap<AssetId, Arc<Worker>>>,
+    hardware: std::sync::atomic::AtomicU8,
     failed: Mutex<HashMap<AssetId, String>>,
     thumbs: Mutex<HashMap<(AssetId, i64), Option<Arc<Image>>>>,
     thumb_queue: Mutex<VecDeque<(Arc<MediaAsset>, i64)>>,
@@ -118,6 +161,7 @@ impl MediaService {
             }),
             frame_ready: Condvar::new(),
             workers: Mutex::new(HashMap::new()),
+            hardware: std::sync::atomic::AtomicU8::new(HardwareDecoding::Auto.code()),
             failed: Mutex::new(HashMap::new()),
             thumbs: Mutex::new(HashMap::new()),
             thumb_queue: Mutex::new(VecDeque::new()),
@@ -137,6 +181,15 @@ impl MediaService {
             .spawn(move || me.thumb_loop())
             .ok();
         s
+    }
+
+    /// Changes how decoders opened from now on decode (running decoders keep theirs).
+    pub fn set_hardware_decoding(&self, mode: HardwareDecoding) {
+        self.hardware.store(mode.code(), Ordering::Relaxed);
+    }
+
+    pub fn hardware_decoding(&self) -> HardwareDecoding {
+        HardwareDecoding::from_code(self.hardware.load(Ordering::Relaxed))
     }
 
     pub fn cache_dir(&self) -> &Path {
@@ -321,16 +374,26 @@ impl MediaService {
             Some(v) => v.clone(),
             None => return,
         };
-        let opened = guarded("decoder", || {
-            VideoDecoder::open(
-                Path::new(&asset.path),
-                Some(v.index),
-                asset.frame_rate(),
-                v.color,
-                asset.is_still(),
-            )
-            .map_err(|e| e.to_string())
-        });
+        let mode = self.hardware_decoding();
+        let open = |hw: bool| {
+            guarded("decoder", || {
+                VideoDecoder::open_with(
+                    Path::new(&asset.path),
+                    Some(v.index),
+                    asset.frame_rate(),
+                    v.color,
+                    asset.is_still(),
+                    hw,
+                )
+                .map_err(|e| e.to_string())
+            })
+        };
+        let opened = open(mode == HardwareDecoding::Always);
+        if let Ok(d) = &opened
+            && let Some(dev) = d.hardware()
+        {
+            log::info!("decoding {} with {dev}", asset.path);
+        }
         let mut dec = match opened {
             Ok(d) => d,
             Err(e) => {
@@ -342,6 +405,12 @@ impl MediaService {
             }
         };
         let mut prefetch: Option<(i64, i64)> = None;
+        // the last frame this decoder produced: requests just after it continue in order
+        let mut last: Option<i64> = None;
+        // Auto: time sequential software decoding and move to hardware if it cannot keep up
+        let mut timing: Vec<f64> = Vec::new();
+        let mut tried_hw = mode != HardwareDecoding::Auto || dec.hardware().is_some();
+        let realtime = 1.0 / asset.frame_rate().unwrap_or(v.rate).as_f64().max(1.0);
         loop {
             let target = {
                 let mut st = w.state.lock();
@@ -381,17 +450,80 @@ impl MediaService {
             if self.frames.lock().get((asset.id, index)).is_some() {
                 continue;
             }
-            let decoded =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dec.frame(index)));
+            // a target a little ahead of the last decoded frame is reached in order, keeping
+            // every frame on the way: skipping one would force a seek back to the previous
+            // keyframe when it is asked for next (very slow with long-GOP camera footage)
+            let from = match last {
+                Some(l) if index > l + 1 && index - l <= GAP_FILL => l + 1,
+                _ => index,
+            };
+            let sequential = last.is_some_and(|l| index > l);
+            let t0 = Instant::now();
+            let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut out = Vec::new();
+                for i in from..=index {
+                    if i < index && self.frames.lock().get((asset.id, i)).is_some() {
+                        continue;
+                    }
+                    out.push((i, dec.frame(i)?));
+                }
+                Ok::<_, op_media::MediaError>(out)
+            }));
             match decoded {
-                Ok(Ok(f)) => {
-                    self.frames.lock().insert((asset.id, index), Arc::new(f));
+                Ok(Ok(frames)) => {
+                    {
+                        let mut cache = self.frames.lock();
+                        for (i, f) in frames {
+                            cache.insert((asset.id, i), Arc::new(f));
+                        }
+                    }
+                    last = Some(index);
                     self.frame_ready.notify_all();
                     self.bump();
+                    if !tried_hw && sequential {
+                        let per_frame = t0.elapsed().as_secs_f64() / (index - from + 1) as f64;
+                        timing.push(per_frame);
+                        if timing.len() >= SPEED_SAMPLE {
+                            tried_hw = true;
+                            let mean = timing.iter().sum::<f64>() / timing.len() as f64;
+                            // decoding must leave room for rendering: 80 % of a frame at most
+                            if mean > realtime * 0.8 {
+                                match open(true) {
+                                    Ok(d) if d.hardware().is_some() => {
+                                        log::info!(
+                                            "{}: software decoding takes {:.1} ms per frame; using {}",
+                                            asset.path,
+                                            mean * 1000.0,
+                                            d.hardware().unwrap_or_default()
+                                        );
+                                        dec = d;
+                                        last = None;
+                                    }
+                                    _ => log::info!(
+                                        "{}: software decoding is slow ({:.1} ms per frame) and no hardware decoder is available",
+                                        asset.path,
+                                        mean * 1000.0
+                                    ),
+                                }
+                            }
+                        }
+                    }
                 }
                 Ok(Err(e)) => {
                     log::debug!("frame {index} of {}: {e}", asset.path);
                     prefetch = None;
+                    last = None;
+                    // a hardware decoder that fails hands the file back to software decoding
+                    if let Some(dev) = dec.hardware()
+                        && let Ok(d) = open(false)
+                    {
+                        log::warn!(
+                            "{dev} could not decode {}; using software decoding",
+                            asset.path
+                        );
+                        dec = d;
+                        tried_hw = true;
+                    }
                 }
                 Err(panic) => {
                     // the decoder state is unknown after a failure: stop using this file
@@ -428,9 +560,15 @@ impl MediaService {
             if ahead != 0
                 && let Some(w) = self.worker(asset)
             {
-                // keep the pipeline full while playing
-                let next = index + ahead.signum() * 2;
-                if self.frames.lock().get((asset.id, next)).is_none() {
+                // keep the pipeline full while playing: the decoder continues from the first
+                // frame of the read-ahead window that is not decoded yet
+                let missing = {
+                    let mut cache = self.frames.lock();
+                    (1..=ahead.abs())
+                        .map(|k| index + ahead.signum() * k)
+                        .find(|i| cache.get((asset.id, *i)).is_none())
+                };
+                if let Some(next) = missing {
                     let mut st = w.state.lock();
                     if st.want.is_none() {
                         st.want = Some(next);
@@ -623,7 +761,7 @@ impl op_render::FrameSource for ExactFrames {
             .asset(asset.id)
             .unwrap_or_else(|| Arc::new(asset.clone()));
         self.service
-            .frame(&a, time, Duration::from_secs(30), false, 1)
+            .frame(&a, time, Duration::from_secs(30), false, PLAYBACK_AHEAD)
     }
 }
 
@@ -684,5 +822,71 @@ mod tests {
             let _ = tx.send(first && again);
         });
         assert_eq!(rx.recv_timeout(Duration::from_secs(20)), Ok(true));
+        // the read-ahead window fills in order, without gaps that would force a seek back
+        let start = Instant::now();
+        let filled = |s: &MediaService| {
+            let mut cache = s.frames.lock();
+            (1..=PLAYBACK_AHEAD.min(19)).all(|i| cache.get((asset.id, i)).is_some())
+        };
+        while !filled(&service) && start.elapsed() < Duration::from_secs(20) {
+            service.frame(&asset, SrcTime::ZERO, Duration::ZERO, true, PLAYBACK_AHEAD);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            filled(&service),
+            "the frames after the play position were not decoded"
+        );
+    }
+
+    /// Forced hardware decoding gives the same picture as the processor, or falls back to the
+    /// processor on machines without a hardware decoder.
+    #[test]
+    fn hardware_decoding_or_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hw.mp4");
+        let (w, h) = (320u32, 240u32);
+        let v = VideoSettings {
+            codec: VideoCodec::H264,
+            width: w,
+            height: h,
+            rate: Rate::FPS_25,
+            bitrate_kbps: None,
+            quality: 20,
+            hardware: false,
+        };
+        let mut m = Muxer::create(&path, Some(&v), None).unwrap();
+        let luma = vec![180u8; (w * h) as usize];
+        let chroma = vec![100u8; (w / 2 * h / 2) as usize];
+        for _ in 0..10 {
+            m.push_video(&[&luma, &chroma, &chroma]).unwrap();
+        }
+        m.finish().unwrap();
+        let mut asset = op_media::probe(&path).unwrap();
+        asset.id = AssetId(7);
+        let asset = Arc::new(asset);
+        let mut pictures = Vec::new();
+        for mode in [HardwareDecoding::Never, HardwareDecoding::Always] {
+            let service = MediaService::new(dir.path().join(format!("cache-{mode:?}")), 64 << 20);
+            service.set_hardware_decoding(mode);
+            service.set_assets(std::iter::once((&asset.id, &asset)));
+            let f = service
+                .frame(
+                    &asset,
+                    SrcTime::from_seconds(0.2),
+                    Duration::from_secs(20),
+                    false,
+                    0,
+                )
+                .expect("a decoded frame");
+            pictures.push(f.to_rgba8_scaled(1, 1));
+        }
+        for k in 0..3 {
+            assert!(
+                (pictures[0][k] as i32 - pictures[1][k] as i32).abs() <= 3,
+                "{:?} vs {:?}",
+                pictures[0],
+                pictures[1]
+            );
+        }
     }
 }

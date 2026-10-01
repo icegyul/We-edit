@@ -3,7 +3,7 @@
 // Planes are unsigned-integer textures read with textureLoad, so 8, 10, 12 and 16-bit sources
 // share one path without CPU conversion.
 //
-// prm(0) kind: 0 planar YUV, 1 packed RGBA
+// prm(0) kind: 0 planar YUV, 1 packed RGBA, 2 Y plus interleaved CbCr (NV12/P010)
 // prm(1) maximum code value (255, 1023, 4095, 65535)
 // prm(2), prm(3) chroma subsampling shift (x, y)
 // prm(4) Kr, prm(5) Kb
@@ -33,6 +33,22 @@ fn bilinear1(t: texture_2d<u32>, p: vec2<f32>) -> f32 {
     let b = load1(t, i + vec2<i32>(1, 0));
     let c = load1(t, i + vec2<i32>(0, 1));
     let d = load1(t, i + vec2<i32>(1, 1));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+fn load2(t: texture_2d<u32>, p: vec2<i32>) -> vec2<f32> {
+    let d = vec2<i32>(textureDimensions(t));
+    return vec2<f32>(textureLoad(t, clamp(p, vec2<i32>(0), d - 1), 0).rg);
+}
+
+fn bilinear2(t: texture_2d<u32>, p: vec2<f32>) -> vec2<f32> {
+    let q = p - 0.5;
+    let i = vec2<i32>(floor(q));
+    let f = fract(q);
+    let a = load2(t, i);
+    let b = load2(t, i + vec2<i32>(1, 0));
+    let c = load2(t, i + vec2<i32>(0, 1));
+    let d = load2(t, i + vec2<i32>(1, 1));
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
@@ -73,13 +89,21 @@ fn fs_convert(in: VOut) -> @location(0) vec4<f32> {
     let p0 = suv * size0;
     let maxv = prm(1);
     var rgba: vec4<f32>;
-    if (prm(0) < 0.5) {
+    if (prm(0) < 0.5 || prm(0) > 1.5) {
         let depth = prm(11);
         let unit = exp2(depth - 8.0);
         var y = bilinear1(plane0, p0);
         let pc = suv * vec2<f32>(textureDimensions(plane1));
-        var cb = bilinear1(plane1, pc);
-        var cr = bilinear1(plane2, pc);
+        var cb: f32;
+        var cr: f32;
+        if (prm(0) > 1.5) {
+            let c = bilinear2(plane1, pc);
+            cb = c.x;
+            cr = c.y;
+        } else {
+            cb = bilinear1(plane1, pc);
+            cr = bilinear1(plane2, pc);
+        }
         if (prm(6) > 0.5) {
             y = y / maxv;
             let mid = exp2(depth - 1.0);

@@ -48,7 +48,9 @@ pub struct Stats {
 }
 
 struct UploadedPlanes {
-    key: (AssetId, i64, u32),
+    /// Asset, frame index, width and pixel layout (a file can switch between hardware and
+    /// software decoding, which deliver different layouts).
+    key: (AssetId, i64, u32, PixelLayout),
     planes: Vec<Tex>,
 }
 
@@ -60,6 +62,8 @@ pub struct Renderer {
     encoder: Option<wgpu::CommandEncoder>,
     uploads: Vec<UploadedPlanes>,
     plane_pool: HashMap<(u32, u32, wgpu::TextureFormat), Vec<Tex>>,
+    /// Readback buffers by size, reused frame after frame (exports read every frame).
+    pub(crate) readbacks: HashMap<u64, Vec<wgpu::Buffer>>,
     text_cache: HashMap<u64, (Tex, [f32; 2], u32)>,
     lut_cache: HashMap<String, Option<wgpu::TextureView>>,
     curve_cache: HashMap<u64, Tex>,
@@ -117,6 +121,7 @@ impl Renderer {
             encoder: None,
             uploads: Vec::new(),
             plane_pool: HashMap::new(),
+            readbacks: HashMap::new(),
             text_cache: HashMap::new(),
             lut_cache: HashMap::new(),
             curve_cache: HashMap::new(),
@@ -645,7 +650,7 @@ impl Renderer {
         w: u32,
         h: u32,
     ) -> Tex {
-        let key = (asset, frame.index, frame.width);
+        let key = (asset, frame.index, frame.width, frame.layout);
         let cached = self.uploads.iter().position(|u| u.key == key);
         let idx = match cached {
             Some(i) => i,
@@ -683,6 +688,13 @@ impl Renderer {
                 alpha,
                 bits as f32,
             ),
+            PixelLayout::Nv12 { wide } => {
+                if wide {
+                    (2.0, 65535.0, 1, 1, false, 16.0)
+                } else {
+                    (2.0, 255.0, 1, 1, false, 8.0)
+                }
+            }
             PixelLayout::Rgba8 => (1.0, 255.0, 0, 0, false, 8.0),
             PixelLayout::Rgba16 => (1.0, 65535.0, 0, 0, false, 16.0),
         };
@@ -735,10 +747,14 @@ impl Renderer {
 
     fn upload(&mut self, frame: &VideoFrame) -> Vec<Tex> {
         let mut out = Vec::new();
-        for p in &frame.planes {
+        for (i, p) in frame.planes.iter().enumerate() {
             let (format, bpp) = match frame.layout {
                 PixelLayout::Yuv8 { .. } => (wgpu::TextureFormat::R8Uint, 1),
                 PixelLayout::Yuv16 { .. } => (wgpu::TextureFormat::R16Uint, 2),
+                PixelLayout::Nv12 { wide: false } if i == 1 => (wgpu::TextureFormat::Rg8Uint, 2),
+                PixelLayout::Nv12 { wide: false } => (wgpu::TextureFormat::R8Uint, 1),
+                PixelLayout::Nv12 { wide: true } if i == 1 => (wgpu::TextureFormat::Rg16Uint, 4),
+                PixelLayout::Nv12 { wide: true } => (wgpu::TextureFormat::R16Uint, 2),
                 PixelLayout::Rgba8 => (wgpu::TextureFormat::Rgba8Uint, 4),
                 PixelLayout::Rgba16 => (wgpu::TextureFormat::Rgba16Uint, 8),
             };

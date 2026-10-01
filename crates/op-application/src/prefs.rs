@@ -46,6 +46,12 @@ pub struct Preferences {
     pub paste_folder: Option<PathBuf>,
     /// Save pasted images in `paste_folder` without asking.
     pub paste_always: bool,
+    /// Lighter interface: no animations and fewer redraws (slower computers, laptops on battery).
+    pub performance_mode: bool,
+    /// Video decoding: "auto", "always" (graphics card) or "never" (processor only).
+    pub hardware_decoding: String,
+    /// Graphics API: "auto", "vulkan", "dx12", "metal" or "gl"; used from the next start.
+    pub graphics_backend: String,
 }
 
 impl Default for Preferences {
@@ -79,6 +85,9 @@ impl Default for Preferences {
             effect_controls_timeline: true,
             paste_folder: None,
             paste_always: false,
+            performance_mode: false,
+            hardware_decoding: "auto".into(),
+            graphics_backend: "auto".into(),
         }
     }
 }

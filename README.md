@@ -23,7 +23,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 </p>
 ## Estado actual
 
-La versión `0.4.0` es una versión alfa funcional para Windows y Linux. La aplicación ya se puede
+La versión `0.5.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -35,7 +35,10 @@ en todos los trabajos de producción.
   Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics y Tools.
 - Lectura, decodificación y exportación multimedia mediante FFmpeg, con exportación que se puede
   pausar, vista previa de los fotogramas renderizados y velocidad de fotogramas configurable.
-- Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12 y Metal según la plataforma.
+- Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12, Metal u OpenGL (se elige en
+  Preferencias).
+- Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático, y un modo de
+  rendimiento para equipos más modestos.
 - Efectos de estilo (resplandor, fallo digital, temblor de cámara, grano, VHS, película antigua,
   fugas de luz...), transiciones de zoom, giro, destello y luz, y ajustes preestablecidos de
   animación listos para arrastrar.
@@ -47,7 +50,8 @@ en todos los trabajos de producción.
   la imagen se guarda, se importa y queda lista en la línea de tiempo.
 - Recuperación automática del proyecto ante fallos y registro de actividad configurable desde
   Preferencias.
-- Paquete ZIP portátil para Windows y AppImage para Linux.
+- Paquete ZIP portátil para Windows, AppImage para Linux e imagen de disco `.dmg` para macOS
+  (Apple silicon e Intel).
 
 ### Trabajo pendiente
 
@@ -69,6 +73,7 @@ Cada versión incluye:
 
 - `OpenPremier-<versión>-windows-x64.zip`
 - `OpenPremier-<versión>-x86_64.AppImage`
+- `OpenPremier-<versión>-macos-arm64.dmg` (Apple silicon) y `OpenPremier-<versión>-macos-x86_64.dmg` (Intel)
 - `SHA256SUMS.txt`
 
 ## Compilar desde el código fuente
@@ -89,13 +94,14 @@ cargo xtask dist
 ```
 
 En Windows, la creación del AppImage utiliza la distribución WSL `OpenPremier-Build` y Podman.
+En macOS se usa el FFmpeg de Homebrew (`brew install ffmpeg dylibbundler pkg-config`).
 Los resultados se guardan en `dist/`.
 
 ## Comprobar un paquete
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.4.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.5.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

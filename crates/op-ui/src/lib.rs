@@ -30,6 +30,27 @@ pub struct Options {
     pub open: Vec<PathBuf>,
     /// Keep all settings next to the program (portable mode).
     pub portable: Option<PathBuf>,
+    /// Graphics API from the preferences ("auto", "vulkan", "dx12", "metal", "gl").
+    pub backend: String,
+}
+
+/// The graphics APIs to try for a preference, best first.
+fn backend_order(pref: &str) -> Vec<wgpu::Backends> {
+    let primary = wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL;
+    let chosen = match pref {
+        "vulkan" => Some(wgpu::Backends::VULKAN),
+        "dx12" => Some(wgpu::Backends::DX12),
+        "metal" => Some(wgpu::Backends::METAL),
+        "gl" => Some(wgpu::Backends::GL),
+        _ => None,
+    };
+    let mut v: Vec<wgpu::Backends> = chosen.into_iter().collect();
+    for b in [primary, wgpu::Backends::GL] {
+        if !v.contains(&b) {
+            v.push(b);
+        }
+    }
+    v
 }
 
 fn wgpu_setup(backends: wgpu::Backends) -> egui_wgpu::WgpuConfiguration {
@@ -72,7 +93,6 @@ fn native_options(backends: wgpu::Backends) -> eframe::NativeOptions {
 
 /// Starts the application window.
 pub fn run(opts: Options) -> Result<(), String> {
-    let primary = wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL;
     let make = |opts: Options| -> eframe::AppCreator<'static> {
         Box::new(move |cc| {
             let app = App::new(cc, opts)
@@ -80,21 +100,21 @@ pub fn run(opts: Options) -> Result<(), String> {
             Ok(Box::new(app))
         })
     };
-    match eframe::run_native(
-        op_application::APP_NAME,
-        native_options(primary),
-        make(opts.clone()),
-    ) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            // machines without Vulkan/Direct3D 12 still get a window through OpenGL
-            log::warn!("starting with Vulkan/Direct3D 12 failed ({e}); trying OpenGL");
-            eframe::run_native(
-                op_application::APP_NAME,
-                native_options(wgpu::Backends::GL),
-                make(opts),
-            )
-            .map_err(|e| e.to_string())
+    // the chosen API first; machines without it (or without Vulkan/Direct3D 12/Metal) still get
+    // a window through the next one, down to OpenGL
+    let mut last = String::new();
+    for backends in backend_order(&opts.backend) {
+        match eframe::run_native(
+            op_application::APP_NAME,
+            native_options(backends),
+            make(opts.clone()),
+        ) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                log::warn!("starting with {backends:?} failed ({e})");
+                last = e.to_string();
+            }
         }
     }
+    Err(last)
 }

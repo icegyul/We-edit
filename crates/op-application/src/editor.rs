@@ -102,6 +102,9 @@ pub struct Editor {
 impl Editor {
     pub fn new(dirs: Dirs, prefs: Preferences, audio: bool) -> Editor {
         let media = MediaService::new(dirs.cache.join("MediaCache"), prefs.frame_cache_mb << 20);
+        media.set_hardware_decoding(crate::media::HardwareDecoding::from_pref(
+            &prefs.hardware_decoding,
+        ));
         let source: Arc<dyn op_audio::AudioSource> = media.clone();
         let playback = if audio {
             op_audio::Playback::start(source)

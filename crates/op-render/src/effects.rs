@@ -745,6 +745,8 @@ impl Renderer {
                     "font".into(),
                     Value::Text(if cfg!(windows) {
                         "Consolas".into()
+                    } else if cfg!(target_os = "macos") {
+                        "Menlo".into()
                     } else {
                         "DejaVu Sans Mono".into()
                     }),

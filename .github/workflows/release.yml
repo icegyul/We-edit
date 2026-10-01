@@ -68,8 +68,35 @@ jobs:
           path: dist/OpenPremier-${{ needs.validate-tag.outputs.version }}-x86_64.AppImage
           if-no-files-found: error
 
+  macos:
+    needs: validate-tag
+    # a macOS problem must not hold back the Windows and Linux packages
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Install FFmpeg and the bundling tool
+        run: brew install ffmpeg dylibbundler pkg-config
+      - name: Build and self-test the macOS package
+        run: cargo xtask dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/OpenPremier-${{ needs.validate-tag.outputs.version }}-macos-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
   publish:
-    needs: [validate-tag, windows, linux]
+    needs: [validate-tag, windows, linux, macos]
+    if: ${{ !cancelled() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -82,14 +109,17 @@ jobs:
       - name: Create checksums
         working-directory: release-assets
         shell: bash
-        run: sha256sum *.zip *.AppImage > SHA256SUMS.txt
+        run: |
+          shopt -s nullglob
+          sha256sum *.zip *.AppImage *.dmg > SHA256SUMS.txt
       - name: Publish prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          assets=(release-assets/*.zip release-assets/*.AppImage release-assets/SHA256SUMS.txt)
+          shopt -s nullglob
+          assets=(release-assets/*.zip release-assets/*.AppImage release-assets/*.dmg release-assets/SHA256SUMS.txt)
           notes="docs/releases/${{ needs.validate-tag.outputs.version }}.md"
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"

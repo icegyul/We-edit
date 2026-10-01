@@ -52,6 +52,9 @@ pub struct Progress {
     /// Waiting for audio to be conformed before the first frame.
     pub preparing: bool,
     pub preview: Option<Arc<PreviewImage>>,
+    /// Average milliseconds per frame spent waiting for decoded media, rendering on the GPU,
+    /// reading the result back and encoding (diagnostics).
+    pub stage_ms: [f32; 4],
 }
 
 impl Progress {
@@ -250,9 +253,8 @@ fn run(
     // when Windows Controlled folder access blocks it); check it first for a clear message
     std::fs::File::create(&s.path)
         .map_err(|e| format!("cannot write {}: {e}", s.path.display()))?;
-    let mut muxer =
-        Muxer::create(&s.path, s.video.as_ref(), s.audio.as_ref()).map_err(|e| e.to_string())?;
-    progress.lock().encoder = muxer.video_encoder().unwrap_or("audio").to_string();
+    let (mut writer, encoder) = Writer::start(s)?;
+    progress.lock().encoder = encoder;
     progress.lock().total = total;
     let mut renderer = s.video.as_ref().map(|_| Renderer::new(gpu));
     let frames = ExactFrames {
@@ -267,6 +269,8 @@ fn run(
     let started = Instant::now();
     let mut paused_for = Duration::ZERO;
     let mut preview_at: Option<Instant> = None;
+    // seconds spent per stage: media and render commands, readback, encoding
+    let mut stage = [0f64; 4];
     let audio_total = s
         .audio
         .as_ref()
@@ -288,6 +292,7 @@ fn run(
         if let (Some(r), Some(v)) = (renderer.as_mut(), s.video.as_ref()) {
             let t = s.range.start + rate.frames_to_dur(n as i64);
             let scale = v.width as f32 / seq.settings.width.max(1) as f32;
+            let t0 = Instant::now();
             let frame = r.render(&Request {
                 project,
                 sequence: s.sequence,
@@ -295,6 +300,7 @@ fn run(
                 scale,
                 source: &frames,
             });
+            stage[0] += t0.elapsed().as_secs_f64();
             // a small copy of the frame a few times per second, for the progress preview
             if preview_at.is_none_or(|p| p.elapsed() >= Duration::from_millis(200)) {
                 preview_at = Some(Instant::now());
@@ -315,6 +321,7 @@ fn run(
                     frame: n,
                 }));
             }
+            let t1 = Instant::now();
             let planes = if (frame.width, frame.height) == (v.width, v.height) {
                 r.delivery_planes(&frame, v.codec.input())
             } else {
@@ -332,8 +339,11 @@ fn run(
                 p
             };
             r.recycle(frame);
-            let refs: Vec<&[u8]> = planes.iter().map(|p| p.as_slice()).collect();
-            muxer.push_video(&refs).map_err(|e| e.to_string())?;
+            stage[1] += t1.elapsed().as_secs_f64();
+            // time blocked here means the encoder is the slowest stage
+            let t2 = Instant::now();
+            writer.send(Packet::Video(planes))?;
+            stage[2] += t2.elapsed().as_secs_f64();
         }
         // audio up to the end of this frame (or everything, for audio-only exports)
         if let (Some(m), Some(a)) = (mixer.as_mut(), s.audio.as_ref()) {
@@ -352,7 +362,7 @@ fn run(
                 let mut buf = vec![0f32; chunk * a.channels as usize];
                 let t = s.range.start + Rate::fps(a.rate).frames_to_dur(audio_done);
                 m.render(project, s.sequence, t, 1.0, &mut buf, source);
-                muxer.push_audio(&buf).map_err(|e| e.to_string())?;
+                writer.send(Packet::Audio(buf))?;
                 audio_done += chunk as i64;
                 if video_frames == 0 {
                     let mut pr = progress.lock();
@@ -365,14 +375,117 @@ fn run(
         pr.elapsed = started.elapsed().saturating_sub(paused_for);
         if video_frames > 0 {
             pr.frame = n + 1;
+            let k = 1000.0 / (n + 1) as f64;
+            pr.stage_ms = [
+                (stage[0] * k) as f32,
+                (stage[1] * k) as f32,
+                (stage[2] * k) as f32,
+                (stage[3] * k) as f32,
+            ];
             let secs = pr.elapsed.as_secs_f32().max(1e-3);
             pr.fps = (n + 1) as f32 / secs;
             let left = (total - n - 1) as f32 / pr.fps.max(1e-3);
             pr.remaining = Some(Duration::from_secs_f32(left));
         }
     }
-    muxer.finish().map_err(|e| e.to_string())?;
-    Ok(())
+    writer.finish()
+}
+
+enum Packet {
+    Video(Vec<Vec<u8>>),
+    Audio(Vec<f32>),
+}
+
+/// Encodes and writes on its own thread, so the next frame renders while this one encodes.
+struct Writer {
+    tx: Option<crossbeam_channel::Sender<Packet>>,
+    thread: Option<std::thread::JoinHandle<Result<(), String>>>,
+}
+
+impl Writer {
+    /// Opens the output on the writer thread (FFmpeg contexts stay on one thread). Returns the
+    /// writer and the video encoder's name.
+    fn start(s: &ExportSettings) -> Result<(Writer, String), String> {
+        let (tx, rx) = crossbeam_channel::bounded::<Packet>(3);
+        let (ready_tx, ready_rx) = crossbeam_channel::bounded::<Result<String, String>>(1);
+        let (path, video, audio) = (s.path.clone(), s.video.clone(), s.audio.clone());
+        let thread = std::thread::Builder::new()
+            .name("export-writer".into())
+            .spawn(move || {
+                let mut muxer = match Muxer::create(&path, video.as_ref(), audio.as_ref()) {
+                    Ok(m) => {
+                        let name = m.video_encoder().unwrap_or("audio").to_string();
+                        let _ = ready_tx.send(Ok(name));
+                        m
+                    }
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(e.to_string()));
+                        return Err(e.to_string());
+                    }
+                };
+                for p in rx {
+                    match p {
+                        Packet::Video(planes) => {
+                            let refs: Vec<&[u8]> = planes.iter().map(|p| p.as_slice()).collect();
+                            muxer.push_video(&refs)
+                        }
+                        Packet::Audio(buf) => muxer.push_audio(&buf),
+                    }
+                    .map_err(|e| e.to_string())?;
+                }
+                muxer.finish().map_err(|e| e.to_string())
+            })
+            .map_err(|e| e.to_string())?;
+        let mut writer = Writer {
+            tx: Some(tx),
+            thread: Some(thread),
+        };
+        match ready_rx.recv() {
+            Ok(Ok(name)) => Ok((writer, name)),
+            Ok(Err(e)) => {
+                let _ = writer.join();
+                Err(e)
+            }
+            Err(_) => Err(writer
+                .join()
+                .err()
+                .unwrap_or_else(|| "the encoder did not start".into())),
+        }
+    }
+
+    fn send(&mut self, p: Packet) -> Result<(), String> {
+        let sent = self.tx.as_ref().is_some_and(|tx| tx.send(p).is_ok());
+        if sent {
+            return Ok(());
+        }
+        // the writer stopped: report its error
+        Err(self
+            .join()
+            .err()
+            .unwrap_or_else(|| "the encoder stopped".into()))
+    }
+
+    fn join(&mut self) -> Result<(), String> {
+        self.tx.take();
+        match self.thread.take() {
+            Some(t) => t
+                .join()
+                .unwrap_or_else(|_| Err("the encoder stopped unexpectedly".into())),
+            None => Ok(()),
+        }
+    }
+
+    /// Flushes the encoders and closes the file.
+    fn finish(mut self) -> Result<(), String> {
+        self.join()
+    }
+}
+
+impl Drop for Writer {
+    // cancelled or failed exports still close the file before it is removed
+    fn drop(&mut self) {
+        let _ = self.join();
+    }
 }
 
 /// Renders one frame to an image file (PNG, JPEG or TIFF by extension).
