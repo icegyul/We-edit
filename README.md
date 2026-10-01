@@ -21,6 +21,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 <p align="center">
   <img src="assets/branding/Windows.png" width="70"  alt="Logowindows"> <img src="assets/branding/Linux.png" width="70" alt="Logolinux"> <img src="assets/branding/macOS.png" width="70" alt="Logomac">
 </p>
+
 ## Estado actual
 
 La versión `0.5.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
