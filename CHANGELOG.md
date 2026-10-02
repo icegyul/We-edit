@@ -2,6 +2,26 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.7.0 - 2026-10-02
+
+### Added
+
+- Performance profiles in Preferences > Performance: a five-step slider from Ultra Performance to Maximum Quality replaces the Performance Mode checkbox. A profile sets interface animations and smooth scrolling, how often the interface redraws while playing and while background work runs, playback and paused resolution, the decoded frame cache (never more than a quarter of the memory), how far playback decodes ahead, how long playback waits for a late frame, and timeline thumbnails and waveforms. Ultra Performance is meant for old computers and ones without a graphics card; Maximum Quality redraws at the display's refresh rate with richer animations. Exports are never affected.
+- Automatic hardware check: the processor, its cores and threads, the memory and the graphics card (dedicated, integrated or none) choose a recommended profile. On the first start a Performance Setup window shows what was found and offers Use Recommended Settings or Choose Manually; Preferences shows the recommendation and Use Recommended at any time.
+- Software Only (processor) in Preferences > Graphics API, like Premiere Pro's Mercury Playback Engine Software Only: the interface and preview are drawn by the processor's rasterizer (WARP on Windows, llvmpipe on Linux), for computers without a usable graphics card or with broken drivers.
+- The Razor tool shows translucent scissors at the pointer over the timeline, so the clip underneath stays visible, with the red cut line between the blades.
+
+### Changed
+
+- The program opens on computers without a graphics card: the window takes the best adapter that can draw it (dedicated, then integrated, then the software rasterizer).
+- Faster start: only the shaders every preview needs compile at start; effect shaders compile two per idle frame from the Balanced profile up, and on first use in the lighter profiles (with software rendering, compiling them all at start took several seconds of every core).
+- The Preferences window scrolls when it is taller than the screen.
+
+### Fixed
+
+- The underline of the active tab of a narrow panel (such as Audio Meters) ran into the neighbouring panel.
+- The Essential Graphics placeholder text wraps in a narrow panel instead of being cut off.
+
 ## 0.6.0 - 2026-10-02
 
 ### Added

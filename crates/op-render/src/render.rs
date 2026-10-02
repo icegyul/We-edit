@@ -1190,6 +1190,35 @@ impl Renderer {
     }
 
     /// Creates every pipeline now (startup warm-up and shader validation in tests).
+    /// Compiles the pipelines every preview needs (conversion, compositing, display), so the
+    /// first frame shows without a pause. Effects compile on first use or with `warm_up_step`.
+    pub fn warm_up_core(&mut self) {
+        let device = self.gpu.device.clone();
+        for e in self.pipes.entry_names() {
+            if self.pipes.is_core(e) {
+                self.pipes.get(&device, e);
+            }
+        }
+    }
+
+    /// Compiles up to `n` pipelines not compiled yet; returns whether more remain. Spread over
+    /// idle frames, it avoids the pause of an effect's first use without a long start (with
+    /// software rendering, compiling everything at once takes many seconds of every core).
+    pub fn warm_up_step(&mut self, n: usize) -> bool {
+        let device = self.gpu.device.clone();
+        let pending: Vec<&'static str> = self
+            .pipes
+            .entry_names()
+            .into_iter()
+            .filter(|e| !self.pipes.is_compiled(e))
+            .take(n + 1)
+            .collect();
+        for e in pending.iter().take(n) {
+            self.pipes.get(&device, e);
+        }
+        pending.len() > n
+    }
+
     pub fn warm_up(&mut self) {
         let device = self.gpu.device.clone();
         for e in self.pipes.entry_names() {

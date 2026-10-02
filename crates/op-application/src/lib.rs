@@ -10,6 +10,7 @@ pub mod keymap;
 pub mod logging;
 pub mod media;
 pub mod merge;
+pub mod performance;
 pub mod prefs;
 pub mod proxies;
 pub mod recovery;

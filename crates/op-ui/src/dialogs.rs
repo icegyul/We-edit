@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use egui::{RichText, Ui};
 use op_application::captions::ModelSize;
 use op_application::keymap::{self, Binding, Chord, Keymap};
+use op_application::performance::{Hardware, Profile};
 use op_application::{ExportJob, ExportSettings};
 use op_core::*;
 use op_media::{AudioCodec, AudioSettings, VideoCodec, VideoSettings};
@@ -103,6 +104,11 @@ pub enum Dialog {
         audio: usize,
     },
     Captions(Box<CaptionForm>),
+    /// First start: choose the recommended performance profile or pick one.
+    PerformanceSetup {
+        manual: bool,
+        choice: Profile,
+    },
     Interpret {
         asset: AssetId,
         fps: f64,
@@ -1093,6 +1099,139 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 s.new_synthetic(Generator::ColorMatte { color: c }, &n);
             }
             !(ok || cancel || esc)
+        }
+        Dialog::PerformanceSetup { manual, choice } => {
+            let rec = s.hardware.recommended();
+            let mut decided: Option<Profile> = None;
+            let (_, esc) = modal(
+                ctx,
+                "performance-setup",
+                t("Performance Setup"),
+                440.0,
+                |ui| {
+                    ui.label(t(
+                        "OpenPremier checked this computer to choose how it should run:",
+                    ));
+                    ui.add_space(4.0);
+                    egui::Frame::new()
+                        .fill(theme::PANEL_DARK)
+                        .corner_radius(4.0)
+                        .inner_margin(egui::Margin::same(8))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.label(
+                                RichText::new(hardware_summary(&s.hardware))
+                                    .size(12.0)
+                                    .color(theme::TEXT_DIM),
+                            );
+                        });
+                    ui.add_space(8.0);
+                    if !*manual {
+                        ui.label(
+                            RichText::new(tf("Recommended profile: {}", &[&t(rec.label())]))
+                                .strong()
+                                .color(theme::TEXT_BRIGHT),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(t(rec.description()))
+                                    .size(11.5)
+                                    .color(theme::TEXT_DIM),
+                            )
+                            .wrap(),
+                        );
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new(t("Use Recommended Settings"))
+                                                    .color(egui::Color32::WHITE),
+                                            )
+                                            .fill(theme::ACCENT_DIM),
+                                        )
+                                        .clicked()
+                                    {
+                                        decided = Some(rec);
+                                    }
+                                    if ui.button(t("Choose Manually")).clicked() {
+                                        *manual = true;
+                                        *choice = rec;
+                                    }
+                                },
+                            );
+                        });
+                    } else {
+                        ui.label(t("Performance Profile"));
+                        let mut level = choice.index() as f32;
+                        let slider = egui::Slider::new(&mut level, 0.0..=4.0)
+                            .step_by(1.0)
+                            .show_value(false);
+                        if ui.add_sized([ui.available_width(), 18.0], slider).changed() {
+                            *choice = Profile::from_index(level.round() as u8);
+                        }
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(t(Profile::UltraPerformance.label()))
+                                    .size(10.5)
+                                    .color(theme::TEXT_DIM),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        RichText::new(t(Profile::Maximum.label()))
+                                            .size(10.5)
+                                            .color(theme::TEXT_DIM),
+                                    );
+                                },
+                            );
+                        });
+                        ui.add_space(4.0);
+                        let label = if *choice == rec {
+                            format!("{} ({})", t(choice.label()), t("recommended"))
+                        } else {
+                            t(choice.label()).to_string()
+                        };
+                        ui.label(RichText::new(label).strong().color(theme::TEXT_BRIGHT));
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(t(choice.description()))
+                                    .size(11.5)
+                                    .color(theme::TEXT_DIM),
+                            )
+                            .wrap(),
+                        );
+                        if buttons(ui, t("Apply")).0 {
+                            decided = Some(*choice);
+                        }
+                    }
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(t(
+                            "You can change this at any time in Edit > Preferences > Performance.",
+                        ))
+                        .size(11.0)
+                        .color(theme::TEXT_DIM),
+                    );
+                },
+            );
+            // closing the window keeps the recommendation
+            let chosen = decided.or(esc.then_some(rec));
+            if let Some(p) = chosen {
+                let hw = s.hardware.clone();
+                s.ed.prefs.performance_setup_done = true;
+                s.ed.set_performance_profile(p, Some(&hw));
+                log::info!(
+                    "performance setup: {} (recommended {})",
+                    p.label(),
+                    rec.label()
+                );
+            }
+            chosen.is_none()
         }
         Dialog::Captions(form) => {
             let models = op_application::captions::models_dir(&s.ed);
@@ -2205,6 +2344,7 @@ fn level_name(i: usize) -> &'static str {
 
 fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
     let mut open = true;
+    let mut new_profile: Option<Profile> = None;
     let mut show_log = false;
     let mut open_logs = false;
     window(ctx, t("Preferences"))
@@ -2213,6 +2353,13 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
         .default_width(500.0)
         .show(ctx, |ui| {
             ui.set_min_width(480.0);
+            // taller than small screens: the settings scroll
+            let max_h = (ui.ctx().content_rect().height() - 140.0).max(240.0);
+            egui::ScrollArea::vertical()
+                .max_height(max_h)
+                .min_scrolled_height(max_h.min(640.0))
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
             let p = &mut s.ed.prefs;
             let mut log_changed = false;
             ui.label(RichText::new(t("General")).strong().color(theme::TEXT_BRIGHT));
@@ -2387,14 +2534,82 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                             .color(theme::TEXT_BRIGHT),
                     );
                     ui.end_row();
-                    ui.label(t("Performance Mode"));
-                    ui.checkbox(
-                        &mut p.performance_mode,
-                        t("No animations and fewer redraws"),
-                    )
-                    .on_hover_text(t(
-                        "For slower computers and laptops on battery. Editing and rendering are not affected.",
-                    ));
+                    ui.label(t("Performance Profile"));
+                    let current = p.profile();
+                    let mut level = current.index() as f32;
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().slider_width = 240.0;
+                        let slider = egui::Slider::new(&mut level, 0.0..=4.0)
+                            .step_by(1.0)
+                            .show_value(false);
+                        if ui.add(slider).changed() {
+                            new_profile = Some(Profile::from_index(level.round() as u8));
+                        }
+                        // the two ends of the scale, under its ends
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(240.0, 14.0),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.label(
+                                    RichText::new(t(Profile::UltraPerformance.label()))
+                                        .size(10.5)
+                                        .color(theme::TEXT_DIM),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            RichText::new(t(Profile::Maximum.label()))
+                                                .size(10.5)
+                                                .color(theme::TEXT_DIM),
+                                        );
+                                    },
+                                );
+                            },
+                        );
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.vertical(|ui| {
+                        ui.set_max_width(300.0);
+                        ui.label(
+                            RichText::new(t(current.label()))
+                                .strong()
+                                .color(theme::TEXT_BRIGHT),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(t(current.description()))
+                                    .size(11.5)
+                                    .color(theme::TEXT_DIM),
+                            )
+                            .wrap(),
+                        );
+                    });
+                    ui.end_row();
+                    ui.label(t("This Computer"));
+                    let hw = &s.hardware;
+                    let rec = hw.recommended();
+                    ui.vertical(|ui| {
+                        ui.set_max_width(300.0);
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(hardware_summary(hw))
+                                    .size(11.5)
+                                    .color(theme::TEXT_DIM),
+                            )
+                            .wrap(),
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(tf("Recommended: {}", &[&t(rec.label())]))
+                                    .size(11.5),
+                            );
+                            if rec != current && ui.small_button(t("Use Recommended")).clicked() {
+                                new_profile = Some(rec);
+                            }
+                        });
+                    });
                     ui.end_row();
                     ui.label(t("Hardware Decoding"));
                     let modes = [
@@ -2435,6 +2650,7 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                         apis.push(("vulkan", "Vulkan"));
                     }
                     apis.push(("gl", "OpenGL"));
+                    apis.push(("software", t("Software Only (processor)")));
                     let current = apis
                         .iter()
                         .find(|(k, _)| *k == p.graphics_backend)
@@ -2509,12 +2725,18 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     .color(theme::TEXT_DIM)
                     .size(11.0),
             );
+                        });
         });
     if show_log && !s.dialogs.iter().any(|d| matches!(d, Dialog::Log { .. })) {
         s.dialogs.push(Dialog::log());
     }
     if open_logs && let Some(dir) = op_application::logging::folder() {
         crate::app::open_folder(&dir);
+    }
+    // a profile also sets the preview resolutions, frame cache and read-ahead, at once
+    if let Some(p) = new_profile {
+        let hw = s.hardware.clone();
+        s.ed.set_performance_profile(p, Some(&hw));
     }
     if !open {
         let _ = s.ed.prefs.save(&s.ed.dirs);
@@ -2796,4 +3018,26 @@ fn res_label(d: u32) -> String {
         1 => t("Full").to_string(),
         n => format!("1/{n}"),
     }
+}
+
+/// "Processor (cores) - memory - graphics" for the performance settings.
+pub fn hardware_summary(h: &Hardware) -> String {
+    use op_application::performance::GpuKind;
+    let kind = match h.gpu_kind {
+        GpuKind::Discrete => t("dedicated graphics"),
+        GpuKind::Integrated => t("integrated graphics"),
+        GpuKind::Software => t("no graphics acceleration"),
+        GpuKind::Unknown => t("graphics"),
+    };
+    format!(
+        "{} ({} {}, {} {})\n{:.0} GB {}\n{} ({kind})",
+        h.cpu,
+        h.cores,
+        t("cores"),
+        h.threads,
+        t("threads"),
+        h.memory_gb,
+        t("of memory"),
+        h.gpu
+    )
 }

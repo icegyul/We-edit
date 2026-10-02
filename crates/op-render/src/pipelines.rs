@@ -342,6 +342,19 @@ impl Pipelines {
     }
 
     /// Every fragment entry point (for warming up and tests).
+    /// Whether a pipeline is already compiled.
+    pub fn is_compiled(&self, entry: &str) -> bool {
+        self.cache.contains_key(entry)
+    }
+
+    /// Pipelines every preview needs: frame conversion, compositing and display.
+    pub fn is_core(&self, entry: &str) -> bool {
+        matches!(
+            self.entries.get(entry),
+            Some(&"convert") | Some(&"composite") | Some(&"output")
+        )
+    }
+
     pub fn entry_names(&self) -> Vec<&'static str> {
         let mut v: Vec<&'static str> = self.entries.keys().copied().collect();
         v.sort();

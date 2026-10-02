@@ -519,3 +519,36 @@ pub fn button(ui: &mut Ui, icon: Icon, size: f32, on: bool, tooltip: &str) -> Re
         resp.on_hover_text(tooltip)
     }
 }
+
+/// The Razor tool's cursor: open scissors whose blades meet at `tip` (the cut point), drawn
+/// translucent with a dark rim so the clip underneath stays visible.
+pub fn scissors(p: &Painter, tip: Pos2, size: f32) {
+    let k = size / 24.0;
+    let at = |x: f32, y: f32| tip + vec2((x - 12.0) * k, y * k);
+    let fill = Color32::from_rgba_unmultiplied(255, 255, 255, 190);
+    let rim = Color32::from_rgba_unmultiplied(0, 0, 0, 150);
+    let pivot = at(12.0, 11.6);
+    // two slim blades open in a V around the cut line
+    let blades = [
+        [at(7.2, 0.0), at(8.8, 0.3), at(12.9, 11.4), at(11.5, 11.8)],
+        [at(16.8, 0.0), at(15.2, 0.3), at(11.1, 11.4), at(12.5, 11.8)],
+    ];
+    for b in &blades {
+        p.add(Shape::convex_polygon(
+            b.to_vec(),
+            fill,
+            Stroke::new((1.2 * k).max(0.6), rim),
+        ));
+    }
+    // arms down to the finger rings
+    for x1 in [7.4, 16.6] {
+        p.line_segment([at(12.0, 11.5), at(x1, 16.3)], Stroke::new(3.2 * k, rim));
+        p.line_segment([at(12.0, 11.5), at(x1, 16.3)], Stroke::new(1.8 * k, fill));
+    }
+    for x in [6.2, 17.8] {
+        let c = at(x, 19.3);
+        p.circle_stroke(c, 3.4 * k, Stroke::new(3.0 * k, rim));
+        p.circle_stroke(c, 3.4 * k, Stroke::new(1.7 * k, fill));
+    }
+    p.circle_filled(pivot, 1.3 * k, rim);
+}

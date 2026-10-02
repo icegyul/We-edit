@@ -1000,9 +1000,12 @@ pub fn graphics(s: &mut State, ui: &mut Ui) {
     ui.separator();
     let Some((sid, clip)) = sel else {
         ui.centered_and_justified(|ui| {
-            ui.label(
-                RichText::new(t("Select a graphic clip, or add a new layer"))
-                    .color(theme::TEXT_DIM),
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t("Select a graphic clip, or add a new layer"))
+                        .color(theme::TEXT_DIM),
+                )
+                .wrap(),
             )
         });
         return;

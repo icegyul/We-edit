@@ -1107,9 +1107,11 @@ fn draw_clip(
     painter.rect_filled(r, 2.0, fill);
     let inner = painter.with_clip_rect(r.intersect(g.body));
     let name_y = r.min.y + 2.0;
+    let profile = s.ed.prefs.profile().settings();
     if c.is_video() {
-        // head thumbnail
-        if row.h >= 34.0
+        // head thumbnail (off in Ultra Performance)
+        if profile.thumbnails
+            && row.h >= 34.0
             && let ClipSource::Asset { asset, .. } = c.source
             && let Some(a) = s.ed.project.asset(asset)
             && a.has_video()
@@ -1136,7 +1138,7 @@ fn draw_clip(
                 );
             }
         }
-    } else if row.h >= 24.0 {
+    } else if profile.waveforms && row.h >= 24.0 {
         waveform(s, &inner, g, r, c);
     }
     let mut name = c.name.clone();
@@ -1394,7 +1396,16 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
         painter.rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(74, 156, 255, 30));
         painter.rect_stroke(r, 0.0, Stroke::new(1.0, theme::ACCENT), StrokeKind::Inside);
     }
-    // razor preview
+    // razor preview: translucent scissors at the pointer, and the cut line over a clip
+    if s.ed.tool == Tool::Razor
+        && let Some(p) = resp.hover_pos()
+    {
+        let fg = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("razor-cursor"),
+        ));
+        crate::icons::scissors(&fg, p, 26.0);
+    }
     if s.ed.tool == Tool::Razor
         && let Some(p) = resp.hover_pos()
         && let Hit::Clip { track, .. } = hit(seq, g, p)
@@ -1468,7 +1479,8 @@ fn input(
             } else {
                 CursorIcon::ZoomIn
             }),
-            (Tool::Razor, Hit::Clip { .. }) => Some(CursorIcon::Crosshair),
+            // the Razor tool draws its own scissors cursor (see the razor preview)
+            (Tool::Razor, _) => Some(CursorIcon::None),
             (Tool::Slip | Tool::Slide, Hit::Clip { .. }) => Some(CursorIcon::ResizeColumn),
             (
                 _,

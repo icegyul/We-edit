@@ -182,7 +182,7 @@ fn render(
     let frames = PreviewFrames {
         service: s.ed.media.clone(),
         wait: if playing {
-            Duration::from_millis(6)
+            s.ed.prefs.profile().settings().frame_wait
         } else if scrubbing {
             Duration::ZERO
         } else {
@@ -190,7 +190,7 @@ fn render(
         },
         // decode about half a second ahead in the playing direction
         ahead: if playing {
-            let k = op_application::media::PLAYBACK_AHEAD;
+            let k = s.ed.media.read_ahead();
             if speed < 0.0 { -k } else { k }
         } else {
             0

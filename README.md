@@ -24,7 +24,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.6.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
+La versión `0.7.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -38,8 +38,10 @@ en todos los trabajos de producción.
   pausar, vista previa de los fotogramas renderizados y velocidad de fotogramas configurable.
 - Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12, Metal u OpenGL (se elige en
   Preferencias).
-- Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático, y un modo de
-  rendimiento para equipos más modestos.
+- Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático.
+- Cinco perfiles de rendimiento, de Ultra rendimiento a Calidad máxima, elegidos automáticamente
+  según el procesador, la memoria y la tarjeta gráfica; funciona incluso en equipos sin tarjeta
+  gráfica (modo Solo software).
 - Subtítulos animados automáticos al estilo TikTok: la voz de la secuencia se transcribe en el
   propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 12 estilos
   (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...). También importa y exporta
@@ -112,7 +114,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.6.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.7.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

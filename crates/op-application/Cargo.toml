@@ -23,6 +23,7 @@ log.workspace = true
 dirs.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
+sysinfo.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

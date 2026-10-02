@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-10-02 (version 0.6.0)<br>
+**Updated:** 2026-10-02 (version 0.7.0)<br>
 **Companion documents:** [implementation-status.md](implementation-status.md) (technical status and
 validation gaps), [CHANGELOG.md](../CHANGELOG.md) (what each release changed),
 [drift-comparison.md](drift-comparison.md) (lessons from another open-source editor).
@@ -33,7 +33,11 @@ priority. Items move from "Next" to "Done" in the release that ships them.
 - **Proxies** (0.6): Create Proxies / Remove Proxies in the Project panel and the Clip menu,
   Toggle Proxies in the Program Monitor and View menu. Proxies are 540p H.264 with a keyframe every
   half second, keep the original's frame numbering and color, and are never used for export.
-- Playback and paused resolution (Full, 1/2, 1/4, 1/8), performance mode, choice of graphics API.
+- Playback and paused resolution (Full, 1/2, 1/4, 1/8) and choice of graphics API.
+- Performance profiles (0.7): Ultra Performance, Performance, Balanced, Quality and Maximum
+  Quality, recommended from the processor, memory and graphics card at first start; Software Only
+  rendering and automatic fallback to the processor's rasterizer, so the program runs on
+  computers without a graphics card; effect shaders compiled in idle time.
 
 ### Captions (0.6)
 

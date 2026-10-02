@@ -109,6 +109,7 @@ impl Editor {
             &prefs.hardware_decoding,
         ));
         media.set_use_proxies(prefs.use_proxies);
+        media.set_read_ahead(prefs.profile().settings().read_ahead);
         let source: Arc<dyn op_audio::AudioSource> = media.clone();
         let playback = if audio {
             op_audio::Playback::start(source)
@@ -1235,6 +1236,30 @@ impl Editor {
                     }
                 });
         }
+    }
+
+    /// Switches the performance profile: preview resolutions, frame cache and read-ahead
+    /// change now (the interface follows from the preference). `hw` limits the frame cache
+    /// to this computer's memory.
+    pub fn set_performance_profile(
+        &mut self,
+        p: crate::performance::Profile,
+        hw: Option<&crate::performance::Hardware>,
+    ) {
+        let st = p.settings();
+        self.prefs.performance_profile = Some(p.index());
+        self.prefs.performance_mode = p <= crate::performance::Profile::Performance;
+        self.prefs.playback_resolution = st.playback_resolution;
+        self.prefs.paused_resolution = st.paused_resolution;
+        self.prefs.frame_cache_mb = hw.map(|h| h.frame_cache_mb(p)).unwrap_or(st.frame_cache_mb);
+        self.media.set_frame_budget(self.prefs.frame_cache_mb << 20);
+        self.media.set_read_ahead(st.read_ahead);
+        let _ = self.prefs.save(&self.dirs);
+        log::info!(
+            "performance profile: {} (cache {} MB)",
+            p.label(),
+            self.prefs.frame_cache_mb
+        );
     }
 
     pub fn set_use_proxies(&mut self, on: bool) {

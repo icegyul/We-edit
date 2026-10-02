@@ -4,7 +4,7 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/openpremier"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.98"
 license = "GPL-3.0-or-later"
@@ -51,6 +51,7 @@ tempfile = "3"
 arboard = "3.6"
 image = { version = "0.25", default-features = false, features = ["png"] }
 ureq = "3"
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

@@ -48,8 +48,13 @@ pub struct Preferences {
     pub paste_always: bool,
     /// Play attached proxies instead of the original media (export always uses the original).
     pub use_proxies: bool,
-    /// Lighter interface: no animations and fewer redraws (slower computers, laptops on battery).
+    /// Replaced by `performance_profile`; read from older preference files only.
     pub performance_mode: bool,
+    /// Performance profile (0 Ultra Performance .. 4 Maximum Quality); None before the first
+    /// choice (older files map `performance_mode` to Performance).
+    pub performance_profile: Option<u8>,
+    /// The first-start performance setup has been answered.
+    pub performance_setup_done: bool,
     /// Video decoding: "auto", "always" (graphics card) or "never" (processor only).
     pub hardware_decoding: String,
     /// Graphics API: "auto", "vulkan", "dx12", "metal" or "gl"; used from the next start.
@@ -89,6 +94,8 @@ impl Default for Preferences {
             paste_always: false,
             use_proxies: true,
             performance_mode: false,
+            performance_profile: None,
+            performance_setup_done: false,
             hardware_decoding: "auto".into(),
             graphics_backend: "auto".into(),
         }
@@ -136,6 +143,16 @@ impl Dirs {
 }
 
 impl Preferences {
+    /// The performance profile in use.
+    pub fn profile(&self) -> crate::performance::Profile {
+        use crate::performance::Profile;
+        match self.performance_profile {
+            Some(i) => Profile::from_index(i),
+            None if self.performance_mode => Profile::Performance,
+            None => Profile::Balanced,
+        }
+    }
+
     pub fn load(dirs: &Dirs) -> Preferences {
         std::fs::read_to_string(dirs.config.join("preferences.json"))
             .ok()

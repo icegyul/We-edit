@@ -70,7 +70,11 @@ pub(crate) struct State {
     pub caption_options: op_application::captions::CaptionOptions,
     pub caption_model: op_application::captions::ModelSize,
     pub caption_language: usize,
-    performance_applied: Option<bool>,
+    performance_applied: Option<op_application::performance::Profile>,
+    /// This computer, checked once at start (for the recommended performance profile).
+    pub hardware: op_application::performance::Hardware,
+    /// Effect pipelines are still being compiled in idle frames.
+    warming: bool,
     pub loop_playback: bool,
     pub workspace: Workspace,
     pub program: monitor::MonitorView,
@@ -230,6 +234,16 @@ impl App {
             .and_then(|k| Workspace::ALL.into_iter().find(|w| w.key() == k.trim()))
             .unwrap_or(Workspace::Editing);
         let dock = load_layout(&ed.dirs, workspace).unwrap_or_else(|| workspace.layout());
+        // this computer, for the recommended performance profile
+        let hardware = op_application::performance::Hardware::probe(
+            &gpu.info.name,
+            match gpu.info.device_type {
+                wgpu::DeviceType::DiscreteGpu => op_application::performance::GpuKind::Discrete,
+                wgpu::DeviceType::IntegratedGpu => op_application::performance::GpuKind::Integrated,
+                wgpu::DeviceType::Cpu => op_application::performance::GpuKind::Software,
+                _ => op_application::performance::GpuKind::Unknown,
+            },
+        );
         let mut s = State {
             ed,
             gpu,
@@ -246,6 +260,8 @@ impl App {
             caption_model: op_application::captions::ModelSize::Base,
             caption_language: 0,
             performance_applied: None,
+            hardware,
+            warming: true,
             loop_playback: false,
             workspace,
             program: monitor::MonitorView::new(Monitor::Program),
@@ -272,10 +288,19 @@ impl App {
             ui_scale,
             minimized: false,
         };
-        s.renderer.warm_up();
+        s.renderer.warm_up_core();
         s.open_or_import(opts.open);
         if let Some(p) = recovery {
             s.dialogs.push(Dialog::Recover(p));
+        }
+        // first start (and the first start after updating from a version without profiles):
+        // offer the profile this computer handles comfortably
+        if !s.ed.prefs.performance_setup_done {
+            let choice = s.hardware.recommended();
+            s.dialogs.push(Dialog::PerformanceSetup {
+                manual: false,
+                choice,
+            });
         }
         let mut dock = dock;
         dock.translations = dock_translations();
@@ -1172,7 +1197,14 @@ impl State {
 
     /// Time until the playing sequence shows its next frame.
     fn next_frame_delay(&self) -> Duration {
-        let max = Duration::from_secs_f64(1.0 / 60.0);
+        let cap = self
+            .ed
+            .prefs
+            .profile()
+            .settings()
+            .playback_fps_cap
+            .unwrap_or(60);
+        let max = Duration::from_secs_f64(1.0 / cap.max(1) as f64);
         let Some(seq) = self.ed.active_seq() else {
             return max;
         };
@@ -1183,22 +1215,23 @@ impl State {
         Duration::from_secs_f64(((next - t) / speed).max(0.001)).min(max)
     }
 
-    /// Animations follow the light mode preference.
+    /// Interface animations follow the performance profile.
     fn apply_performance_mode(&mut self, ctx: &egui::Context) {
-        let on = self.ed.prefs.performance_mode;
-        if self.performance_applied == Some(on) {
+        let p = self.ed.prefs.profile();
+        if self.performance_applied == Some(p) {
             return;
         }
-        self.performance_applied = Some(on);
-        ctx.all_styles_mut(|st| {
-            st.animation_time = if on { 0.0 } else { 1.0 / 12.0 };
-            st.scroll_animation = if on {
-                egui::style::ScrollAnimation::none()
-            } else {
+        self.performance_applied = Some(p);
+        let st = p.settings();
+        ctx.all_styles_mut(|s| {
+            s.animation_time = st.animation_time;
+            s.scroll_animation = if st.smooth_scroll {
                 egui::style::ScrollAnimation::default()
+            } else {
+                egui::style::ScrollAnimation::none()
             };
         });
-        log::info!("performance mode {}", if on { "on" } else { "off" });
+        log::info!("interface for the {} profile", p.label());
     }
 
     /// Pastes media from the system clipboard. Returns false when it holds none.
@@ -1910,9 +1943,12 @@ impl State {
         if let Some(tab) = self.tab_rects.get(&p) {
             let focused = self.focused_panel == Some(p);
             let y = tab.max.y - 1.5;
+            // a tab wider than its narrow panel is cut by the tab bar: so is its underline,
+            // which must never reach into the neighbouring panel
+            let column = egui::Rect::from_x_y_ranges(rect.x_range(), tab.expand(2.0).y_range());
             ui.ctx()
                 .layer_painter(ui.layer_id())
-                .with_clip_rect(tab.expand(2.0))
+                .with_clip_rect(tab.expand(2.0).intersect(column))
                 .line_segment(
                     [
                         egui::pos2(tab.min.x + 6.0, y),
@@ -1945,18 +1981,33 @@ impl State {
         self.tab_rects.clear();
         let busy = self.ed.tick() || self.opening.is_some();
         self.apply_performance_mode(ctx);
-        if self.ed.is_playing() {
-            // redraw when the next frame of the sequence is due (at most 60 times a second)
-            // rather than at the display's refresh rate: a 144 Hz screen would otherwise
-            // redraw the whole interface 144 times a second for a 30 fps video
-            ctx.request_repaint_after(self.next_frame_delay());
-        } else if busy {
-            let every = if self.ed.prefs.performance_mode {
-                200
+        let profile = self.ed.prefs.profile().settings();
+        // the remaining effect pipelines compile two per idle frame from Balanced up; the
+        // lighter profiles compile each one on first use and never spend the time up front
+        if self.warming
+            && self.ed.prefs.profile() >= op_application::performance::Profile::Balanced
+            && !self.ed.is_playing()
+            && self.dialogs.is_empty()
+        {
+            self.warming = self.renderer.warm_up_step(2);
+            if self.warming {
+                ctx.request_repaint_after(Duration::from_millis(15));
             } else {
-                60
-            };
-            ctx.request_repaint_after(Duration::from_millis(every));
+                log::info!("all effect pipelines are ready");
+            }
+        }
+        if self.ed.is_playing() {
+            // redraw when the next frame of the sequence is due, at most as often as the
+            // profile allows, rather than at the display's refresh rate: a 144 Hz screen would
+            // otherwise redraw the whole interface 144 times a second for a 30 fps video.
+            // Maximum Quality redraws every display frame for the smoothest playhead.
+            if profile.playback_fps_cap.is_none() {
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(self.next_frame_delay());
+            }
+        } else if busy {
+            ctx.request_repaint_after(profile.busy_repaint);
         }
         if self
             .ed

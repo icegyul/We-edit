@@ -1,7 +1,7 @@
 # Implementation status
 
 **Snapshot:** 2026-10-02<br>
-**Application version:** 0.6.0 technical alpha<br>
+**Application version:** 0.7.0 technical alpha<br>
 **Primary language/UI:** Rust 2024 / egui 0.36<br>
 **Compatibility validation:** in progress; full parity has not been established
 
@@ -16,7 +16,7 @@ flow:
 | Check | Result |
 |---|---|
 | `cargo xtask lint` | rustfmt and Clippy passed with warnings denied |
-| `cargo xtask test` | 161 tests passed on Windows; the same suite runs on Linux (software Vulkan) and macOS (Metal) in CI with the GPU tests required |
+| `cargo xtask test` | 163 tests passed on Windows; the same suite runs on Linux (software Vulkan) and macOS (Metal) in CI with the GPU tests required |
 | Windows release package | final-layout `--self-test` passed |
 | Linux AppImage | WSL `--self-test` passed; startup passed in Ubuntu 22.04 and Fedora 42 containers |
 
@@ -34,6 +34,7 @@ known compositor pixel. It is a startup/integration check, not a performance or 
 | Rendering | wgpu compositor, color conversion, blend modes, implemented effects/transitions (including original looks such as multi-octave glow, glitch, shake, grain and light leaks, and mirrored-edge motion transitions; halftone, duotone, Kuwahara oil paint, pencil sketch, neon edges, halation, lens flare, ripple, zoom pulse and CRT looks; hexagon, shatter, ink, pixelate and kaleidoscope transitions), animation presets, graphics, scopes | No differential pixel-parity corpus; OpenColorIO integration remains pending |
 | Captions | Local speech recognition (Whisper Tiny/Base/Small through candle, CPU, downloaded on request) with language detection and timestamp-constrained greedy decoding; words timed within each timed span; captions as graphics clips with a Caption component, 12 animated styles, SRT/WebVTT import and export, style copied to all captions | Word times are proportional within Whisper's timed spans, not aligned to the audio; no caption list editor yet; transcription runs on the CPU |
 | Audio | Sample-accurate floating-point mixer, meters, device output, EQ/dynamics/delay/reverb foundations; tremolo, auto-pan, phaser, bitcrusher, distortion, noise gate, pitch shifter and telephone/radio voices with unit tests | VST3 hosting, exhaustive routing, 5.1/adaptive parity, and DSP oracle tests remain pending |
+| Performance | Five profiles (animations, redraw rate, preview resolution, frame cache, read-ahead, late-frame wait, thumbnails and waveforms) with a hardware check (processor, memory, graphics card type) that recommends one, offered at first start; software-only rendering and adapter fallback down to WARP/llvmpipe; core shaders at start, effect shaders in idle frames or on first use | Zero-copy decoder/GPU interop and a render cache for heavy sections remain on the roadmap |
 | UI | Fifteen dockable panels, saved workspace layouts, monitors, timeline, effect controls, color picker, centered dialogs, in-app log viewer, English/Spanish catalogs | Multi-monitor, accessibility, IME, HiDPI edge cases, and automated interaction coverage remain incomplete |
 | Reliability | Panels, dialogs, decoders, thumbnails, audio mixing and exports run behind panic boundaries; background recovery file, emergency save and crash reports; program log with runtime level and file switch | Recovery covers the project state, not unfinished exports; no automated crash-injection suite yet |
 | Packaging | Portable Windows ZIP, Linux AppImage, macOS disk images (arm64 and x86_64, built in CI), checksums, licenses, final-layout self-test | The macOS app is signed ad hoc and not notarized |

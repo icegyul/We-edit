@@ -38,6 +38,8 @@ pub struct Options {
 fn backend_order(pref: &str) -> Vec<wgpu::Backends> {
     let primary = wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL;
     let chosen = match pref {
+        // software rendering goes through the same APIs, choosing the processor's rasterizer
+        "software" => Some(primary),
         "vulkan" => Some(wgpu::Backends::VULKAN),
         "dx12" => Some(wgpu::Backends::DX12),
         "metal" => Some(wgpu::Backends::METAL),
@@ -53,10 +55,38 @@ fn backend_order(pref: &str) -> Vec<wgpu::Backends> {
     v
 }
 
-fn wgpu_setup(backends: wgpu::Backends) -> egui_wgpu::WgpuConfiguration {
+fn wgpu_setup(backends: wgpu::Backends, software: bool) -> egui_wgpu::WgpuConfiguration {
     let mut create = egui_wgpu::WgpuSetupCreateNew::without_display_handle();
     create.instance_descriptor.backends = backends;
     create.power_preference = wgpu::PowerPreference::HighPerformance;
+    // the best adapter that can draw the window: a dedicated card, then an integrated one, and
+    // on computers without a usable graphics card the software rasterizer (WARP, llvmpipe),
+    // so the program still opens there
+    // Software Only (like Premiere's Mercury Playback Engine Software Only) puts the processor's
+    // rasterizer first: for broken graphics drivers and for trying the program without a card
+    create.native_adapter_selector = Some(Arc::new(move |adapters, surface| {
+        let rank = |a: &wgpu::Adapter| match a.get_info().device_type {
+            wgpu::DeviceType::Cpu if software => -1,
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            wgpu::DeviceType::VirtualGpu => 2,
+            wgpu::DeviceType::Other => 3,
+            wgpu::DeviceType::Cpu => 4,
+        };
+        let chosen = adapters
+            .iter()
+            .filter(|a| surface.is_none_or(|s| a.is_surface_supported(s)))
+            .min_by_key(|a| rank(a))
+            .cloned()
+            .ok_or_else(|| "no graphics adapter can draw the window".to_string())?;
+        log::info!(
+            "graphics adapter: {} ({:?}, {:?})",
+            chosen.get_info().name,
+            chosen.get_info().device_type,
+            chosen.get_info().backend
+        );
+        Ok(chosen)
+    }));
     create.device_descriptor = Arc::new(|adapter: &wgpu::Adapter| wgpu::DeviceDescriptor {
         label: Some("OpenPremier"),
         required_features: op_render::gpu::optional_features(adapter),
@@ -69,7 +99,7 @@ fn wgpu_setup(backends: wgpu::Backends) -> egui_wgpu::WgpuConfiguration {
     }
 }
 
-fn native_options(backends: wgpu::Backends) -> eframe::NativeOptions {
+fn native_options(backends: wgpu::Backends, software: bool) -> eframe::NativeOptions {
     let icon = eframe::icon_data::from_png_bytes(include_bytes!(
         "../../../assets/icons/openpremier-256.png"
     ))
@@ -85,7 +115,7 @@ fn native_options(backends: wgpu::Backends) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport,
         renderer: eframe::Renderer::Wgpu,
-        wgpu_options: wgpu_setup(backends),
+        wgpu_options: wgpu_setup(backends, software),
         persist_window: true,
         ..Default::default()
     }
@@ -106,7 +136,7 @@ pub fn run(opts: Options) -> Result<(), String> {
     for backends in backend_order(&opts.backend) {
         match eframe::run_native(
             op_application::APP_NAME,
-            native_options(backends),
+            native_options(backends, opts.backend == "software"),
             make(opts.clone()),
         ) {
             Ok(()) => return Ok(()),

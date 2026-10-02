@@ -170,6 +170,8 @@ pub struct MediaService {
     /// Decoder seeks over all files (each one restarts decoding at a keyframe).
     seeks: AtomicU64,
     use_proxies: std::sync::atomic::AtomicBool,
+    /// Frames decoded ahead while playing (from the performance profile).
+    read_ahead: std::sync::atomic::AtomicI64,
     /// Assets as their proxies: the proxy file under its own id.
     proxy_assets: Mutex<HashMap<AssetId, Arc<MediaAsset>>>,
     failed: Mutex<HashMap<AssetId, String>>,
@@ -199,6 +201,7 @@ impl MediaService {
             hardware: std::sync::atomic::AtomicU8::new(HardwareDecoding::Auto.code()),
             seeks: AtomicU64::new(0),
             use_proxies: std::sync::atomic::AtomicBool::new(true),
+            read_ahead: std::sync::atomic::AtomicI64::new(PLAYBACK_AHEAD),
             proxy_assets: Mutex::new(HashMap::new()),
             failed: Mutex::new(HashMap::new()),
             thumbs: Mutex::new(HashMap::new()),
@@ -249,6 +252,16 @@ impl MediaService {
 
     pub fn asset(&self, id: AssetId) -> Option<Arc<MediaAsset>> {
         self.assets.lock().get(&id).cloned()
+    }
+
+    pub fn set_read_ahead(&self, frames: i64) {
+        self.read_ahead
+            .store(frames.clamp(2, 64), Ordering::Relaxed);
+    }
+
+    /// Frames playback asks the decoder to prepare ahead of the play position.
+    pub fn read_ahead(&self) -> i64 {
+        self.read_ahead.load(Ordering::Relaxed)
     }
 
     pub fn set_use_proxies(&self, on: bool) {

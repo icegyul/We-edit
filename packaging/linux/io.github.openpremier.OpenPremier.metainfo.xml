@@ -29,6 +29,15 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.7.0" date="2026-10-02">
+      <description>
+        <p>
+          Performance profiles from Ultra Performance to Maximum Quality, chosen automatically
+          from the hardware on first start; software-only rendering for computers without a
+          graphics card; a scissors cursor for the Razor tool.
+        </p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-10-02">
       <description>
         <p>

@@ -16,8 +16,8 @@ does not validate Premiere feature, project, pixel, performance, or workflow par
 Create and push an annotated tag matching the workspace version:
 
 ```text
-git tag -a v0.6.0 -m "OpenPremier 0.6.0"
-git push origin v0.6.0
+git tag -a v0.7.0 -m "OpenPremier 0.7.0"
+git push origin v0.7.0
 ```
 
 The release workflow verifies the tag/version match, builds the portable Windows ZIP, builds the
