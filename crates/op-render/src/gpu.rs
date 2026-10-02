@@ -29,7 +29,9 @@ impl std::fmt::Debug for Gpu {
 /// Backends in preference order: Vulkan / Direct3D 12 / Metal, never the OpenGL backend for the
 /// renderer (its texture format support is too limited for the pipeline).
 pub fn backends() -> wgpu::Backends {
-    wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL
+    // WGPU_BACKEND (vulkan, dx12, metal, gl) picks one for diagnostics and tests
+    wgpu::Backends::from_env()
+        .unwrap_or(wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL)
 }
 
 /// Features the renderer uses when the adapter offers them.

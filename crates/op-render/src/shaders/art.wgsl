@@ -44,11 +44,13 @@ fn dot_cover(p: vec2<f32>, size: f32, angle: f32, channel: i32, contrast: f32) -
     let center = (cell + vec2<f32>(0.5)) * size;
     let uv = rot2(center, -angle) / u.out_size;
     let s = unpremul(s0(uv));
-    var v: f32;
-    if (channel < 0) {
-        v = luma(s.rgb);
-    } else {
-        v = s.rgb[channel];
+    var v = luma(s.rgb);
+    if (channel == 0) {
+        v = s.r;
+    } else if (channel == 1) {
+        v = s.g;
+    } else if (channel == 2) {
+        v = s.b;
     }
     // ink amount, pushed by the contrast setting
     let ink = clamp((1.0 - v - 0.5) * (1.0 + contrast) + 0.5, 0.0, 1.0);
@@ -292,9 +294,10 @@ fn fs_crt(in: VOut) -> @location(0) vec4<f32> {
     let lines = max(prm(4), 50.0);
     let scan = 0.5 + 0.5 * cos(tex_uv.y * lines * 2.0 * PI);
     rgb = rgb * mix(1.0, 0.55 + 0.45 * scan, clamp(prm(1), 0.0, 1.0)) * (1.0 + prm(1) * 0.25);
-    let col = i32(floor(pixel(in.uv).x)) % 3;
-    var mask = vec3<f32>(0.75);
-    mask[col] = 1.25;
+    // which of the red, green and blue phosphor stripes this column is (no dynamic vector
+    // indexing: the Direct3D shader compiler cannot write through one)
+    let col = u32(floor(pixel(in.uv).x)) % 3u;
+    let mask = select(vec3<f32>(0.75), vec3<f32>(1.25), vec3<u32>(0u, 1u, 2u) == vec3<u32>(col));
     rgb = rgb * mix(vec3<f32>(1.0), mask, clamp(prm(2), 0.0, 1.0));
     let vig = 1.0 - dot(uv * 0.7, uv * 0.7);
     rgb = rgb * mix(1.0, clamp(vig, 0.0, 1.0), clamp(prm(3), 0.0, 1.0));
