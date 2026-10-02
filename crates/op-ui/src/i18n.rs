@@ -136,7 +136,12 @@ mod tests {
                 .chain(d.params.iter().map(|p| p.label))
                 .chain(d.params.iter().map(|p| p.group))
             {
-                if !s.is_empty() && !table.contains_key(s) && !missing.contains(&s) {
+                // groups named "_..." hold internal parameters and are never shown
+                if !s.is_empty()
+                    && !s.starts_with('_')
+                    && !table.contains_key(s)
+                    && !missing.contains(&s)
+                {
                     missing.push(s);
                 }
             }

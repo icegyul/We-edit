@@ -17,6 +17,7 @@ op-timeline = { path = "crates/op-timeline" }
 op-project = { path = "crates/op-project" }
 op-media = { path = "crates/op-media" }
 op-render = { path = "crates/op-render" }
+op-speech = { path = "crates/op-speech" }
 op-audio = { path = "crates/op-audio" }
 op-application = { path = "crates/op-application" }
 op-ui = { path = "crates/op-ui" }
@@ -53,6 +54,9 @@ ureq = "3"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+# the MSVC linker reports "Creating library ... .lib and object ... .exp" when a dependency
+# exports symbols from the executable; it is informational
+linker_messages = "allow"
 missing_debug_implementations = "allow"
 
 [workspace.lints.clippy]

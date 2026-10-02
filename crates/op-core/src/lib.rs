@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod captions;
 pub mod catalog;
 pub mod color;
 pub mod history;

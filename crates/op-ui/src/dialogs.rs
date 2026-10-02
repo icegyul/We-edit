@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use egui::{RichText, Ui};
+use op_application::captions::ModelSize;
 use op_application::keymap::{self, Binding, Chord, Keymap};
 use op_application::{ExportJob, ExportSettings};
 use op_core::*;
@@ -53,6 +54,14 @@ pub struct ShortcutsForm {
     message: Option<String>,
 }
 
+/// Graphics > Captions > Transcribe and Create Captions.
+pub struct CaptionForm {
+    /// Index into CAPTION_LANGUAGES.
+    pub language: usize,
+    pub model: op_application::captions::ModelSize,
+    pub options: op_application::captions::CaptionOptions,
+}
+
 pub enum Dialog {
     Unsaved(Then),
     /// Closing the program while an export runs.
@@ -93,6 +102,7 @@ pub enum Dialog {
         video: usize,
         audio: usize,
     },
+    Captions(Box<CaptionForm>),
     Interpret {
         asset: AssetId,
         fps: f64,
@@ -382,6 +392,14 @@ impl Dialog {
         }
     }
 
+    pub fn captions(s: &State) -> Dialog {
+        Dialog::Captions(Box::new(CaptionForm {
+            language: s.caption_language,
+            model: s.caption_model,
+            options: s.caption_options.clone(),
+        }))
+    }
+
     pub fn export(s: &State) -> Option<Dialog> {
         let seq = s.ed.active_seq()?;
         let dir =
@@ -529,6 +547,45 @@ fn window<'a>(ctx: &egui::Context, title: &'a str) -> egui::Window<'a> {
         .default_pos(ctx.content_rect().center())
         .constrain(true)
         .collapsible(false)
+}
+
+/// Languages offered for transcription: Whisper code (empty: detect) and name.
+const CAPTION_LANGUAGES: &[(&str, &str)] = &[
+    ("", "Detect Automatically"),
+    ("es", "Español"),
+    ("en", "English"),
+    ("pt", "Português"),
+    ("fr", "Français"),
+    ("de", "Deutsch"),
+    ("it", "Italiano"),
+    ("ca", "Català"),
+    ("nl", "Nederlands"),
+    ("pl", "Polski"),
+    ("ru", "Русский"),
+    ("tr", "Türkçe"),
+    ("ar", "العربية"),
+    ("hi", "हिन्दी"),
+    ("ja", "日本語"),
+    ("ko", "한국어"),
+    ("zh", "中文"),
+];
+
+/// What each caption style does, for the dialog.
+fn caption_style_hint(i: usize) -> &'static str {
+    match i {
+        0 => "White text with an outline, like classic subtitles",
+        1 => "Text on a solid box",
+        2 => "Each word fills with the highlight color as it is said",
+        3 => "The word being said sits on a colored box",
+        4 => "The word being said grows and changes color",
+        5 => "One big word at a time, popping in",
+        6 => "Words appear as they are said",
+        7 => "Words bounce in as they are said",
+        8 => "Glowing neon text; the word being said burns brighter",
+        9 => "Bold capitals with a thick outline; the word being said is highlighted",
+        10 => "Words fade in from faint as they are said",
+        _ => "A line grows under the word being said",
+    }
 }
 
 fn buttons(ui: &mut Ui, ok: &str) -> (bool, bool) {
@@ -1034,6 +1091,130 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 let c = Rgba::new(color[0], color[1], color[2], 1.0);
                 let n = name.clone();
                 s.new_synthetic(Generator::ColorMatte { color: c }, &n);
+            }
+            !(ok || cancel || esc)
+        }
+        Dialog::Captions(form) => {
+            let models = op_application::captions::models_dir(&s.ed);
+            let ((ok, cancel), esc) = modal(
+                ctx,
+                "captions",
+                t("Transcribe and Create Captions"),
+                460.0,
+                |ui| {
+                    ui.label(
+                        RichText::new(t(
+                            "The speech in the sequence becomes animated captions. Everything runs on this computer; nothing is uploaded.",
+                        ))
+                        .color(theme::TEXT_DIM),
+                    );
+                    ui.add_space(8.0);
+                    egui::Grid::new("captions-form")
+                        .num_columns(2)
+                        .spacing([14.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label(t("Language"));
+                            let current = CAPTION_LANGUAGES
+                                .get(form.language)
+                                .map(|(_, n)| if form.language == 0 { t(n) } else { *n })
+                                .unwrap_or("");
+                            egui::ComboBox::from_id_salt("cap-lang")
+                                .selected_text(current)
+                                .width(220.0)
+                                .show_ui(ui, |ui| {
+                                    for (i, (_, name)) in CAPTION_LANGUAGES.iter().enumerate() {
+                                        let label = if i == 0 { t(name) } else { name };
+                                        ui.selectable_value(&mut form.language, i, label);
+                                    }
+                                });
+                            ui.end_row();
+
+                            ui.label(t("Speech Model"));
+                            let model_label = |m: ModelSize| {
+                                let note = match m {
+                                    ModelSize::Tiny => t("fastest"),
+                                    ModelSize::Base => t("recommended"),
+                                    ModelSize::Small => t("most accurate"),
+                                };
+                                format!("{} ({} MB, {note})", m.label(), m.megabytes())
+                            };
+                            egui::ComboBox::from_id_salt("cap-model")
+                                .selected_text(model_label(form.model))
+                                .width(220.0)
+                                .show_ui(ui, |ui| {
+                                    for m in ModelSize::ALL {
+                                        ui.selectable_value(&mut form.model, m, model_label(m));
+                                    }
+                                });
+                            ui.end_row();
+                            ui.label("");
+                            let status = if form.model.is_downloaded(&models) {
+                                t("Downloaded").to_string()
+                            } else {
+                                tf(
+                                    "Downloaded once ({} MB) from Hugging Face when you continue",
+                                    &[&form.model.megabytes()],
+                                )
+                            };
+                            ui.label(RichText::new(status).size(11.5).color(theme::TEXT_DIM));
+                            ui.end_row();
+
+                            ui.label(t("Caption Style"));
+                            egui::ComboBox::from_id_salt("cap-style")
+                                .selected_text(t(catalog::CAPTION_STYLES
+                                    [form.options.style as usize % catalog::CAPTION_STYLES.len()]))
+                                .width(220.0)
+                                .show_ui(ui, |ui| {
+                                    for (i, name) in catalog::CAPTION_STYLES.iter().enumerate() {
+                                        ui.selectable_value(
+                                            &mut form.options.style,
+                                            i as u32,
+                                            t(name),
+                                        )
+                                        .on_hover_text(t(caption_style_hint(i)));
+                                    }
+                                });
+                            ui.end_row();
+                            ui.label("");
+                            ui.label(
+                                RichText::new(t(caption_style_hint(form.options.style as usize)))
+                                    .size(11.5)
+                                    .color(theme::TEXT_DIM),
+                            );
+                            ui.end_row();
+
+                            ui.label(t("Words per Caption"));
+                            ui.add(egui::Slider::new(&mut form.options.max_words, 1..=8));
+                            ui.end_row();
+
+                            ui.label(t("All Caps"));
+                            ui.checkbox(&mut form.options.uppercase, "");
+                            ui.end_row();
+                        });
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(t(
+                            "The style, colors and font can be changed later in Effect Controls; Graphics > Captions > Apply Caption Style to All copies one caption's look to the others.",
+                        ))
+                        .size(11.5)
+                        .color(theme::TEXT_DIM),
+                    );
+                    buttons(ui, t("Create Captions"))
+                },
+            );
+            if ok {
+                s.caption_language = form.language;
+                s.caption_model = form.model;
+                s.caption_options = form.options.clone();
+                let language = CAPTION_LANGUAGES
+                    .get(form.language)
+                    .map(|(code, _)| code.to_string())
+                    .filter(|c| !c.is_empty());
+                s.ed.transcribe_captions(op_application::captions::TranscribeOptions {
+                    model: form.model,
+                    language,
+                    captions: form.options.clone(),
+                });
             }
             !(ok || cancel || esc)
         }

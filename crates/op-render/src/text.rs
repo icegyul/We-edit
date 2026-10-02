@@ -77,6 +77,11 @@ impl Fonts {
         v
     }
 
+    /// The bundled font used for characters the chosen font lacks.
+    pub(crate) fn fallback(&self) -> &FontArc {
+        &self.fallback
+    }
+
     pub fn default_family() -> &'static str {
         if cfg!(windows) {
             "Arial"
@@ -132,7 +137,7 @@ impl Fonts {
 
 /// Exact Euclidean distance transform (Felzenszwalb-Huttenlocher) of a binary mask; returns
 /// the distance in pixels from each pixel to the nearest set pixel.
-fn distance(mask: &[bool], w: usize, h: usize) -> Vec<f32> {
+pub(crate) fn distance(mask: &[bool], w: usize, h: usize) -> Vec<f32> {
     const INF: f32 = 1e20;
     fn edt1(f: &[f32], out: &mut [f32]) {
         let n = f.len();

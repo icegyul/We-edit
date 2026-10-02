@@ -488,6 +488,15 @@ impl Editor {
             "cmd.graphics.add.shape.ellipse" => {
                 self.add_graphic(catalog::SHAPE, Some(1));
             }
+            "op.captions.new" => {
+                self.add_graphic(catalog::CAPTION, None);
+            }
+            "op.captions.apply_style" => {
+                let n = self.apply_caption_style_to_all();
+                if n > 0 {
+                    self.info(format!("Style applied to {n} captions"));
+                }
+            }
             "cmd.file.new.bin" => {
                 let bin = self.bin;
                 if let Some(id) = self.edit("New Bin", |p| Ok(p.add_bin(bin, "Bin"))) {
@@ -1159,12 +1168,13 @@ impl Editor {
             })
             .unwrap_or(seq.video.len());
         let def = catalog::find(effect)?;
-        let name = if effect == catalog::TEXT {
-            "Text"
-        } else {
-            "Shape"
+        let name = match effect {
+            catalog::TEXT => "Text",
+            catalog::CAPTION => "Caption",
+            _ => "Shape",
         }
         .to_string();
+        let caption_size = (seq.settings.height as f64 * 0.065).round().max(12.0);
         let default_font = op_render::text::Fonts::default_family().to_string();
         let r = self.seq_edit("New Graphic", move |p, sid, _| {
             let mut ids = p.ids.clone();
@@ -1176,6 +1186,11 @@ impl Editor {
             }
             if let Some(f) = comp.param_mut("font") {
                 f.value = Value::Text(default_font);
+            }
+            if effect == catalog::CAPTION
+                && let Some(f) = comp.param_mut("font_size")
+            {
+                f.value = Value::Float(caption_size);
             }
             let mut components = default_components(EffectKind::VideoFixed, &mut ids);
             components.push(comp);

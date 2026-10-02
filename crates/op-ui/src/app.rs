@@ -66,6 +66,10 @@ pub(crate) struct State {
     /// Pasted images waiting to be saved and imported.
     pub pastes: Vec<crate::paste::Job>,
     next_paste: u64,
+    /// Settings of the last caption dialog (style, words per caption, model, language).
+    pub caption_options: op_application::captions::CaptionOptions,
+    pub caption_model: op_application::captions::ModelSize,
+    pub caption_language: usize,
     performance_applied: Option<bool>,
     pub loop_playback: bool,
     pub workspace: Workspace,
@@ -238,6 +242,9 @@ impl App {
             paste_seen: false,
             pastes: Vec::new(),
             next_paste: 1,
+            caption_options: Default::default(),
+            caption_model: op_application::captions::ModelSize::Base,
+            caption_language: 0,
             performance_applied: None,
             loop_playback: false,
             workspace,
@@ -373,6 +380,8 @@ impl App {
                 item(ui, s, "New Text Layer", "cmd.graphics.add.text");
                 item(ui, s, "New Rectangle", "cmd.graphics.add.shape.rectangle");
                 item(ui, s, "New Ellipse", "cmd.graphics.add.shape.ellipse");
+                ui.separator();
+                ui.menu_button(t("Captions"), |ui| captions_menu(ui, s));
             });
             ui.menu_button(t("View"), |ui| view_menu(ui, s));
             let dock = &self.dock;
@@ -600,6 +609,48 @@ fn clip_menu(ui: &mut Ui, s: &mut State) {
     item_if(ui, s, "Scale to Frame Size", "op.clip.scaletoframe", has);
     ui.separator();
     proxy_menu(ui, s);
+}
+
+/// Graphics > Captions.
+fn captions_menu(ui: &mut Ui, s: &mut State) {
+    let has_seq = s.ed.active.is_some();
+    let busy = s.ed.captioning.is_some();
+    item_if(
+        ui,
+        s,
+        "Transcribe and Create Captions...",
+        "op.captions.transcribe",
+        has_seq && !busy,
+    );
+    item_if(ui, s, "New Caption", "op.captions.new", has_seq);
+    ui.separator();
+    item_if(
+        ui,
+        s,
+        "Import Captions File...",
+        "op.captions.import",
+        has_seq,
+    );
+    item_if(
+        ui,
+        s,
+        "Export Captions File...",
+        "op.captions.export",
+        has_seq,
+    );
+    ui.separator();
+    let caption_selected = s.ed.active_seq().is_some_and(|q| {
+        q.video.iter().flat_map(|t| &t.clips).any(|c| {
+            s.ed.selection.clips.contains(&c.id) && c.component(catalog::CAPTION).is_some()
+        })
+    });
+    item_if(
+        ui,
+        s,
+        "Apply Caption Style to All",
+        "op.captions.apply_style",
+        caption_selected,
+    );
 }
 
 /// Clip > Proxy and the Project panel's Proxy submenu.
@@ -901,6 +952,16 @@ impl State {
                 }
             }
             "cmd.export.frame" => self.export_frame(),
+            "op.captions.transcribe" => {
+                if self.ed.active.is_none() {
+                    self.ed.error(t("Open a sequence first"));
+                } else {
+                    let d = Dialog::captions(self);
+                    self.dialogs.push(d);
+                }
+            }
+            "op.captions.import" => self.import_captions(),
+            "op.captions.export" => self.export_captions(),
             "op.view.toggle_proxies" => {
                 let on = !self.ed.prefs.use_proxies;
                 self.ed.set_use_proxies(on);
@@ -1670,6 +1731,44 @@ impl State {
     }
 
     /// The export shown in the Program Monitor: the newest one still running.
+    /// Graphics > Captions > Import Captions File: SRT or WebVTT into caption clips.
+    fn import_captions(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(t("Import Captions File..."))
+            .add_filter(t("Captions"), &["srt", "vtt"])
+            .pick_file()
+        else {
+            return;
+        };
+        let opts = self.caption_options.clone();
+        match self.ed.import_captions(&path, &opts) {
+            Ok(n) => self.ed.info(format!("Created {n} captions")),
+            Err(e) => self.ed.error(e),
+        }
+    }
+
+    /// Graphics > Captions > Export Captions File: SRT (or WebVTT by extension).
+    fn export_captions(&mut self) {
+        let name = self
+            .ed
+            .active_seq()
+            .map(|q| q.name.clone())
+            .unwrap_or_else(|| "Captions".into());
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(t("Export Captions File..."))
+            .set_file_name(format!("{name}.srt"))
+            .add_filter("SubRip (.srt)", &["srt"])
+            .add_filter("WebVTT (.vtt)", &["vtt"])
+            .save_file()
+        else {
+            return;
+        };
+        match self.ed.export_captions(&path) {
+            Ok(n) => self.ed.info(format!("Exported {n} captions")),
+            Err(e) => self.ed.error(e),
+        }
+    }
+
     /// Media assets of the selected Project panel items, or of the selected clips when the
     /// timeline has the focus.
     pub fn selected_assets(&self) -> Vec<AssetId> {
@@ -1990,6 +2089,7 @@ impl State {
                 // exports sit in the bottom right corner, like background tasks
                 self.export_status(ui);
                 self.proxy_status(ui);
+                self.caption_status(ui);
                 ui.label(
                     RichText::new(self.gpu.description())
                         .color(theme::TEXT_DIM)
@@ -2014,6 +2114,29 @@ impl State {
                 }
             });
         });
+    }
+
+    /// Automatic captions in progress: stage, progress and Cancel.
+    fn caption_status(&mut self, ui: &mut Ui) {
+        let Some(job) = &self.ed.captioning else {
+            return;
+        };
+        let p = job.progress();
+        if ui.small_button(t("Cancel")).clicked() {
+            job.cancel();
+        }
+        let stage = match p.stage {
+            op_application::captions::CaptionStage::Downloading => t("Downloading speech model"),
+            op_application::captions::CaptionStage::MixingAudio => t("Preparing audio"),
+            op_application::captions::CaptionStage::Transcribing => t("Transcribing"),
+        };
+        ui.add(
+            egui::ProgressBar::new(p.fraction)
+                .desired_width(140.0)
+                .text(format!("{:.0} %", p.fraction * 100.0)),
+        );
+        ui.label(RichText::new(stage).size(12.0));
+        ui.ctx().request_repaint_after(Duration::from_millis(200));
     }
 
     /// Proxy creation in progress: file, progress and Cancel.
@@ -2166,7 +2289,7 @@ fn translate_status(text: &str) -> String {
         return tf("{} media files are offline", &[&n]);
     }
     // messages with one variable part, from the editing engine and the exporter
-    const PATTERNS: [(&str, &str, &str); 10] = [
+    const PATTERNS: [(&str, &str, &str); 14] = [
         ("track ", " is locked", "Track {} is locked"),
         ("clips would overlap on ", "", "Clips would overlap on {}"),
         ("not enough media: ", "", "Not enough media: {}"),
@@ -2177,6 +2300,14 @@ fn translate_status(text: &str) -> String {
             "Export failed: cannot write {}",
         ),
         ("Export failed: ", "", "Export failed: {}"),
+        ("Created ", " captions", "Created {} captions"),
+        ("Exported ", " captions", "Exported {} captions"),
+        (
+            "Style applied to ",
+            " captions",
+            "Style applied to {} captions",
+        ),
+        ("Captions not created: ", "", "Captions not created: {}"),
         ("Exported ", "", "Exported {}"),
         ("Proxies ready (", ")", "Proxies ready ({})"),
         ("Proxy not created: ", "", "Proxy not created: {}"),
@@ -2190,7 +2321,7 @@ fn translate_status(text: &str) -> String {
         if let Some(rest) = text.strip_prefix(prefix)
             && let Some(mid) = rest.strip_suffix(suffix)
         {
-            return tf(fmt, &[&mid]);
+            return tf(fmt, &[&tn(mid)]);
         }
     }
     tn(text)

@@ -40,6 +40,10 @@ en todos los trabajos de producción.
   Preferencias).
 - Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático, y un modo de
   rendimiento para equipos más modestos.
+- Subtítulos animados automáticos al estilo TikTok: la voz de la secuencia se transcribe en el
+  propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 12 estilos
+  (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...). También importa y exporta
+  SRT y WebVTT.
 - Proxies como en Premiere Pro: copias ligeras de los clips para editar con fluidez material 4K o
   de cámara, con un botón para alternar entre proxies y originales; la exportación usa siempre el
   original.

@@ -35,6 +35,16 @@ priority. Items move from "Next" to "Done" in the release that ships them.
   half second, keep the original's frame numbering and color, and are never used for export.
 - Playback and paused resolution (Full, 1/2, 1/4, 1/8), performance mode, choice of graphics API.
 
+### Captions (0.6)
+
+- Graphics > Captions > Transcribe and Create Captions: local speech recognition (Whisper Tiny,
+  Base or Small through candle, downloaded once on request) with language detection and word
+  times; captions on their own track, one clip per caption.
+- Twelve animated styles driven by the word times: Classic, Boxed, Karaoke, Highlight Box, Pop,
+  One Word, Typewriter, Bounce In, Neon, Creator, Fade In, Underline. Everything is editable in
+  Effect Controls; Apply Caption Style to All restyles the sequence.
+- SRT and WebVTT import and export; New Caption for typed captions.
+
 ### Effects
 
 - 73 video effects, 42 transitions and 27 audio effects, including Lumetri Color, keyers, blurs,
@@ -69,9 +79,12 @@ editor shows are valuable for the same audience; see [drift-comparison.md](drift
 
 ### 2. Titles, captions and graphics
 
-- **Captions:** a caption track with an editor, SRT/VTT import and export, burned-in styles.
-- **Speech to text** for captions, running locally (Whisper-class model through ONNX Runtime,
-  optional download) (Drift).
+- **Caption editor:** a panel listing every caption with its text and times, to correct
+  transcription mistakes quickly, split and merge captions (today: Effect Controls per clip).
+- **Exact word timing:** align each word to the audio (Whisper cross-attention or forced
+  alignment) instead of spreading a timed phrase over its words; faster transcription on the
+  GPU (candle with CUDA or Metal).
+- **Caption style presets** with saved custom looks, emoji and keyword highlighting.
 - **Text animators:** per-character, per-word and per-line presets (fade, rise, pop, typewriter,
   karaoke highlight) (Drift has about 40).
 - **Stickers and emoji** as graphics, and Lottie/SVG animated graphics (Drift).

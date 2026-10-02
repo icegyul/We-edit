@@ -164,6 +164,7 @@ fn third_party_notices() -> Result<String> {
         "License: GNU General Public License version 3 or later (licenses/FFmpeg-LICENSE.txt).\r\n",
     );
     text.push_str("Source code: https://ffmpeg.org/releases/ and https://github.com/BtbN/FFmpeg-Builds (build scripts).\r\n\r\n");
+    text.push_str("Speech models for automatic captions are not included: OpenAI Whisper (tiny, base or small; MIT License, https://github.com/openai/whisper) is downloaded from https://huggingface.co/openai when the user asks for captions.\r\n\r\n");
     text.push_str("Rust crates (name, version, license, repository):\r\n\r\n");
     for (n, v, l, r) in rows {
         text.push_str(&format!("{n} {v}\r\n    License: {l}\r\n"));

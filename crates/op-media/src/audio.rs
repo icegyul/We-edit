@@ -178,14 +178,18 @@ pub fn conform(
                 Err(e) => return Err(e.into()),
             }
             let fmt = decoded.format();
-            let layout_bits = decoded.channel_layout().bits();
+            // files that do not name their channel layout (many WAV writers) decode with an
+            // unspecified one; the frames must carry the layout the resampler is made for, or
+            // every conversion fails with "Input changed"
+            let mut src_layout = decoded.channel_layout();
+            if src_layout.channels() != decoded.channels() as i32 || src_layout.is_empty() {
+                src_layout = ff::ChannelLayout::default(decoded.channels() as i32);
+                decoded.set_channel_layout(src_layout);
+            }
+            let layout_bits = src_layout.bits();
             let frate = decoded.rate();
             let rebuild = !matches!(&resampler, Some((f, l, r, _)) if *f == fmt && *l == layout_bits && *r == frate);
             if rebuild {
-                let mut src_layout = decoded.channel_layout();
-                if src_layout.channels() != decoded.channels() as i32 || src_layout.is_empty() {
-                    src_layout = ff::ChannelLayout::default(decoded.channels() as i32);
-                }
                 let ctx = ff::software::resampling::Context::get(
                     fmt,
                     src_layout,
@@ -399,5 +403,51 @@ impl Peaks {
             hi = hi.max(self.data[i + 1]);
         }
         (lo as f32 / 32767.0, hi as f32 / 32767.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A plain PCM WAV (mono, 16-bit) has no channel layout; it must conform like any file.
+    #[test]
+    fn wav_without_a_channel_layout_conforms() {
+        let dir = tempfile::tempdir().unwrap();
+        let wav = dir.path().join("speech.wav");
+        let rate = 16_000u32;
+        let samples: Vec<i16> = (0..rate)
+            .map(|i| ((i as f32 * 0.07).sin() * 12_000.0) as i16)
+            .collect();
+        let data_len = samples.len() as u32 * 2;
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36 + data_len).to_le_bytes());
+        b.extend_from_slice(b"WAVEfmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        b.extend_from_slice(&1u16.to_le_bytes()); // mono
+        b.extend_from_slice(&rate.to_le_bytes());
+        b.extend_from_slice(&(rate * 2).to_le_bytes());
+        b.extend_from_slice(&2u16.to_le_bytes());
+        b.extend_from_slice(&16u16.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&data_len.to_le_bytes());
+        for s in &samples {
+            b.extend_from_slice(&s.to_le_bytes());
+        }
+        std::fs::write(&wav, b).unwrap();
+        let info = conform(
+            &wav,
+            0,
+            Dur::ZERO,
+            &dir.path().join("a.pcm"),
+            &dir.path().join("a.peaks"),
+            &mut |_| true,
+        )
+        .expect("conformed");
+        assert!(info.samples >= 15_000, "{info:?}");
+        let audio = ConformedAudio::open(&dir.path().join("a.pcm")).unwrap();
+        assert!(audio.info.samples >= 15_000);
     }
 }

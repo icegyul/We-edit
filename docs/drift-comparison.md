@@ -87,6 +87,7 @@ roadmap).
 | Temporal effects (echo, trails) | Next (effects) |
 | Effect thumbnails on the current frame | Next |
 | Effect packages and add-ons | Next |
-| Captions, speech to text, text animators, stickers | Next |
+| Captions with speech to text and word-by-word animated styles | Done in 0.6 (local Whisper through candle, 12 styles, SRT/WebVTT) |
+| Text animators, stickers | Next |
 | Beat and scene detection, templates, ducking, loudness | Next |
 | Segmentation, matting, depth, face effects | Later (optional local models) |

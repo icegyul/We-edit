@@ -88,6 +88,8 @@ pub struct Editor {
     pub place_after_import: Vec<PathBuf>,
     pub exports: Vec<crate::export::ExportJob>,
     pub proxies: crate::proxies::ProxyQueue,
+    /// Automatic captions being transcribed.
+    pub captioning: Option<crate::captions::CaptionJob>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
     autosaving: Arc<AtomicBool>,
@@ -146,6 +148,7 @@ impl Editor {
             place_after_import: Vec::new(),
             exports: Vec::new(),
             proxies: Default::default(),
+            captioning: None,
             last_import_report: None,
             autosave_at: Instant::now(),
             autosaving: Arc::new(AtomicBool::new(false)),
@@ -1099,6 +1102,7 @@ impl Editor {
         self.poll_imports();
         self.poll_exports();
         self.poll_proxies();
+        self.poll_captions();
         self.autosave();
         self.keep_recovery();
         if let Some(monitor) = self.transport.playing {

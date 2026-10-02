@@ -6,6 +6,7 @@
 //! monitor path never reads frames back to the CPU; export reads back delivery planes that are
 //! already converted on the GPU.
 
+pub mod captions;
 mod effects;
 pub mod gpu;
 pub mod lut;

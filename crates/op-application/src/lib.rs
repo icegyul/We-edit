@@ -2,6 +2,7 @@
 //! service, playback, export, autosave and preferences. The UI is a thin layer over `Editor`.
 
 pub mod autosave;
+pub mod captions;
 pub mod commands;
 pub mod editor;
 pub mod export;

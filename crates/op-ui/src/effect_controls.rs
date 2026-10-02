@@ -577,6 +577,10 @@ pub fn params_ui(
                 .take_while(|p| p.group == group)
                 .count()
         };
+        if group.starts_with('_') {
+            i = end;
+            continue;
+        }
         let visible = if group.is_empty() {
             true
         } else {

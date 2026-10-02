@@ -802,10 +802,18 @@ impl Renderer {
 
     fn text_image(&mut self, style: &TextStyle) -> (Tex, [f32; 2]) {
         let key = hash_of(&format!("{style:?}"));
-        if let Some((t, anchor, _)) = self.text_cache.get_mut(&key) {
+        let fonts = self.fonts.clone();
+        self.cached_image(key, || crate::text::rasterize(style, &fonts))
+    }
+
+    /// A rasterized text image as a texture, from the cache when the same `key` was drawn
+    /// recently.
+    fn cached_image(&mut self, key: u64, make: impl FnOnce() -> TextImage) -> (Tex, [f32; 2]) {
+        if let Some((t, anchor, used)) = self.text_cache.get_mut(&key) {
+            *used = self.frame_counter;
             return (t.clone(), *anchor);
         }
-        let img: TextImage = crate::text::rasterize(style, &self.fonts);
+        let img: TextImage = make();
         let tex = Tex::new(
             &self.gpu.device,
             img.width,
@@ -842,6 +850,56 @@ impl Renderer {
         self.text_cache
             .insert(key, (tex.clone(), img.anchor, self.frame_counter));
         (tex, img.anchor)
+    }
+
+    /// Draws a Caption component: its words animated for `clip_time` seconds into the clip.
+    pub(crate) fn draw_caption(
+        &mut self,
+        fx: &EvalComponent,
+        canvas: Tex,
+        scale: f32,
+        clip_time: f64,
+        duration: f64,
+    ) -> Tex {
+        let text = fx.text("text");
+        if text.trim().is_empty() {
+            return canvas;
+        }
+        let words = op_core::captions::words(&text, &fx.text("timing"), duration);
+        let size_scale = (fx.f64("scale") / 100.0) as f32 * scale;
+        let px = (fx.f32("font_size") * size_scale).clamp(1.0, 2000.0);
+        let mut background = fx.color("background_color");
+        background.a *= fx.f32("background_opacity") / 100.0;
+        let style = crate::captions::CaptionStyle {
+            style: fx.choice("style"),
+            strength: fx.f32("animation") / 100.0,
+            family: fx.text("font"),
+            font_style: fx.choice("font_style"),
+            size: px,
+            uppercase: fx.bool("uppercase"),
+            max_width: canvas.width as f32 * fx.f32("max_width") / 100.0,
+            fill: fx.color("fill"),
+            highlight: fx.color("highlight"),
+            stroke: fx.bool("stroke").then(|| {
+                (
+                    fx.color("stroke_color"),
+                    fx.f32("stroke_width") * size_scale,
+                )
+            }),
+            background,
+        };
+        // still styles look the same for the whole caption; animated ones change every frame
+        let moment = if style.animated() {
+            (clip_time * 120.0).round() as i64
+        } else {
+            0
+        };
+        let key = hash_of(&format!("caption {style:?} {words:?} {moment}"));
+        let fonts = self.fonts.clone();
+        let (tex, anchor) = self.cached_image(key, || {
+            crate::captions::rasterize(&style, &words, clip_time, &fonts)
+        });
+        self.place_text(fx, canvas, &tex, anchor, 1.0, scale)
     }
 
     /// Draws a Text component onto a sequence-sized canvas.
@@ -882,7 +940,20 @@ impl Renderer {
             }),
         };
         let (tex, anchor) = self.text_image(&style);
-        let k = px / raster;
+        self.place_text(fx, canvas, &tex, anchor, px / raster, scale)
+    }
+
+    /// Draws a rasterized text image onto the canvas at the component's position, rotation and
+    /// opacity, with its shadow. `k` is the displayed size over the raster size.
+    pub(crate) fn place_text(
+        &mut self,
+        fx: &EvalComponent,
+        canvas: Tex,
+        tex: &Tex,
+        anchor: [f32; 2],
+        k: f32,
+        scale: f32,
+    ) -> Tex {
         let pos = fx.point("position");
         let (cw, ch) = (canvas.width as f64, canvas.height as f64);
         let rot = fx.f64("rotation").to_radians();

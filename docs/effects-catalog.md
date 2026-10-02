@@ -177,6 +177,12 @@ Added in 0.6.0, also original:
   limiting, presence peak and speaker saturation for telephone, radio, megaphone, walkie-talkie
   and underwater sounds).
 
+Captions (0.6.0) are a graphic component, Caption (`op.graphic.caption`): the caption text, the
+time of each word (an internal parameter written by transcription and caption import), one of
+twelve animated styles and the usual text appearance. The renderer lays the words out in lines
+and draws each word with its own state at the current time (color, size, lift, visibility,
+highlight box, underline), so the animation follows the speech.
+
 Every video effect and transition is rendered by the GPU tests, which CI requires on Linux (software
 Vulkan) and macOS (Metal);
 the audio effects have unit tests for level, pitch (an octave up and down), gating, quantization

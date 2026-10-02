@@ -32,6 +32,7 @@ impl Renderer {
         match fx.effect.as_str() {
             catalog::TEXT => self.draw_text(fx, img, s, None),
             catalog::SHAPE => self.draw_shape(fx, img, s),
+            catalog::CAPTION => self.draw_caption(fx, img, s, clip_time as f64, layer.duration),
             "op.video.brightness_contrast" => self.single(
                 "fs_brightness_contrast",
                 img,

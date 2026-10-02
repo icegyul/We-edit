@@ -122,6 +122,8 @@ pub struct ClipLayer {
     /// Enabled components in stack order, evaluated at `src_time`.
     pub components: Vec<EvalComponent>,
     pub src_time: SrcTime,
+    /// The clip's length on the timeline, in seconds.
+    pub duration: f64,
 }
 
 impl ClipLayer {
@@ -290,6 +292,7 @@ fn layer(project: &Project, seq: &Sequence, c: &Clip, t: SeqTime) -> ClipLayer {
         scale_to_frame: c.scale_to_frame,
         components,
         src_time: src,
+        duration: c.duration.seconds(),
     }
 }
 

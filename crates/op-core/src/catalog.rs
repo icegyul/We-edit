@@ -488,6 +488,8 @@ pub const CHANNEL_VOLUME: &str = "op.fixed.channel_volume";
 pub const PANNER: &str = "op.fixed.panner";
 pub const TEXT: &str = "op.graphic.text";
 pub const SHAPE: &str = "op.graphic.shape";
+/// Animated captions (one caption per clip, words timed by the hidden "timing" parameter).
+pub const CAPTION: &str = "op.graphic.caption";
 pub const CROSS_DISSOLVE: &str = "op.tr.cross_dissolve";
 pub const CONSTANT_POWER: &str = "op.atr.constant_power";
 
@@ -549,6 +551,21 @@ static PANNER_PARAMS: [ParamSpec; 1] = [f("balance", "Balance", 0.0, -100.0, 100
 pub const TEXT_ALIGN: &[&str] = &["Left", "Center", "Right"];
 pub const FONT_STYLES: &[&str] = &["Regular", "Bold", "Italic", "Bold Italic"];
 pub const SHAPES: &[&str] = &["Rectangle", "Ellipse"];
+/// Caption styles, in the order the renderer knows them (see op_render::captions).
+pub const CAPTION_STYLES: &[&str] = &[
+    "Classic",
+    "Boxed",
+    "Karaoke",
+    "Highlight Box",
+    "Pop",
+    "One Word",
+    "Typewriter",
+    "Bounce In",
+    "Neon",
+    "Creator",
+    "Fade In",
+    "Underline",
+];
 
 static TEXT_PARAMS: [ParamSpec; 25] = [
     text("text", "Source Text", "Text"),
@@ -682,6 +699,135 @@ static TEXT_PARAMS: [ParamSpec; 25] = [
     ),
     g(
         point("position", "Position", 0.5, 0.5, PointSpace::Sequence),
+        "Transform",
+    ),
+    g(
+        fs(
+            "scale",
+            "Scale",
+            100.0,
+            0.0,
+            4000.0,
+            0.0,
+            400.0,
+            Unit::Percent,
+        ),
+        "Transform",
+    ),
+    g(angle("rotation", "Rotation", 0.0), "Transform"),
+    g(pct("opacity", "Opacity", 100.0), "Transform"),
+];
+
+static CAPTION_PARAMS: [ParamSpec; 26] = [
+    text("text", "Caption Text", "Caption"),
+    // word times, written by transcription and caption import; hidden in Effect Controls
+    g(
+        ParamSpec {
+            key: "timing",
+            label: "Word Timing",
+            kind: ParamKind::Text {
+                default: "",
+                multiline: false,
+            },
+            animatable: false,
+            group: "",
+        },
+        "_timing",
+    ),
+    g(choice("style", "Caption Style", 2, CAPTION_STYLES), "Style"),
+    g(pct("animation", "Animation Strength", 100.0), "Style"),
+    still(g(
+        ParamSpec {
+            key: "font",
+            label: "Font",
+            kind: ParamKind::Text {
+                default: "",
+                multiline: false,
+            },
+            animatable: false,
+            group: "",
+        },
+        "Text",
+    )),
+    g(choice("font_style", "Font Style", 1, FONT_STYLES), "Text"),
+    g(
+        fs(
+            "font_size",
+            "Font Size",
+            72.0,
+            1.0,
+            1000.0,
+            12.0,
+            240.0,
+            Unit::Pixels,
+        ),
+        "Text",
+    ),
+    g(boolean("uppercase", "All Caps", false), "Text"),
+    g(pct("max_width", "Maximum Width", 80.0), "Text"),
+    g(color("fill", "Text Color", 1.0, 1.0, 1.0), "Colors"),
+    g(
+        color("highlight", "Highlight Color", 1.0, 0.84, 0.04),
+        "Colors",
+    ),
+    g(boolean("stroke", "Stroke", true), "Colors"),
+    g(
+        color("stroke_color", "Stroke Color", 0.0, 0.0, 0.0),
+        "Colors",
+    ),
+    g(
+        fs(
+            "stroke_width",
+            "Stroke Width",
+            6.0,
+            0.0,
+            100.0,
+            0.0,
+            30.0,
+            Unit::Pixels,
+        ),
+        "Colors",
+    ),
+    g(
+        color("background_color", "Box Color", 0.0, 0.0, 0.0),
+        "Colors",
+    ),
+    g(pct("background_opacity", "Box Opacity", 75.0), "Colors"),
+    g(boolean("shadow", "Shadow", false), "Shadow"),
+    g(
+        color("shadow_color", "Shadow Color", 0.0, 0.0, 0.0),
+        "Shadow",
+    ),
+    g(pct("shadow_opacity", "Shadow Opacity", 75.0), "Shadow"),
+    g(angle("shadow_angle", "Shadow Angle", 135.0), "Shadow"),
+    g(
+        fs(
+            "shadow_distance",
+            "Shadow Distance",
+            6.0,
+            0.0,
+            1000.0,
+            0.0,
+            100.0,
+            Unit::Pixels,
+        ),
+        "Shadow",
+    ),
+    g(
+        fs(
+            "shadow_blur",
+            "Shadow Blur",
+            12.0,
+            0.0,
+            500.0,
+            0.0,
+            100.0,
+            Unit::Pixels,
+        ),
+        "Shadow",
+    ),
+    g(
+        point("position", "Position", 0.5, 0.78, PointSpace::Sequence),
         "Transform",
     ),
     g(
@@ -2635,6 +2781,7 @@ pub static CATALOG: &[EffectDef] = &[
     def!(PANNER, "Panner", AudioFixed, "", [], PANNER_PARAMS),
     // graphics
     def!(TEXT, "Text", Graphic, "", ["AE.ADBE Text"], TEXT_PARAMS),
+    def!(CAPTION, "Caption", Graphic, "", [], CAPTION_PARAMS),
     def!(SHAPE, "Shape", Graphic, "", ["AE.ADBE Shape"], SHAPE_PARAMS),
     // video effects
     def!(

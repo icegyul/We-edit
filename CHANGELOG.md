@@ -6,11 +6,19 @@ OpenPremier follows semantic versioning. User-visible changes are grouped by rel
 
 ### Added
 
+- Animated captions, in the style of short-form video apps. Graphics > Captions > Transcribe and Create Captions turns the speech in the sequence into captions automatically: OpenAI's Whisper speech model (Tiny, Base or Small, downloaded once on request) runs on this computer, detects the language or uses the chosen one, and times every word. Captions go on their own Captions track, one clip per caption, with the chosen number of words per caption.
+- Twelve caption styles, animated word by word as each word is said: Classic, Boxed, Karaoke (words fill with color), Highlight Box, Pop, One Word, Typewriter, Bounce In, Neon, Creator (bold capitals), Fade In and Underline. Style, font, size, colors, outline, box, shadow, position and animation strength are in Effect Controls; Apply Caption Style to All copies one caption's look to every caption in the sequence.
+- Captions can also be imported from SRT and WebVTT files (word times are spread over each caption), exported to SRT or WebVTT, or added by hand (New Caption).
+
 - Proxies, as in Premiere Pro: Proxy > Create Proxies in the Project panel and the Clip menu makes 540p H.264 copies of the selected clips in the background (progress and Cancel in the status bar), and Toggle Proxies in the Program Monitor (also View > Enable Proxies) switches playback between proxies and originals. Proxies keep the original's frame numbering and colors, a keyframe every half second and no reordered frames, so scrubbing and reverse playback are fast; export always uses the original media. Remove Proxies detaches them and deletes the files OpenPremier made.
 - Ten video effects: Halftone, Duotone, Oil Paint, Pencil Sketch, Neon Edges, Halation, Lens Flare, Ripple, Zoom Pulse and CRT Screen.
 - Five video transitions: Hexagons, Shatter, Ink, Pixelate and Kaleidoscope.
 - Eight audio effects: Tremolo, Auto-Pan, Phaser, Bitcrusher, Distortion, Noise Gate, Pitch Shifter (up to two octaves up or down) and Telephone and Radio (telephone, radio, megaphone, walkie-talkie and underwater voices).
 - docs/roadmap.md lists what the editor does today and what comes next; docs/drift-comparison.md reviews the Drift editor's rendering and features.
+
+### Fixed
+
+- WAV files that do not name their channel layout (written by many recorders and speech synthesizers) played silent: preparing their audio failed with "Input changed" on every frame.
 
 ### Changed
 
