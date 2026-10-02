@@ -598,6 +598,37 @@ fn clip_menu(ui: &mut Ui, s: &mut State) {
     item_if(ui, s, "Nest...", "op.clip.nest", has);
     item_if(ui, s, "Add Frame Hold", "op.clip.framehold", has);
     item_if(ui, s, "Scale to Frame Size", "op.clip.scaletoframe", has);
+    ui.separator();
+    proxy_menu(ui, s);
+}
+
+/// Clip > Proxy and the Project panel's Proxy submenu.
+pub fn proxy_menu(ui: &mut Ui, s: &mut State) {
+    let assets = s.selected_assets();
+    let videos = assets
+        .iter()
+        .filter(|a| {
+            s.ed.project
+                .asset(**a)
+                .is_some_and(|m| m.has_video() && !m.is_still())
+        })
+        .count();
+    let attached = assets
+        .iter()
+        .filter(|a| s.ed.project.asset(**a).is_some_and(|m| m.proxy.is_some()))
+        .count();
+    ui.menu_button(t("Proxy"), |ui| {
+        item_if(ui, s, "Create Proxies", "op.proxy.create", videos > 0);
+        item_if(ui, s, "Remove Proxies", "op.proxy.remove", attached > 0);
+        ui.separator();
+        check(
+            ui,
+            s,
+            "Enable Proxies",
+            "op.view.toggle_proxies",
+            s.ed.prefs.use_proxies,
+        );
+    });
 }
 
 fn sequence_menu(ui: &mut Ui, s: &mut State) {
@@ -745,6 +776,9 @@ fn markers_menu(ui: &mut Ui, s: &mut State) {
 }
 
 fn view_menu(ui: &mut Ui, s: &mut State) {
+    let on = s.ed.prefs.use_proxies;
+    check(ui, s, "Enable Proxies", "op.view.toggle_proxies", on);
+    ui.separator();
     ui.menu_button(t("Playback Resolution"), |ui| {
         for (d, label) in [(1u32, "Full"), (2, "1/2"), (4, "1/4"), (8, "1/8")] {
             if ui
@@ -867,6 +901,18 @@ impl State {
                 }
             }
             "cmd.export.frame" => self.export_frame(),
+            "op.view.toggle_proxies" => {
+                let on = !self.ed.prefs.use_proxies;
+                self.ed.set_use_proxies(on);
+            }
+            "op.proxy.create" => {
+                let assets = self.selected_assets();
+                self.ed.create_proxies(&assets);
+            }
+            "op.proxy.remove" => {
+                let assets = self.selected_assets();
+                self.ed.remove_proxies(&assets);
+            }
             "op.file.export.otio" => self.export_interchange("otio"),
             "op.file.export.fcpxml" => self.export_interchange("xml"),
             "op.file.export.edl" => self.export_interchange("edl"),
@@ -1624,6 +1670,35 @@ impl State {
     }
 
     /// The export shown in the Program Monitor: the newest one still running.
+    /// Media assets of the selected Project panel items, or of the selected clips when the
+    /// timeline has the focus.
+    pub fn selected_assets(&self) -> Vec<AssetId> {
+        let mut out: Vec<AssetId> = Vec::new();
+        if self.focus == Focus::Timeline
+            && let Some(seq) = self.ed.active_seq()
+        {
+            for c in seq.video.iter().chain(&seq.audio).flat_map(|t| &t.clips) {
+                if self.ed.selection.clips.contains(&c.id)
+                    && let ClipSource::Asset { asset, .. } = c.source
+                    && !out.contains(&asset)
+                {
+                    out.push(asset);
+                }
+            }
+        }
+        if out.is_empty() {
+            for id in &self.ed.items {
+                if let Some(ItemKind::Media { asset, .. }) =
+                    self.ed.project.item(*id).map(|i| i.kind.clone())
+                    && !out.contains(&asset)
+                {
+                    out.push(asset);
+                }
+            }
+        }
+        out
+    }
+
     pub fn running_export(&self) -> Option<&op_application::ExportJob> {
         self.ed.exports.iter().rev().find(|j| !j.finished())
     }
@@ -1914,6 +1989,7 @@ impl State {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // exports sit in the bottom right corner, like background tasks
                 self.export_status(ui);
+                self.proxy_status(ui);
                 ui.label(
                     RichText::new(self.gpu.description())
                         .color(theme::TEXT_DIM)
@@ -1938,6 +2014,26 @@ impl State {
                 }
             });
         });
+    }
+
+    /// Proxy creation in progress: file, progress and Cancel.
+    fn proxy_status(&mut self, ui: &mut Ui) {
+        if !self.ed.proxies.busy() {
+            return;
+        }
+        let p = self.ed.proxies.progress();
+        if ui.small_button(t("Cancel")).clicked() {
+            self.ed.proxies.cancel();
+        }
+        let n = (p.done + 1).min(p.total.max(1));
+        ui.add(
+            egui::ProgressBar::new(p.fraction)
+                .desired_width(140.0)
+                .text(format!("{:.0} %", p.fraction * 100.0)),
+        )
+        .on_hover_text(p.current.clone().unwrap_or_default());
+        ui.label(RichText::new(tf("Creating proxies ({}/{})", &[&n, &p.total])).size(12.0));
+        ui.ctx().request_repaint_after(Duration::from_millis(200));
     }
 
     /// One entry per export, right to left: progress with pause and cancel while it runs (its
@@ -2070,7 +2166,7 @@ fn translate_status(text: &str) -> String {
         return tf("{} media files are offline", &[&n]);
     }
     // messages with one variable part, from the editing engine and the exporter
-    const PATTERNS: [(&str, &str, &str); 8] = [
+    const PATTERNS: [(&str, &str, &str); 10] = [
         ("track ", " is locked", "Track {} is locked"),
         ("clips would overlap on ", "", "Clips would overlap on {}"),
         ("not enough media: ", "", "Not enough media: {}"),
@@ -2082,6 +2178,8 @@ fn translate_status(text: &str) -> String {
         ),
         ("Export failed: ", "", "Export failed: {}"),
         ("Exported ", "", "Exported {}"),
+        ("Proxies ready (", ")", "Proxies ready ({})"),
+        ("Proxy not created: ", "", "Proxy not created: {}"),
         (
             "This project was saved by a newer version (format ",
             ").",

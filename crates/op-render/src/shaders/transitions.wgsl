@@ -583,3 +583,165 @@ fn fs_tr_chroma(in: VOut) -> @location(0) vec4<f32> {
     let b = mix(am(in.uv - d), bm(in.uv - d), m);
     return vec4<f32>(r.r, g.g, b.b, max(r.a, max(g.a, b.a)));
 }
+
+// ------------------------------------------------------------------------------- hexagons
+
+// Center of the pointy-top hexagon cell (circumradius 1/sqrt(3) units) containing p.
+fn hex_center(p: vec2<f32>) -> vec2<f32> {
+    let s = vec2<f32>(1.0, 1.7320508);
+    let h = s * 0.5;
+    let a = p - s * floor(p / s) - h;
+    let q = p - h;
+    let b = q - s * floor(q / s) - h;
+    if (dot(a, a) < dot(b, b)) {
+        return p - a;
+    }
+    return p - b;
+}
+
+// Distance to a hexagon's edge measure (0 center, 0.5 at the flat sides).
+fn hex_dist(v: vec2<f32>) -> f32 {
+    let a = abs(v);
+    return max(dot(a, vec2<f32>(0.5, 0.8660254)), a.x);
+}
+
+// prm(0) cells across, prm(1) order (0 random, 1 from the center, 2 across), prm(2..4) edge
+// color, prm(5) edge width 0..1
+@fragment
+fn fs_tr_hexagon(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let asp = u.out_size.x / max(u.out_size.y, 1.0);
+    let n = max(prm(0), 2.0);
+    let p = in.uv * vec2<f32>(asp, 1.0) * n;
+    let c = hex_center(p);
+    var delay: f32;
+    if (prm(1) > 1.5) {
+        delay = c.x / (asp * n);
+    } else if (prm(1) > 0.5) {
+        delay = length(c / n - vec2<f32>(asp, 1.0) * 0.5) / (0.5 * length(vec2<f32>(asp, 1.0)));
+    } else {
+        delay = lhash(floor(c * 2.0));
+    }
+    let local = clamp((t * 1.6 - delay * 0.6), 0.0, 1.0);
+    let d = hex_dist(p - c);
+    // each cell opens from its center
+    let open = local * 0.5;
+    let inside = d < open;
+    let edge = abs(d - open) < 0.04 * prm(5) && local > 0.0 && local < 1.0;
+    if (edge) {
+        return vec4<f32>(prm3(2), 1.0);
+    }
+    return select(ta(in.uv), tb(in.uv), inside || local >= 1.0);
+}
+
+// -------------------------------------------------------------------------------- shatter
+
+// The outgoing image breaks into glass-like cells that fall away. prm(0) pieces across,
+// prm(1) fall distance, prm(2) spin
+@fragment
+fn fs_tr_shatter(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let asp = u.out_size.x / max(u.out_size.y, 1.0);
+    let n = max(prm(0), 2.0);
+    let p = in.uv * vec2<f32>(asp, 1.0) * n;
+    let cell = floor(p);
+    var best = 1e9;
+    var id = vec2<f32>(0.0);
+    var center = vec2<f32>(0.0);
+    for (var j = -1; j <= 1; j = j + 1) {
+        for (var i = -1; i <= 1; i = i + 1) {
+            let g = cell + vec2<f32>(f32(i), f32(j));
+            let f = g + vec2<f32>(lhash(g), lhash(g + vec2<f32>(31.0, 17.0)));
+            let d = dot(p - f, p - f);
+            if (d < best) {
+                best = d;
+                id = g;
+                center = f;
+            }
+        }
+    }
+    let r = lhash(id + vec2<f32>(5.0, 9.0));
+    // pieces near the top go first, with some randomness
+    let start = (center.y / n) * 0.45 + r * 0.25;
+    let local = clamp((t - start) / 0.35, 0.0, 1.0);
+    let b = tb(in.uv);
+    if (local >= 1.0) {
+        return b;
+    }
+    // the piece falls and turns: sample A where this pixel came from
+    let fall = local * local * prm(1);
+    let ang = (r - 0.5) * prm(2) * local * 2.0;
+    let cuv = center / (vec2<f32>(asp, 1.0) * n);
+    var v = (in.uv - cuv) * vec2<f32>(asp, 1.0);
+    v = vec2<f32>(cos(ang) * v.x + sin(ang) * v.y, -sin(ang) * v.x + cos(ang) * v.y);
+    v = v * (1.0 + local * 0.3);
+    let src = cuv + v / vec2<f32>(asp, 1.0) - vec2<f32>(0.0, fall);
+    var a = ta(src);
+    // a thin dark crack between pieces once they move
+    let crack = smoothstep(0.0, 0.02, sqrt(best)) ;
+    a = vec4<f32>(a.rgb * mix(1.0, 0.75, (1.0 - crack) * step(0.001, local)), a.a);
+    return mix(b, a, 1.0 - local * local);
+}
+
+// ------------------------------------------------------------------------------------ ink
+
+// Ink spreading over the picture. prm(0) scale, prm(1) softness 0..1, prm(2..4) ink color,
+// prm(5) ink edge 0..1
+@fragment
+fn fs_tr_ink(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let asp = u.out_size.x / max(u.out_size.y, 1.0);
+    let q = (in.uv - vec2<f32>(0.5)) * vec2<f32>(asp, 1.0);
+    let n = tfbm(q * max(prm(0), 0.5) * 3.0 + vec2<f32>(3.1, 1.7));
+    // blots grow from the center outwards and through the noise
+    let field = n * 0.75 + (1.0 - length(q) * 0.9) * 0.25;
+    let level = 1.0 - t * 1.25;
+    let soft = max(prm(1), 0.01) * 0.25;
+    let m = smoothstep(level - soft, level + soft, field);
+    let band = (1.0 - abs(m * 2.0 - 1.0)) * prm(5);
+    let base = mix(ta(in.uv), tb(in.uv), m);
+    return mix(base, vec4<f32>(prm3(2), 1.0), clamp(band, 0.0, 1.0));
+}
+
+// ------------------------------------------------------------------------------- pixelate
+
+// prm(0) largest block px at the cut
+@fragment
+fn fs_tr_pixelate(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let k = peak(t);
+    let bs = max(1.0, prm(0) * k * k);
+    let px = (floor(pixel(in.uv) / bs) + vec2<f32>(0.5)) * bs;
+    let uv = select(in.uv, px / u.out_size, bs > 1.5);
+    let m = smoothstep(0.42, 0.58, t);
+    return mix(ta(uv), tb(uv), m);
+}
+
+// ---------------------------------------------------------------------------- kaleidoscope
+
+// Folds the picture into a spinning kaleidoscope that opens on the incoming image.
+// prm(0) segments, prm(1) turns
+@fragment
+fn fs_tr_kaleido(in: VOut) -> @location(0) vec4<f32> {
+    let t = u.progress;
+    let k = peak(t);
+    let asp = u.out_size.x / max(u.out_size.y, 1.0);
+    let v = (in.uv - vec2<f32>(0.5)) * vec2<f32>(asp, 1.0);
+    let r = length(v);
+    // spin as a rotation of the vector (no angle wrap), then fold the spun vector
+    let spin = (t - 0.5) * prm(1) * 2.0 * PI * k;
+    let cs = cos(spin);
+    let sn = sin(spin);
+    let spun = vec2<f32>(cs * v.x - sn * v.y, sn * v.x + cs * v.y);
+    let seg = 2.0 * PI / max(round(prm(0)), 2.0);
+    let a = atan2(spun.y, spun.x);
+    var folded = a - seg * floor(a / seg);
+    folded = abs(folded - seg * 0.5);
+    let fv = vec2<f32>(cos(folded), sin(folded)) * r;
+    // mixing positions keeps the picture continuous while the fold grows towards the cut
+    let zoom = 1.0 - k * 0.35;
+    let w = mix(spun, fv, smoothstep(0.0, 0.6, k)) * zoom;
+    let uv = w / vec2<f32>(asp, 1.0) + vec2<f32>(0.5);
+    let m = smoothstep(0.4, 0.6, t);
+    return mix(am(uv), bm(uv), m);
+}

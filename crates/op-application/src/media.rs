@@ -17,6 +17,11 @@ type AssetMap = HashMap<AssetId, Arc<MediaAsset>>;
 
 /// Frames decoded in order (and cached) to reach a target this close after the last one.
 const GAP_FILL: i64 = 32;
+/// Proxies decode under their own id, so their smaller frames never mix with the original's.
+const PROXY_BIT: u64 = 1 << 62;
+/// Requests this close to the previous one tell the playing direction (a reversed clip asks
+/// for earlier source frames while the sequence plays forward).
+const STEER_RANGE: i64 = 8;
 
 /// Frames decoded ahead of the play position (about half a second at common rates).
 pub const PLAYBACK_AHEAD: i64 = 12;
@@ -120,6 +125,31 @@ struct WorkerState {
     ahead: i64,
     quit: bool,
     last_use: Option<Instant>,
+    /// The frame asked for last, and the direction the requests move in (0: not known yet).
+    last_asked: Option<i64>,
+    dir: i64,
+}
+
+impl WorkerState {
+    /// The read-ahead for a request: as long as asked, in the direction the requests actually
+    /// move. Reversed clips and reverse playback both read the source backwards, whatever the
+    /// direction of the sequence.
+    fn steer(&mut self, index: i64, ahead: i64) -> i64 {
+        if let Some(prev) = self.last_asked {
+            let d = index - prev;
+            if d != 0 && d.abs() <= STEER_RANGE {
+                self.dir = d.signum();
+            }
+        }
+        self.last_asked = Some(index);
+        if ahead == 0 {
+            0
+        } else if self.dir == 0 {
+            ahead
+        } else {
+            self.dir * ahead.abs()
+        }
+    }
 }
 
 struct Worker {
@@ -137,6 +167,11 @@ pub struct MediaService {
     frame_ready: Condvar,
     workers: Mutex<HashMap<AssetId, Arc<Worker>>>,
     hardware: std::sync::atomic::AtomicU8,
+    /// Decoder seeks over all files (each one restarts decoding at a keyframe).
+    seeks: AtomicU64,
+    use_proxies: std::sync::atomic::AtomicBool,
+    /// Assets as their proxies: the proxy file under its own id.
+    proxy_assets: Mutex<HashMap<AssetId, Arc<MediaAsset>>>,
     failed: Mutex<HashMap<AssetId, String>>,
     thumbs: Mutex<HashMap<(AssetId, i64), Option<Arc<Image>>>>,
     thumb_queue: Mutex<VecDeque<(Arc<MediaAsset>, i64)>>,
@@ -162,6 +197,9 @@ impl MediaService {
             frame_ready: Condvar::new(),
             workers: Mutex::new(HashMap::new()),
             hardware: std::sync::atomic::AtomicU8::new(HardwareDecoding::Auto.code()),
+            seeks: AtomicU64::new(0),
+            use_proxies: std::sync::atomic::AtomicBool::new(true),
+            proxy_assets: Mutex::new(HashMap::new()),
             failed: Mutex::new(HashMap::new()),
             thumbs: Mutex::new(HashMap::new()),
             thumb_queue: Mutex::new(VecDeque::new()),
@@ -211,6 +249,45 @@ impl MediaService {
 
     pub fn asset(&self, id: AssetId) -> Option<Arc<MediaAsset>> {
         self.assets.lock().get(&id).cloned()
+    }
+
+    pub fn set_use_proxies(&self, on: bool) {
+        self.use_proxies.store(on, Ordering::Relaxed);
+        self.bump();
+    }
+
+    pub fn use_proxies(&self) -> bool {
+        self.use_proxies.load(Ordering::Relaxed)
+    }
+
+    /// What preview decodes for `a`: its proxy while proxies are enabled and the file is there,
+    /// otherwise the asset itself. The proxy keeps the original's frame numbering, frame rate
+    /// and color description; the renderer sizes layers from the original asset, so the smaller
+    /// frames fill the same space.
+    pub fn preview_asset(&self, a: &Arc<MediaAsset>) -> Arc<MediaAsset> {
+        let Some(proxy) = a.proxy.as_deref() else {
+            return a.clone();
+        };
+        if !self.use_proxies() || !Path::new(proxy).is_file() {
+            return a.clone();
+        }
+        let mut map = self.proxy_assets.lock();
+        if let Some(p) = map.get(&a.id)
+            && p.path == proxy
+        {
+            return p.clone();
+        }
+        let mut d = (**a).clone();
+        d.id = AssetId(a.id.0 | PROXY_BIT);
+        d.path = proxy.to_string();
+        d.proxy = None;
+        if let Some(v) = d.video.as_mut() {
+            // a proxy holds a single video stream
+            v.index = 0;
+        }
+        let d = Arc::new(d);
+        map.insert(a.id, d.clone());
+        d
     }
 
     // --------------------------------------------------------------------------------- audio
@@ -407,6 +484,9 @@ impl MediaService {
         let mut prefetch: Option<(i64, i64)> = None;
         // the last frame this decoder produced: requests just after it continue in order
         let mut last: Option<i64> = None;
+        // reading backwards (reversed clip or reverse playback)
+        let mut backwards = false;
+        let mut frame_bytes = 0usize;
         // Auto: time sequential software decoding and move to hardware if it cannot keep up
         let mut timing: Vec<f64> = Vec::new();
         let mut tried_hw = mode != HardwareDecoding::Auto || dec.hardware().is_some();
@@ -420,12 +500,14 @@ impl MediaService {
                     }
                     if let Some(t) = st.want.take() {
                         prefetch = (st.ahead != 0).then_some((t + st.ahead.signum(), st.ahead));
+                        backwards = st.ahead < 0;
                         break Some(t);
                     }
                     if let Some((next, left)) = prefetch
                         && left != 0
                     {
                         prefetch = Some((next + left.signum(), left - left.signum()));
+                        backwards = left < 0;
                         break Some(next);
                     }
                     let idle = st
@@ -453,10 +535,23 @@ impl MediaService {
             // a target a little ahead of the last decoded frame is reached in order, keeping
             // every frame on the way: skipping one would force a seek back to the previous
             // keyframe when it is asked for next (very slow with long-GOP camera footage)
+            //
+            // Backwards, each frame on its own would cost a seek to the previous keyframe and a
+            // decode of everything up to it. Instead a block of frames ending at the target is
+            // decoded in one pass and kept, so the frames before it come from the cache; the
+            // block is sized to stay well inside the frame cache.
             let from = match last {
                 Some(l) if index > l + 1 && index - l <= GAP_FILL => l + 1,
+                _ if backwards => {
+                    let budget = self.frames.lock().budget;
+                    let block = (budget / 3)
+                        .checked_div(frame_bytes)
+                        .map_or(8, |n| n.clamp(2, GAP_FILL as usize) as i64);
+                    (index - block + 1).max(0)
+                }
                 _ => index,
             };
+            let seeks_before = dec.seeks();
             let sequential = last.is_some_and(|l| index > l);
             let t0 = Instant::now();
             let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -469,11 +564,14 @@ impl MediaService {
                 }
                 Ok::<_, op_media::MediaError>(out)
             }));
+            self.seeks
+                .fetch_add(dec.seeks() - seeks_before, Ordering::Relaxed);
             match decoded {
                 Ok(Ok(frames)) => {
                     {
                         let mut cache = self.frames.lock();
                         for (i, f) in frames {
+                            frame_bytes = f.byte_size();
                             cache.insert((asset.id, i), Arc::new(f));
                         }
                     }
@@ -560,6 +658,7 @@ impl MediaService {
             if ahead != 0
                 && let Some(w) = self.worker(asset)
             {
+                let ahead = w.state.lock().steer(index, ahead);
                 // keep the pipeline full while playing: the decoder continues from the first
                 // frame of the read-ahead window that is not decoded yet
                 let missing = {
@@ -584,7 +683,7 @@ impl MediaService {
         {
             let mut st = w.state.lock();
             st.want = Some(index);
-            st.ahead = ahead;
+            st.ahead = st.steer(index, ahead);
             st.last_use = Some(Instant::now());
         }
         w.wake.notify_one();
@@ -609,12 +708,24 @@ impl MediaService {
         }
     }
 
+    /// Decoder seeks so far, over all files (diagnostics and tests).
+    pub fn decoder_seeks(&self) -> u64 {
+        self.seeks.load(Ordering::Relaxed)
+    }
+
     pub fn decode_error(&self, asset: AssetId) -> Option<String> {
         self.failed.lock().get(&asset).cloned()
     }
 
-    /// Forgets failures and cached data of an asset (after relinking).
+    /// Forgets failures and cached data of an asset and of its proxy (after relinking or
+    /// when a proxy is attached or removed).
     pub fn forget(&self, asset: AssetId) {
+        self.proxy_assets.lock().remove(&asset);
+        self.forget_id(AssetId(asset.0 | PROXY_BIT));
+        self.forget_id(asset);
+    }
+
+    fn forget_id(&self, asset: AssetId) {
         self.failed.lock().remove(&asset);
         self.thumbs.lock().retain(|(a, _), _| *a != asset);
         let mut c = self.frames.lock();
@@ -745,6 +856,7 @@ impl op_render::FrameSource for PreviewFrames {
             .service
             .asset(asset.id)
             .unwrap_or_else(|| Arc::new(asset.clone()));
+        let a = self.service.preview_asset(&a);
         self.service.frame(&a, time, self.wait, true, self.ahead)
     }
 }
@@ -835,6 +947,59 @@ mod tests {
         assert!(
             filled(&service),
             "the frames after the play position were not decoded"
+        );
+    }
+
+    /// A reversed clip plays forward in the sequence but reads its source backwards: the
+    /// frames arrive in order and correct, with a seek per block of frames rather than per frame.
+    #[test]
+    fn backwards_reading_decodes_in_blocks() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rev.mp4");
+        let (w, h) = (64u32, 64u32);
+        let v = VideoSettings {
+            codec: VideoCodec::H264,
+            width: w,
+            height: h,
+            rate: Rate::FPS_25,
+            bitrate_kbps: None,
+            quality: 20,
+            hardware: false,
+        };
+        let mut m = Muxer::create(&path, Some(&v), None).unwrap();
+        let chroma = vec![128u8; (w / 2 * h / 2) as usize];
+        let n = 75u32;
+        for i in 0..n {
+            let luma = vec![(16 + 2 * i) as u8; (w * h) as usize];
+            m.push_video(&[&luma, &chroma, &chroma]).unwrap();
+        }
+        m.finish().unwrap();
+        let mut asset = op_media::probe(&path).unwrap();
+        asset.id = AssetId(3);
+        let asset = Arc::new(asset);
+        let service = MediaService::new(dir.path().join("cache"), 256 << 20);
+        service.set_hardware_decoding(HardwareDecoding::Never);
+        service.set_assets(std::iter::once((&asset.id, &asset)));
+        let rate = Rate::FPS_25.as_f64();
+        // the sequence plays forward (positive read-ahead) while the source runs backwards
+        for i in (0..n as i64).rev() {
+            let t = SrcTime::from_seconds(i as f64 / rate);
+            let f = service
+                .frame(&asset, t, Duration::from_secs(20), false, PLAYBACK_AHEAD)
+                .unwrap_or_else(|| panic!("frame {i}"));
+            let px = f.to_rgba8_scaled(1, 1);
+            let want = 16.0 + 2.0 * i as f64;
+            // limited-range luma shown full range: compare loosely, but tell neighbours apart
+            let got = (px[0] as f64) * 219.0 / 255.0 + 16.0;
+            assert!(
+                (got - want).abs() < 3.0,
+                "frame {i}: luma {got:.1}, expected {want}"
+            );
+        }
+        let seeks = service.decoder_seeks();
+        assert!(
+            seeks <= n as u64 / 4,
+            "{seeks} seeks for {n} frames read backwards"
         );
     }
 

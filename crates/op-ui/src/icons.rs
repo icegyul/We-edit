@@ -44,6 +44,7 @@ pub enum Icon {
     Trash,
     Loop,
     SafeMargins,
+    Proxy,
     Selection,
     TrackForward,
     TrackBackward,
@@ -363,6 +364,16 @@ pub fn draw(p: &Painter, r: Rect, icon: Icon, c: Color32) {
                 thin,
                 egui::StrokeKind::Inside,
             );
+        }
+        Icon::Proxy => {
+            // a full frame with a smaller copy of it: the proxy
+            p.rect_stroke(
+                rect((0.05, 0.12), (0.72, 0.62)),
+                1.0,
+                thin,
+                egui::StrokeKind::Inside,
+            );
+            p.rect_filled(rect((0.45, 0.48), (0.95, 0.88)), 1.0, c);
         }
         Icon::Selection => {
             fill(

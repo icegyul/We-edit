@@ -408,6 +408,14 @@ fn item_menu(s: &mut State, ui: &mut Ui, id: ItemId) {
             });
             ui.close();
         }
+        if a.has_video() && !a.is_still() {
+            // the menu acts on the selection; a right-click outside it selects this item
+            if !s.ed.items.contains(&id) {
+                s.ed.items = vec![id];
+            }
+            s.focus = Focus::Project;
+            crate::app::proxy_menu(ui, s);
+        }
         if ui.button(t("Relink Media...")).clicked() {
             ui.close();
             if let Some(path) = rfd::FileDialog::new()

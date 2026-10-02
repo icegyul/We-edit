@@ -151,6 +151,34 @@ impl Renderer {
                 "fs_tr_luma_fade",
                 P::new().f(fx.f32("softness") / 100.0).b(fx.bool("invert")),
             ),
+            "op.tr.hexagons" => (
+                "fs_tr_hexagon",
+                P::new()
+                    .f(fx.f32("cells"))
+                    .f(fx.choice("order") as f32)
+                    .rgb(fx.color("edge_color"))
+                    .f(fx.f32("edge") / 100.0),
+            ),
+            "op.tr.shatter" => (
+                "fs_tr_shatter",
+                P::new()
+                    .f(fx.f32("pieces"))
+                    .f(fx.f32("fall") / 100.0 * 1.5)
+                    .f(fx.f32("spin") / 100.0 * 1.5),
+            ),
+            "op.tr.ink" => (
+                "fs_tr_ink",
+                P::new()
+                    .f(fx.f32("scale"))
+                    .f(fx.f32("softness") / 100.0)
+                    .rgb(fx.color("ink"))
+                    .f(fx.f32("edge") / 100.0),
+            ),
+            "op.tr.pixelate" => ("fs_tr_pixelate", P::new().f(fx.f32("block") * scale)),
+            "op.tr.kaleidoscope" => (
+                "fs_tr_kaleido",
+                P::new().f(fx.f32("segments")).f(fx.f32("turns")),
+            ),
             "op.tr.flash" => (
                 "fs_tr_flash",
                 P::new()

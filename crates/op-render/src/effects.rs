@@ -406,6 +406,103 @@ impl Renderer {
                 self.timecode_overlay(fx, img, s, text, seq_size)
             }
             "op.video.glow" | "op.video.radiant_glow" => self.glow(fx, img, s),
+            "op.video.halation" => self.halation(fx, img, s),
+            "op.video.halftone" => self.single(
+                "fs_halftone",
+                img,
+                P::new()
+                    .f(fx.f32("size") * s)
+                    .f(fx.f32("angle"))
+                    .f(fx.choice("mode") as f32)
+                    .f(fx.f32("contrast") / 100.0)
+                    .rgb(fx.color("ink"))
+                    .rgb(fx.color("paper"))
+                    .f(fx.f32("mix") / 100.0),
+            ),
+            "op.video.duotone" => self.single(
+                "fs_duotone",
+                img,
+                P::new()
+                    .rgb(fx.color("shadows"))
+                    .rgb(fx.color("highlights"))
+                    .f(fx.f32("contrast") / 100.0)
+                    .f(fx.f32("mix") / 100.0),
+            ),
+            "op.video.oil_paint" => self.single(
+                "fs_oil_paint",
+                img,
+                P::new()
+                    .f((fx.f32("radius") * s).max(1.0))
+                    .f(fx.f32("mix") / 100.0),
+            ),
+            "op.video.pencil_sketch" => self.single(
+                "fs_sketch",
+                img,
+                P::new()
+                    .f(fx.f32("strength") / 100.0 * 2.0)
+                    .f(fx.f32("width") * s)
+                    .f(fx.f32("shading") / 100.0)
+                    .f(fx.f32("spacing") * s)
+                    .rgb(fx.color("pencil"))
+                    .rgb(fx.color("paper"))
+                    .f(fx.f32("keep_color") / 100.0),
+            ),
+            "op.video.neon_edges" => self.single(
+                "fs_neon_edges",
+                img,
+                P::new()
+                    .f(fx.f32("thickness") * s)
+                    .f(fx.f32("intensity"))
+                    .f(fx.choice("colors") as f32)
+                    .rgb(fx.color("color"))
+                    .f(fx.f32("speed"))
+                    .f(fx.f32("background") / 100.0)
+                    .time(clip_time),
+            ),
+            "op.video.lens_flare" => self.single(
+                "fs_lens_flare",
+                img,
+                P::new()
+                    .v2(fx.point("position"))
+                    .f(fx.f32("brightness"))
+                    .f(0.05 + fx.f32("size") / 100.0 * 1.5)
+                    .rgb(fx.color("tint"))
+                    .f(fx.f32("streak") / 100.0),
+            ),
+            "op.video.ripple" => self.single(
+                "fs_ripple",
+                img,
+                P::new()
+                    .v2(fx.point("center"))
+                    .f(fx.f32("amplitude") * s)
+                    .f(fx.f32("wavelength") * s)
+                    .f(fx.f32("speed"))
+                    .f(fx.f32("fade") / 100.0)
+                    .time(clip_time),
+            ),
+            "op.video.zoom_pulse" => self.single(
+                "fs_zoom_pulse",
+                img,
+                P::new()
+                    .f(fx.f32("rate"))
+                    .f(fx.f32("amount") / 100.0)
+                    .v2(fx.point("center"))
+                    .f(fx.f32("sharpness"))
+                    .f(fx.f32("offset"))
+                    .time(clip_time),
+            ),
+            "op.video.crt" => self.single(
+                "fs_crt",
+                img,
+                P::new()
+                    .f(fx.f32("curvature") / 100.0)
+                    .f(fx.f32("scanlines") / 100.0)
+                    .f(fx.f32("mask") / 100.0)
+                    .f(fx.f32("vignette") / 100.0)
+                    .f(fx.f32("lines"))
+                    .f(fx.f32("flicker") / 100.0)
+                    .time(clip_time),
+            ),
             "op.video.rgb_split" => self.single(
                 "fs_rgb_split",
                 img,
@@ -605,6 +702,36 @@ impl Renderer {
         );
         self.put(img);
         self.put(glow);
+        out
+    }
+
+    /// Halation: the red bloom film shows around highlights. A tinted glow of the bright parts.
+    fn halation(&mut self, fx: &EvalComponent, img: Tex, s: f32) -> Tex {
+        let (w, h) = (img.width, img.height);
+        let bright = self.work(w, h);
+        self.pass(
+            "fs_bright_pass",
+            &[&img.view],
+            P::new().f(fx.f32("threshold") / 100.0).f(0.08),
+            img.size(),
+            &bright,
+        );
+        let glow = self.blur(bright, fx.f32("radius") * s / 2.0, false, true, true);
+        let out = self.work(w, h);
+        self.pass(
+            "fs_glow_composite",
+            &[&img.view, &glow.view],
+            P::new()
+                .f(fx.f32("intensity") * 1.5)
+                .rgb(fx.color("tint"))
+                .f(1.0)
+                .f(0.0)
+                .b(false),
+            img.size(),
+            &out,
+        );
+        self.put(glow);
+        self.put(img);
         out
     }
 

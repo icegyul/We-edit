@@ -87,6 +87,7 @@ pub struct Editor {
     /// Files being imported that go onto the timeline as soon as they are ready (pasted media).
     pub place_after_import: Vec<PathBuf>,
     pub exports: Vec<crate::export::ExportJob>,
+    pub proxies: crate::proxies::ProxyQueue,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
     autosaving: Arc<AtomicBool>,
@@ -105,6 +106,7 @@ impl Editor {
         media.set_hardware_decoding(crate::media::HardwareDecoding::from_pref(
             &prefs.hardware_decoding,
         ));
+        media.set_use_proxies(prefs.use_proxies);
         let source: Arc<dyn op_audio::AudioSource> = media.clone();
         let playback = if audio {
             op_audio::Playback::start(source)
@@ -143,6 +145,7 @@ impl Editor {
             importing: 0,
             place_after_import: Vec::new(),
             exports: Vec::new(),
+            proxies: Default::default(),
             last_import_report: None,
             autosave_at: Instant::now(),
             autosaving: Arc::new(AtomicBool::new(false)),
@@ -1095,6 +1098,7 @@ impl Editor {
     pub fn tick(&mut self) -> bool {
         self.poll_imports();
         self.poll_exports();
+        self.poll_proxies();
         self.autosave();
         self.keep_recovery();
         if let Some(monitor) = self.transport.playing {
@@ -1142,6 +1146,123 @@ impl Editor {
         !self.imports.is_empty()
             || self.exports.iter().any(|e| !e.finished())
             || self.media.conforming() > 0
+    }
+
+    // ------------------------------------------------------------------------------- proxies
+
+    /// Queues proxy creation for the video assets among `assets` (Project panel > Proxy >
+    /// Create Proxies). Assets that already have a proxy on disk are skipped.
+    pub fn create_proxies(&mut self, assets: &[AssetId]) {
+        let folder = self.dirs.data.join("Proxies");
+        let mut jobs = Vec::new();
+        let mut skipped = None;
+        for id in assets {
+            let Some(a) = self.project.assets.get(id).cloned() else {
+                continue;
+            };
+            if !a.has_video() {
+                continue;
+            }
+            if let Some(why) = crate::proxies::unsuitable(&a) {
+                skipped = Some(why);
+                continue;
+            }
+            if a.proxy.as_deref().is_some_and(|p| Path::new(p).is_file()) {
+                continue;
+            }
+            let dst = crate::proxies::proxy_path(&folder, &a);
+            jobs.push((a, dst));
+        }
+        if jobs.is_empty() {
+            match skipped {
+                Some(why) => self.info(why.to_string()),
+                None => self.info("The selected clips already have proxies".to_string()),
+            }
+            return;
+        }
+        log::info!("creating {} proxies in {}", jobs.len(), folder.display());
+        self.proxies.add(jobs);
+    }
+
+    /// Detaches proxies from `assets` and deletes the files OpenPremier made.
+    pub fn remove_proxies(&mut self, assets: &[AssetId]) {
+        let folder = self.dirs.data.join("Proxies");
+        let with: Vec<(AssetId, String)> = assets
+            .iter()
+            .filter_map(|id| {
+                let a = self.project.asset(*id)?;
+                a.proxy.clone().map(|p| (*id, p))
+            })
+            .collect();
+        if with.is_empty() {
+            return;
+        }
+        let ids: Vec<AssetId> = with.iter().map(|(id, _)| *id).collect();
+        self.edit("Remove Proxies", |p| {
+            for id in &ids {
+                if let Some(a) = p.assets.get_mut(id) {
+                    Arc::make_mut(a).proxy = None;
+                }
+            }
+            Ok(())
+        });
+        for (id, path) in with {
+            self.media.forget(id);
+            if Path::new(&path).starts_with(&folder) {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    pub fn set_use_proxies(&mut self, on: bool) {
+        self.prefs.use_proxies = on;
+        let _ = self.prefs.save(&self.dirs);
+        self.media.set_use_proxies(on);
+        self.info(
+            if on {
+                "Proxies enabled"
+            } else {
+                "Proxies disabled"
+            }
+            .to_string(),
+        );
+    }
+
+    /// Attaches finished proxies to their assets (one undo step per batch).
+    fn poll_proxies(&mut self) {
+        let results = self.proxies.take_results();
+        if results.is_empty() {
+            return;
+        }
+        let mut made = Vec::new();
+        let mut failed = Vec::new();
+        for (id, r) in results {
+            match r {
+                Ok(path) => made.push((id, path.to_string_lossy().into_owned())),
+                Err(e) if e == "cancelled" => {}
+                Err(e) => failed.push(e),
+            }
+        }
+        if !made.is_empty() {
+            let attach = made.clone();
+            self.edit("Attach Proxies", |p| {
+                for (id, path) in &attach {
+                    if let Some(a) = p.assets.get_mut(id) {
+                        Arc::make_mut(a).proxy = Some(path.clone());
+                    }
+                }
+                Ok(())
+            });
+            for (id, _) in &made {
+                self.media.forget(*id);
+            }
+            if !self.proxies.busy() {
+                self.info(format!("Proxies ready ({})", made.len()));
+            }
+        }
+        if let Some(e) = failed.first() {
+            self.error(format!("Proxy not created: {e}"));
+        }
     }
 
     fn poll_exports(&mut self) {

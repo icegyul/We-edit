@@ -1810,6 +1810,249 @@ static VIGNETTE: [ParamSpec; 5] = [
     color("color", "Color", 0.0, 0.0, 0.0),
 ];
 
+static HALFTONE: [ParamSpec; 7] = [
+    fs("size", "Dot Size", 8.0, 2.0, 100.0, 3.0, 40.0, Unit::Pixels),
+    angle("angle", "Angle", 0.0),
+    choice("mode", "Inks", 0, &["One Ink", "Cyan, Magenta, Yellow"]),
+    f("contrast", "Contrast", 0.0, -100.0, 100.0, Unit::None),
+    color("ink", "Ink Color", 0.05, 0.05, 0.08),
+    color("paper", "Paper Color", 0.97, 0.95, 0.9),
+    pct("mix", "Mix", 100.0),
+];
+
+static DUOTONE: [ParamSpec; 4] = [
+    color("shadows", "Shadows", 0.12, 0.05, 0.3),
+    color("highlights", "Highlights", 1.0, 0.75, 0.35),
+    f("contrast", "Contrast", 0.0, -100.0, 100.0, Unit::None),
+    pct("mix", "Mix", 100.0),
+];
+
+static OIL_PAINT: [ParamSpec; 2] = [
+    fs(
+        "radius",
+        "Brush Size",
+        4.0,
+        1.0,
+        10.0,
+        1.0,
+        10.0,
+        Unit::Pixels,
+    ),
+    pct("mix", "Mix", 100.0),
+];
+
+static SKETCH: [ParamSpec; 7] = [
+    pct("strength", "Line Strength", 60.0),
+    fs("width", "Line Width", 1.0, 0.5, 6.0, 0.5, 4.0, Unit::Pixels),
+    pct("shading", "Shading", 50.0),
+    fs(
+        "spacing",
+        "Hatch Spacing",
+        6.0,
+        2.0,
+        40.0,
+        2.0,
+        20.0,
+        Unit::Pixels,
+    ),
+    color("pencil", "Pencil Color", 0.15, 0.15, 0.18),
+    color("paper", "Paper Color", 0.96, 0.94, 0.9),
+    pct("keep_color", "Keep Color", 0.0),
+];
+
+static NEON_EDGES: [ParamSpec; 6] = [
+    fs(
+        "thickness",
+        "Thickness",
+        1.5,
+        0.5,
+        10.0,
+        0.5,
+        5.0,
+        Unit::Pixels,
+    ),
+    f("intensity", "Intensity", 1.5, 0.0, 5.0, Unit::None),
+    choice("colors", "Colors", 0, &["Rainbow", "Single Color"]),
+    color("color", "Color", 0.1, 0.9, 1.0),
+    f("speed", "Color Speed", 0.2, 0.0, 5.0, Unit::Hz),
+    pct("background", "Background", 15.0),
+];
+
+static HALATION: [ParamSpec; 4] = [
+    pct("threshold", "Threshold", 70.0),
+    fs(
+        "radius",
+        "Radius",
+        30.0,
+        1.0,
+        300.0,
+        4.0,
+        120.0,
+        Unit::Pixels,
+    ),
+    f("intensity", "Intensity", 0.8, 0.0, 3.0, Unit::None),
+    color("tint", "Tint", 1.0, 0.3, 0.15),
+];
+
+static LENS_FLARE: [ParamSpec; 5] = [
+    point("position", "Light Position", 0.25, 0.25, PointSpace::Layer),
+    f("brightness", "Brightness", 1.0, 0.0, 4.0, Unit::None),
+    pct("size", "Size", 50.0),
+    color("tint", "Tint", 1.0, 0.8, 0.55),
+    pct("streak", "Streak", 50.0),
+];
+
+static RIPPLE: [ParamSpec; 5] = [
+    point("center", "Center", 0.5, 0.5, PointSpace::Layer),
+    fs(
+        "amplitude",
+        "Amplitude",
+        8.0,
+        -100.0,
+        100.0,
+        -30.0,
+        30.0,
+        Unit::Pixels,
+    ),
+    fs(
+        "wavelength",
+        "Wavelength",
+        60.0,
+        4.0,
+        1000.0,
+        10.0,
+        300.0,
+        Unit::Pixels,
+    ),
+    f("speed", "Speed", 1.0, -10.0, 10.0, Unit::Hz),
+    pct("fade", "Fade with Distance", 30.0),
+];
+
+static ZOOM_PULSE: [ParamSpec; 5] = [
+    f("rate", "Pulses per Second", 2.0, 0.1, 10.0, Unit::Hz),
+    pct("amount", "Amount", 12.0),
+    point("center", "Center", 0.5, 0.5, PointSpace::Layer),
+    f("sharpness", "Sharpness", 3.0, 0.5, 10.0, Unit::None),
+    f("offset", "Offset", 0.0, -5.0, 5.0, Unit::Seconds),
+];
+
+static CRT: [ParamSpec; 6] = [
+    pct("curvature", "Curvature", 40.0),
+    pct("scanlines", "Scanlines", 50.0),
+    pct("mask", "Shadow Mask", 30.0),
+    pct("vignette", "Vignette", 40.0),
+    int("lines", "Lines", 480, 100, 2000),
+    pct("flicker", "Flicker", 10.0),
+];
+
+static TR_HEXAGON: [ParamSpec; 5] = [
+    int("cells", "Cells Across", 12, 2, 80),
+    choice(
+        "order",
+        "Order",
+        0,
+        &["Random", "From the Center", "Left to Right"],
+    ),
+    color("edge_color", "Edge Color", 1.0, 1.0, 1.0),
+    pct("edge", "Edge Width", 0.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_SHATTER: [ParamSpec; 4] = [
+    int("pieces", "Pieces Across", 8, 2, 40),
+    pct("fall", "Fall Distance", 60.0),
+    pct("spin", "Spin", 50.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_INK: [ParamSpec; 5] = [
+    f("scale", "Scale", 1.0, 0.2, 5.0, Unit::None),
+    pct("softness", "Softness", 30.0),
+    color("ink", "Ink Color", 0.05, 0.05, 0.08),
+    pct("edge", "Ink Edge", 60.0),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_PIXELATE: [ParamSpec; 2] = [
+    fs(
+        "block",
+        "Largest Block",
+        60.0,
+        4.0,
+        400.0,
+        4.0,
+        200.0,
+        Unit::Pixels,
+    ),
+    boolean("reverse", "Reverse", false),
+];
+
+static TR_KALEIDO: [ParamSpec; 3] = [
+    int("segments", "Segments", 6, 2, 24),
+    f("turns", "Turns", 0.5, 0.0, 4.0, Unit::None),
+    boolean("reverse", "Reverse", false),
+];
+
+static TREMOLO: [ParamSpec; 3] = [
+    f("rate", "Speed", 5.0, 0.1, 20.0, Unit::Hz),
+    pct("depth", "Depth", 60.0),
+    choice("shape", "Shape", 0, &["Sine", "Square", "Triangle"]),
+];
+
+static AUTOPAN: [ParamSpec; 2] = [
+    f("rate", "Speed", 0.5, 0.05, 10.0, Unit::Hz),
+    pct("depth", "Width", 100.0),
+];
+
+static PHASER: [ParamSpec; 5] = [
+    f("rate", "Speed", 0.5, 0.05, 10.0, Unit::Hz),
+    pct("depth", "Depth", 70.0),
+    pct("feedback", "Feedback", 40.0),
+    int("stages", "Stages", 6, 2, 12),
+    pct("mix", "Mix", 50.0),
+];
+
+static BITCRUSHER: [ParamSpec; 3] = [
+    int("bits", "Bit Depth", 8, 1, 16),
+    int("downsample", "Downsample", 4, 1, 32),
+    pct("mix", "Mix", 100.0),
+];
+
+static DISTORTION: [ParamSpec; 3] = [
+    db("drive", "Drive", 12.0, 0.0, 48.0),
+    hz("tone", "Tone", 5000.0),
+    pct("mix", "Mix", 100.0),
+];
+
+static NOISE_GATE: [ParamSpec; 4] = [
+    db("threshold", "Threshold", -45.0, -90.0, 0.0),
+    f("attack", "Attack", 2.0, 0.1, 100.0, Unit::Ms),
+    f("hold", "Hold", 50.0, 0.0, 1000.0, Unit::Ms),
+    f("release", "Release", 100.0, 1.0, 2000.0, Unit::Ms),
+];
+
+static PITCH_SHIFTER: [ParamSpec; 3] = [
+    f("semitones", "Semitones", 0.0, -24.0, 24.0, Unit::None),
+    f("cents", "Cents", 0.0, -100.0, 100.0, Unit::None),
+    pct("mix", "Mix", 100.0),
+];
+
+static RADIO_VOICE: [ParamSpec; 2] = [
+    choice(
+        "mode",
+        "Sound",
+        0,
+        &[
+            "Telephone",
+            "Radio",
+            "Megaphone",
+            "Walkie-Talkie",
+            "Underwater",
+        ],
+    ),
+    pct("mix", "Mix", 100.0),
+];
+
 static LETTERBOX: [ParamSpec; 4] = [
     choice(
         "aspect",
@@ -2799,6 +3042,86 @@ pub static CATALOG: &[EffectDef] = &[
         VIGNETTE
     ),
     def!(
+        "op.video.halftone",
+        "Halftone",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        HALFTONE
+    ),
+    def!(
+        "op.video.duotone",
+        "Duotone",
+        VideoEffect,
+        CAT_COLOR,
+        [],
+        DUOTONE
+    ),
+    def!(
+        "op.video.oil_paint",
+        "Oil Paint",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        OIL_PAINT
+    ),
+    def!(
+        "op.video.pencil_sketch",
+        "Pencil Sketch",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        SKETCH
+    ),
+    def!(
+        "op.video.neon_edges",
+        "Neon Edges",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        NEON_EDGES
+    ),
+    def!(
+        "op.video.halation",
+        "Halation",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        HALATION
+    ),
+    def!(
+        "op.video.lens_flare",
+        "Lens Flare",
+        VideoEffect,
+        CAT_GENERATE,
+        [],
+        LENS_FLARE
+    ),
+    def!(
+        "op.video.ripple",
+        "Ripple",
+        VideoEffect,
+        CAT_DISTORT,
+        [],
+        RIPPLE
+    ),
+    def!(
+        "op.video.zoom_pulse",
+        "Zoom Pulse",
+        VideoEffect,
+        CAT_DISTORT,
+        [],
+        ZOOM_PULSE
+    ),
+    def!(
+        "op.video.crt",
+        "CRT Screen",
+        VideoEffect,
+        CAT_STYLIZE,
+        [],
+        CRT
+    ),
+    def!(
         "op.video.letterbox",
         "Cinematic Bars",
         VideoEffect,
@@ -3160,6 +3483,46 @@ pub static CATALOG: &[EffectDef] = &[
         TR_GLITCH
     ),
     def!(
+        "op.tr.hexagons",
+        "Hexagons",
+        VideoTransition,
+        CAT_TR_WIPE,
+        [],
+        TR_HEXAGON
+    ),
+    def!(
+        "op.tr.shatter",
+        "Shatter",
+        VideoTransition,
+        CAT_TR_STYLE,
+        [],
+        TR_SHATTER
+    ),
+    def!(
+        "op.tr.ink",
+        "Ink",
+        VideoTransition,
+        CAT_TR_DISSOLVE,
+        [],
+        TR_INK
+    ),
+    def!(
+        "op.tr.pixelate",
+        "Pixelate",
+        VideoTransition,
+        CAT_TR_STYLE,
+        [],
+        TR_PIXELATE
+    ),
+    def!(
+        "op.tr.kaleidoscope",
+        "Kaleidoscope",
+        VideoTransition,
+        CAT_TR_SPIN,
+        [],
+        TR_KALEIDO
+    ),
+    def!(
         "op.tr.chroma_split",
         "Chromatic Split",
         VideoTransition,
@@ -3271,6 +3634,70 @@ pub static CATALOG: &[EffectDef] = &[
         CAT_AUDIO_MODULATION,
         [],
         CHORUS
+    ),
+    def!(
+        "op.audio.tremolo",
+        "Tremolo",
+        AudioEffect,
+        CAT_AUDIO_MODULATION,
+        [],
+        TREMOLO
+    ),
+    def!(
+        "op.audio.autopan",
+        "Auto-Pan",
+        AudioEffect,
+        CAT_AUDIO_MODULATION,
+        [],
+        AUTOPAN
+    ),
+    def!(
+        "op.audio.phaser",
+        "Phaser",
+        AudioEffect,
+        CAT_AUDIO_MODULATION,
+        [],
+        PHASER
+    ),
+    def!(
+        "op.audio.bitcrusher",
+        "Bitcrusher",
+        AudioEffect,
+        CAT_AUDIO_SPECIAL,
+        [],
+        BITCRUSHER
+    ),
+    def!(
+        "op.audio.distortion",
+        "Distortion",
+        AudioEffect,
+        CAT_AUDIO_SPECIAL,
+        [],
+        DISTORTION
+    ),
+    def!(
+        "op.audio.noise_gate",
+        "Noise Gate",
+        AudioEffect,
+        CAT_AUDIO_AMPLITUDE,
+        [],
+        NOISE_GATE
+    ),
+    def!(
+        "op.audio.pitch_shifter",
+        "Pitch Shifter",
+        AudioEffect,
+        CAT_AUDIO_SPECIAL,
+        [],
+        PITCH_SHIFTER
+    ),
+    def!(
+        "op.audio.radio_voice",
+        "Telephone and Radio",
+        AudioEffect,
+        CAT_AUDIO_SPECIAL,
+        [],
+        RADIO_VOICE
     ),
     def!(
         "op.audio.reverb",

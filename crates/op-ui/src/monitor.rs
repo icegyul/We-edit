@@ -697,6 +697,12 @@ fn transport(s: &mut State, v: &mut MonitorView, ui: &mut Ui) {
             {
                 v.safe_margins = !v.safe_margins;
             }
+            if which == Monitor::Program {
+                let on = s.ed.prefs.use_proxies;
+                if icons::button(ui, Icon::Proxy, size, on, t("Toggle Proxies")).clicked() {
+                    s.command("op.view.toggle_proxies");
+                }
+            }
             if which == Monitor::Program
                 && b(ui, s, Icon::Camera, "Export Frame", "cmd.export.frame")
             {

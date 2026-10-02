@@ -1,12 +1,14 @@
 # Technical documentation
 
-OpenPremier 0.5.1 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the implemented architecture, interoperability research and the tests still required before broader compatibility claims can be made.
+OpenPremier 0.6.0 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the implemented architecture, interoperability research and the tests still required before broader compatibility claims can be made.
 
 ## Project documentation
 
 | Document | Purpose |
 |---|---|
+| [roadmap.md](roadmap.md) | What editors can do today and what comes next, in order |
 | [implementation-status.md](implementation-status.md) | Implemented modules, verified checks and known limits |
+| [drift-comparison.md](drift-comparison.md) | Review of the Drift editor's rendering and features, and what we adopted |
 | [release-process.md](release-process.md) | Package and release procedure |
 | [compatibility-validation.md](compatibility-validation.md) | Compatibility evidence and remaining validation work |
 | [architecture.md](architecture.md) | Rust subsystem boundaries and dependency direction |

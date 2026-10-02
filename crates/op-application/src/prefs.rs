@@ -46,6 +46,8 @@ pub struct Preferences {
     pub paste_folder: Option<PathBuf>,
     /// Save pasted images in `paste_folder` without asking.
     pub paste_always: bool,
+    /// Play attached proxies instead of the original media (export always uses the original).
+    pub use_proxies: bool,
     /// Lighter interface: no animations and fewer redraws (slower computers, laptops on battery).
     pub performance_mode: bool,
     /// Video decoding: "auto", "always" (graphics card) or "never" (processor only).
@@ -85,6 +87,7 @@ impl Default for Preferences {
             effect_controls_timeline: true,
             paste_folder: None,
             paste_always: false,
+            use_proxies: true,
             performance_mode: false,
             hardware_decoding: "auto".into(),
             graphics_backend: "auto".into(),

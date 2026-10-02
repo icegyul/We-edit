@@ -29,6 +29,15 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.6.0" date="2026-10-02">
+      <description>
+        <p>
+          Proxies for smooth editing of camera footage, faster reversed clips, ten new video
+          effects, five transitions and eight audio effects including a pitch shifter and
+          telephone and radio voices.
+        </p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-10-01">
       <description>
         <p>

@@ -2,6 +2,21 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.6.0 - 2026-10-02
+
+### Added
+
+- Proxies, as in Premiere Pro: Proxy > Create Proxies in the Project panel and the Clip menu makes 540p H.264 copies of the selected clips in the background (progress and Cancel in the status bar), and Toggle Proxies in the Program Monitor (also View > Enable Proxies) switches playback between proxies and originals. Proxies keep the original's frame numbering and colors, a keyframe every half second and no reordered frames, so scrubbing and reverse playback are fast; export always uses the original media. Remove Proxies detaches them and deletes the files OpenPremier made.
+- Ten video effects: Halftone, Duotone, Oil Paint, Pencil Sketch, Neon Edges, Halation, Lens Flare, Ripple, Zoom Pulse and CRT Screen.
+- Five video transitions: Hexagons, Shatter, Ink, Pixelate and Kaleidoscope.
+- Eight audio effects: Tremolo, Auto-Pan, Phaser, Bitcrusher, Distortion, Noise Gate, Pitch Shifter (up to two octaves up or down) and Telephone and Radio (telephone, radio, megaphone, walkie-talkie and underwater voices).
+- docs/roadmap.md lists what the editor does today and what comes next; docs/drift-comparison.md reviews the Drift editor's rendering and features.
+
+### Changed
+
+- Reversed clips and reverse playback read the source backwards in blocks of frames: each block costs one seek to a keyframe instead of one per frame (75 frames read backwards went from 76 seeks to under 20 in the test).
+- The decoder follows the direction frames are actually requested in, so a reversed clip in a sequence that plays forward reads ahead the right way.
+
 ## 0.5.1 - 2026-10-01
 
 ### Fixed

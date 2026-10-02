@@ -166,6 +166,22 @@ transitions (zoom, spin, stretch, smooth slide, blur dissolve, luma fade, flash,
 burn, glitch, chromatic split) and animation presets. Their names, parameters and processing are
 our own; none claims to reproduce another product's output.
 
+Added in 0.6.0, also original:
+
+- video effects: Halftone (one ink or CMY screens), Duotone, Oil Paint (Kuwahara filter), Pencil
+  Sketch (Sobel lines with cross hatching), Neon Edges, Halation (tinted highlight bloom), Lens
+  Flare (source, streak, ghosts and ring), Ripple, Zoom Pulse and CRT Screen;
+- video transitions: Hexagons, Shatter, Ink, Pixelate and Kaleidoscope;
+- audio effects: Tremolo, Auto-Pan, Phaser, Bitcrusher, Distortion, Noise Gate, Pitch Shifter
+  (two-head delay-line shifter with complementary sin^2 windows) and Telephone and Radio (band
+  limiting, presence peak and speaker saturation for telephone, radio, megaphone, walkie-talkie
+  and underwater sounds).
+
+Every video effect and transition is rendered by the GPU tests, which CI requires on Linux (software
+Vulkan) and macOS (Metal);
+the audio effects have unit tests for level, pitch (an octave up and down), gating, quantization
+and band limits.
+
 Importers (`.prproj` and FCP XML) resolve a foreign component in this order
 (`op_core::catalog::resolve_foreign`):
 

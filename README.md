@@ -24,7 +24,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.5.1` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
+La versión `0.6.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -40,10 +40,16 @@ en todos los trabajos de producción.
   Preferencias).
 - Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático, y un modo de
   rendimiento para equipos más modestos.
+- Proxies como en Premiere Pro: copias ligeras de los clips para editar con fluidez material 4K o
+  de cámara, con un botón para alternar entre proxies y originales; la exportación usa siempre el
+  original.
 - Efectos de estilo (resplandor, fallo digital, temblor de cámara, grano, VHS, película antigua,
-  fugas de luz...), transiciones de zoom, giro, destello y luz, y ajustes preestablecidos de
-  animación listos para arrastrar.
-- Mezclador de audio en punto flotante, medidores, efectos básicos y salida a dispositivos.
+  fugas de luz, semitono, duotono, pintura al óleo, boceto a lápiz, neón, destello de lente,
+  pantalla CRT...), transiciones de zoom, giro, destello, hexágonos, cristales rotos y tinta, y
+  ajustes preestablecidos de animación listos para arrastrar.
+- Efectos de audio para voces y música: cambio de tono, teléfono y radio, trémolo, phaser,
+  distorsión, reductor de bits y puerta de ruido, además de ecualización, dinámica y reverberación.
+- Mezclador de audio en punto flotante, medidores y salida a dispositivos.
 - Formato nativo `.opproj`, intercambio OTIO/FCP XML/EDL e importación parcial de `.prproj`; los
   efectos y transiciones que no existen tal cual se sustituyen por el equivalente más cercano.
 - Interfaz en español e inglés e importación de mapas de teclado `.kys`.
@@ -62,8 +68,8 @@ en todos los trabajos de producción.
   GPU.
 - Todavía se deben completar las pruebas de compatibilidad y rendimiento para proyectos grandes.
 
-El detalle técnico actualizado se encuentra en
-[docs/implementation-status.md](docs/implementation-status.md).
+Lo que viene, en orden de prioridad, está en [docs/roadmap.md](docs/roadmap.md), y el detalle
+técnico en [docs/implementation-status.md](docs/implementation-status.md).
 
 ## Descargar
 
@@ -102,7 +108,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.5.1-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.6.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

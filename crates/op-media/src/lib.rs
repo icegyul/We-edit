@@ -7,6 +7,7 @@
 pub mod audio;
 pub mod encode;
 pub mod probe;
+pub mod proxy;
 pub mod thumb;
 pub mod video;
 
@@ -15,7 +16,7 @@ use std::sync::Once;
 use thiserror::Error;
 
 pub use audio::{AudioInfo, ConformedAudio, Peaks, conform};
-pub use encode::{AudioCodec, AudioSettings, Muxer, VideoCodec, VideoInput, VideoSettings};
+pub use encode::{AudioCodec, AudioSettings, Muxer, Tuning, VideoCodec, VideoInput, VideoSettings};
 pub use probe::probe;
 pub use video::{PixelLayout, Plane, VideoDecoder, VideoFrame};
 

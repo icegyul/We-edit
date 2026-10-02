@@ -551,3 +551,197 @@ mod tests {
         assert!(tail > 0.01);
     }
 }
+
+/// Low-frequency oscillator: phase 0..1 advanced per sample frame.
+#[derive(Clone, Debug, Default)]
+pub struct Lfo {
+    phase: f64,
+}
+
+impl Lfo {
+    /// The current value in -1..1 for `shape` (0 sine, 1 square with soft edges, 2 triangle),
+    /// then one step at `rate` Hz.
+    pub fn next(&mut self, rate_hz: f64, sample_rate: u32, shape: u32) -> f64 {
+        let p = self.phase;
+        self.phase = (self.phase + rate_hz / sample_rate.max(1) as f64).fract();
+        match shape {
+            1 => (std::f64::consts::TAU * p).sin().clamp(-0.2, 0.2) * 5.0,
+            2 => 1.0 - 4.0 * (p - 0.5).abs(),
+            _ => (std::f64::consts::TAU * p).sin(),
+        }
+    }
+}
+
+/// Phaser: a chain of first-order all-pass filters whose corner sweeps with an LFO, mixed with
+/// the dry signal so the moving notches comb the spectrum.
+#[derive(Clone, Debug, Default)]
+pub struct Phaser {
+    lfo: Lfo,
+    /// Per channel and stage: previous input and output.
+    state: Vec<Vec<(f32, f32)>>,
+    last: Vec<f32>,
+}
+
+impl Phaser {
+    #[allow(clippy::too_many_arguments)]
+    pub fn process(
+        &mut self,
+        buf: &mut [f32],
+        channels: usize,
+        rate: u32,
+        speed: f64,
+        depth: f64,
+        feedback: f32,
+        stages: usize,
+        mix: f32,
+    ) {
+        let stages = stages.clamp(2, 12);
+        if self.state.len() != channels || self.state.first().is_some_and(|s| s.len() != stages) {
+            self.state = vec![vec![(0.0, 0.0); stages]; channels];
+            self.last = vec![0.0; channels];
+        }
+        let sr = rate.max(1) as f64;
+        for frame in buf.chunks_exact_mut(channels) {
+            let l = self.lfo.next(speed, rate, 0) * 0.5 + 0.5;
+            // sweep 200 Hz .. 200 Hz * 2^(depth * 4) on a log scale
+            let f = 200.0 * 2f64.powf(depth.clamp(0.0, 1.0) * 4.0 * l);
+            let t = (std::f64::consts::PI * f.min(sr * 0.45) / sr).tan();
+            let a = ((t - 1.0) / (t + 1.0)) as f32;
+            for (c, s) in frame.iter_mut().enumerate() {
+                let mut x = *s + self.last[c] * feedback;
+                for st in self.state[c].iter_mut() {
+                    let y = a * x + st.0 - a * st.1;
+                    st.0 = x;
+                    st.1 = y;
+                    x = y;
+                }
+                self.last[c] = x;
+                *s = *s * (1.0 - mix * 0.5) + x * mix * 0.5;
+            }
+        }
+    }
+}
+
+/// Bit depth and sample rate reduction.
+#[derive(Clone, Debug, Default)]
+pub struct Crusher {
+    held: Vec<f32>,
+    count: usize,
+}
+
+impl Crusher {
+    pub fn process(&mut self, buf: &mut [f32], channels: usize, bits: u32, hold: usize, mix: f32) {
+        if self.held.len() != channels {
+            self.held = vec![0.0; channels];
+            self.count = 0;
+        }
+        let levels = (1u32 << (bits.clamp(1, 16) - 1)) as f32;
+        let hold = hold.max(1);
+        for frame in buf.chunks_exact_mut(channels) {
+            let take = self.count == 0;
+            self.count = (self.count + 1) % hold;
+            for (c, s) in frame.iter_mut().enumerate() {
+                if take {
+                    self.held[c] = ((*s * levels).round() / levels).clamp(-1.0, 1.0);
+                }
+                *s = *s * (1.0 - mix) + self.held[c] * mix;
+            }
+        }
+    }
+}
+
+/// Noise gate: silences the signal while its level stays below the threshold.
+#[derive(Clone, Debug, Default)]
+pub struct Gate {
+    env: f64,
+    gain: f64,
+    held: usize,
+}
+
+impl Gate {
+    #[allow(clippy::too_many_arguments)]
+    pub fn process(
+        &mut self,
+        buf: &mut [f32],
+        channels: usize,
+        rate: u32,
+        threshold_db: f64,
+        attack_ms: f64,
+        hold_ms: f64,
+        release_ms: f64,
+    ) {
+        let sr = rate.max(1) as f64;
+        let thr = db_to_gain(threshold_db);
+        let coef = |ms: f64| (-1.0 / (ms.max(0.05) * 0.001 * sr)).exp();
+        let (ka, kr) = (coef(attack_ms), coef(release_ms));
+        let env_release = coef(20.0);
+        let hold = (hold_ms.max(0.0) * 0.001 * sr) as usize;
+        for frame in buf.chunks_exact_mut(channels) {
+            let peak = frame.iter().fold(0f32, |m, s| m.max(s.abs())) as f64;
+            self.env = if peak > self.env {
+                peak
+            } else {
+                self.env * env_release + peak * (1.0 - env_release)
+            };
+            let open = if self.env >= thr {
+                self.held = hold;
+                true
+            } else if self.held > 0 {
+                self.held -= 1;
+                true
+            } else {
+                false
+            };
+            let target = if open { 1.0 } else { 0.0 };
+            let k = if target > self.gain { ka } else { kr };
+            self.gain = target + (self.gain - target) * k;
+            let g = self.gain as f32;
+            frame.iter_mut().for_each(|s| *s *= g);
+        }
+    }
+}
+
+/// Pitch shifter: two read heads sweep through a short delay line at the pitch ratio and
+/// cross-fade (sin^2 windows that always sum to one), the classic delay-line shifter. Good for
+/// voices from deep to chipmunk; the duration does not change.
+#[derive(Clone, Debug, Default)]
+pub struct PitchShifter {
+    ring: Vec<Vec<f32>>,
+    pos: usize,
+    phase: f64,
+}
+
+impl PitchShifter {
+    pub fn process(&mut self, buf: &mut [f32], channels: usize, rate: u32, ratio: f64, mix: f32) {
+        // a 40 ms window: long enough for low voices, short enough to avoid echoes
+        let window = ((rate.max(8000) as f64 * 0.04) as usize).max(64);
+        let len = window * 2 + 4;
+        if self.ring.len() != channels || self.ring.first().is_some_and(|r| r.len() != len) {
+            self.ring = vec![vec![0.0; len]; channels];
+            self.pos = 0;
+            self.phase = 0.0;
+        }
+        let step = (1.0 - ratio) / window as f64;
+        for frame in buf.chunks_exact_mut(channels) {
+            for (c, s) in frame.iter_mut().enumerate() {
+                let ring = &mut self.ring[c];
+                ring[self.pos] = *s;
+                let mut out = 0.0f32;
+                for k in 0..2 {
+                    let f = (self.phase + k as f64 * 0.5).rem_euclid(1.0);
+                    let d = 1.0 + f * window as f64;
+                    let rp = (self.pos as f64 - d).rem_euclid(len as f64);
+                    let i0 = rp.floor() as usize % len;
+                    let i1 = (i0 + 1) % len;
+                    let fr = (rp - rp.floor()) as f32;
+                    let v = ring[i0] * (1.0 - fr) + ring[i1] * fr;
+                    let w = (std::f64::consts::PI * f).sin();
+                    out += v * (w * w) as f32;
+                }
+                *s = *s * (1.0 - mix) + out * mix;
+            }
+            self.phase = (self.phase + step).rem_euclid(1.0);
+            self.pos = (self.pos + 1) % len;
+        }
+    }
+}

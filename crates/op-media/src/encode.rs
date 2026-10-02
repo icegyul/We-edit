@@ -106,6 +106,31 @@ pub fn is_hardware_encoder(name: &str) -> bool {
         .any(|k| name.contains(k))
 }
 
+/// How H.264/HEVC streams are laid out: delivery files favour size, proxies favour seeking.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Tuning {
+    /// Keyframe interval in seconds.
+    pub gop_seconds: f64,
+    pub b_frames: u32,
+    /// x264/x265 preset.
+    pub preset: &'static str,
+}
+
+impl Tuning {
+    pub const DELIVERY: Tuning = Tuning {
+        gop_seconds: 2.0,
+        b_frames: 2,
+        preset: "medium",
+    };
+    /// Editing proxies: a keyframe every half second and no reordered frames, so any frame is
+    /// reached by decoding a handful of others.
+    pub const PROXY: Tuning = Tuning {
+        gop_seconds: 0.5,
+        b_frames: 0,
+        preset: "veryfast",
+    };
+}
+
 /// Adds which step failed to an FFmpeg error ("Invalid argument" alone says little).
 fn step(what: impl std::fmt::Display) -> impl FnOnce(MediaError) -> MediaError {
     move |e| MediaError::Failed(format!("{what}: {e}"))
@@ -246,6 +271,16 @@ impl Muxer {
         video: Option<&VideoSettings>,
         audio: Option<&AudioSettings>,
     ) -> Result<Muxer> {
+        Self::create_tuned(path, video, audio, Tuning::DELIVERY)
+    }
+
+    /// Like `create`, with the stream layout of `tuning` for H.264/HEVC.
+    pub fn create_tuned(
+        path: &Path,
+        video: Option<&VideoSettings>,
+        audio: Option<&AudioSettings>,
+        tuning: Tuning,
+    ) -> Result<Muxer> {
         init();
         let mut octx = ff::format::output(path)?;
         let global_header = octx
@@ -253,7 +288,7 @@ impl Muxer {
             .flags()
             .contains(ff::format::Flags::GLOBAL_HEADER);
         let video_out = match video {
-            Some(v) => Some(open_video(&mut octx, v, global_header)?),
+            Some(v) => Some(open_video(&mut octx, v, global_header, tuning)?),
             None => None,
         };
         let audio_out = match audio {
@@ -373,13 +408,14 @@ fn open_video(
     octx: &mut ff::format::context::Output,
     s: &VideoSettings,
     global_header: bool,
+    tuning: Tuning,
 ) -> Result<VideoOut> {
     let mut last_err = None;
     for name in s.codec.encoders(s.hardware) {
         let Some(codec) = ff::encoder::find_by_name(name) else {
             continue;
         };
-        match try_video(octx, s, codec, name, global_header) {
+        match try_video(octx, s, codec, name, global_header, tuning) {
             Ok(v) => return Ok(v),
             Err(e) => {
                 log::info!("video encoder {name} unavailable: {e}");
@@ -397,6 +433,7 @@ fn try_video(
     codec: ff::Codec,
     name: &str,
     global_header: bool,
+    tuning: Tuning,
 ) -> Result<VideoOut> {
     let input = s.codec.input();
     let wanted = input.pixel();
@@ -433,10 +470,14 @@ fn try_video(
     let mut opts = ff::Dictionary::new();
     let delivery = matches!(s.codec, VideoCodec::H264 | VideoCodec::Hevc);
     if delivery {
-        enc.set_gop((s.rate.as_f64() * 2.0).round() as u32);
+        enc.set_gop(((s.rate.as_f64() * tuning.gop_seconds).round() as u32).max(1));
         // VideoToolbox can give B-frame timestamps the MP4 muxer rejects ("Invalid argument")
         let videotoolbox = name.contains("videotoolbox");
-        enc.set_max_b_frames(if videotoolbox { 0 } else { 2 });
+        enc.set_max_b_frames(if videotoolbox {
+            0
+        } else {
+            tuning.b_frames as usize
+        });
         if videotoolbox {
             // the software path of VideoToolbox when the media engine is busy or missing
             opts.set("allow_sw", "1");
@@ -464,7 +505,7 @@ fn try_video(
             }
         }
         if name.starts_with("libx26") {
-            opts.set("preset", "medium");
+            opts.set("preset", tuning.preset);
         } else if name.contains("nvenc") {
             opts.set("preset", "p5");
         }

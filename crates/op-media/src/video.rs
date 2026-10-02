@@ -492,6 +492,8 @@ pub struct VideoDecoder {
     is_still: bool,
     eof: bool,
     frames: i64,
+    /// Seeks made so far (each one restarts decoding at a keyframe), for diagnostics.
+    seeks: u64,
 }
 
 impl VideoDecoder {
@@ -567,6 +569,7 @@ impl VideoDecoder {
             still: None,
             is_still,
             eof: false,
+            seeks: 0,
             frames,
         })
     }
@@ -682,7 +685,13 @@ impl VideoDecoder {
         }
     }
 
+    /// Seeks made so far; each one restarts decoding at the previous keyframe.
+    pub fn seeks(&self) -> u64 {
+        self.seeks
+    }
+
     fn seek_to(&mut self, index: i64, back_off: f64) -> Result {
+        self.seeks += 1;
         let secs = (index as f64 / self.rate.as_f64() - back_off).max(0.0);
         let start_us = (self.start_pts as f64 * self.time_base * 1_000_000.0) as i64;
         let ts = (secs * 1_000_000.0) as i64 + start_us;
