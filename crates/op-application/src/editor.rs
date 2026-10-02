@@ -1210,11 +1210,30 @@ impl Editor {
             }
             Ok(())
         });
+        let mut doomed = Vec::new();
         for (id, path) in with {
             self.media.forget(id);
             if Path::new(&path).starts_with(&folder) {
-                let _ = std::fs::remove_file(&path);
+                doomed.push(PathBuf::from(path));
             }
+        }
+        // the decoder that was reading a proxy closes it a moment later; Windows refuses to
+        // delete an open file, so the files go once they are free
+        if !doomed.is_empty() {
+            let _ = std::thread::Builder::new()
+                .name("remove-proxies".into())
+                .spawn(move || {
+                    for _ in 0..100 {
+                        doomed.retain(|p| std::fs::remove_file(p).is_err() && p.exists());
+                        if doomed.is_empty() {
+                            return;
+                        }
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    for p in doomed {
+                        log::warn!("proxy file still in use, not deleted: {}", p.display());
+                    }
+                });
         }
     }
 

@@ -87,6 +87,11 @@ fn preview_plays_the_proxy_and_export_the_original() {
 
     ed.remove_proxies(&[asset]);
     assert!(ed.project.asset(asset).unwrap().proxy.is_none());
+    // deleted once the decoder that read it lets go of it
+    let start = Instant::now();
+    while std::path::Path::new(&proxy).exists() && start.elapsed() < Duration::from_secs(5) {
+        std::thread::sleep(Duration::from_millis(20));
+    }
     assert!(
         !std::path::Path::new(&proxy).exists(),
         "our proxy file is deleted"
