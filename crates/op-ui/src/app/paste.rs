@@ -9,13 +9,11 @@ impl State {
         let Some(found) = paste::read() else {
             return false;
         };
-        // over the tracks: where the pointer is; else at the playhead when a timeline-side
-        // panel has the focus; else only into the project
+        // pasted media always goes on the timeline too: where the pointer is when it is over the
+        // tracks, else at the playhead (with no sequence open, the media starts one)
         let place = match self.tl.pointer_target(self.ctx.cumulative_pass_nr()) {
             Some((t, track)) => Some((Some(t), track)),
-            None => (self.ed.active.is_some()
-                && !matches!(self.focus, Focus::Project | Focus::Source | Focus::Effects))
-            .then_some((None, None)),
+            None => Some((None, None)),
         };
         let bin = self.ed.project.root;
         let (data, name, source) = match found {
@@ -87,7 +85,10 @@ impl State {
         if let Some(f) = &self.ed.prefs.paste_folder {
             return f.clone();
         }
-        if let Some(dir) = self.ed.path.as_ref().and_then(|p| p.parent()) {
+        // next to the project, unless the project is a recovered copy in the autosave folder
+        if let Some(dir) = self.ed.path.as_ref().and_then(|p| p.parent())
+            && !dir.starts_with(self.ed.dirs.autosave())
+        {
             return dir.join(t("Pasted Media"));
         }
         // Pictures on Windows and macOS, the XDG pictures folder on Linux

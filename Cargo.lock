@@ -3282,6 +3282,7 @@ dependencies = [
  "op-render",
  "op-timeline",
  "parking_lot",
+ "raw-window-handle",
  "rfd",
  "serde",
  "serde_json",
@@ -3289,6 +3290,7 @@ dependencies = [
  "tempfile",
  "ureq",
  "wgpu",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

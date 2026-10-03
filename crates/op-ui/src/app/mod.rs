@@ -1062,6 +1062,7 @@ impl State {
     }
 
     fn begin_frame(&mut self, ctx: &egui::Context) {
+        crate::cursor::begin_frame();
         self.poll_opening();
         self.poll_pastes();
         self.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
@@ -1218,7 +1219,8 @@ fn egui_extras_install(ctx: &egui::Context) {
 // --------------------------------------------------------------------------------- docking
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        crate::cursor::install(frame);
         let ctx = ui.ctx().clone();
         self.s.begin_frame(&ctx);
         if self.s.minimized {

@@ -1427,13 +1427,9 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
                 .flatten()
         })
     {
-        ui.ctx().set_cursor_icon(CursorIcon::None);
-        let fg = ui.ctx().layer_painter(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::new("hand-cursor"),
-        ));
+        let _ = p;
         let closed = matches!(s.tl.drag, Some(TlDrag::Hand { .. }));
-        crate::icons::hand(&fg, p, 22.0, closed);
+        crate::cursor::hand(ui.ctx(), closed);
     }
     // razor preview: translucent scissors at the pointer, and the cut line over a clip
     if s.ed.tool == Tool::Razor
@@ -1512,7 +1508,7 @@ fn input(
     {
         let h = hit(&seq, g, p);
         let cursor = match (tool, h) {
-            (Tool::Hand, _) => Some(CursorIcon::None),
+            (Tool::Hand, _) => None,
             (Tool::Zoom, _) => Some(if m.alt {
                 CursorIcon::ZoomOut
             } else {

@@ -17,6 +17,13 @@ pub const LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 
 const RING: usize = 4000;
 
+/// The log file stops growing here (a session normally writes well under a megabyte).
+const MAX_FILE: u64 = 100 << 20;
+
+/// OPENPREMIER_LOG_LIBRARIES=1 records every library at the chosen level.
+static ALL_LIBRARIES: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var("OPENPREMIER_LOG_LIBRARIES").is_ok_and(|v| v == "1"));
+
 /// One recorded message.
 #[derive(Clone, Debug)]
 pub struct Line {
@@ -45,6 +52,8 @@ struct Logger {
     /// Bumped on every recorded line (the viewer redraws when it changes).
     serial: AtomicUsize,
     start: Instant,
+    /// Bytes written to the file this session.
+    written: std::sync::atomic::AtomicU64,
 }
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
@@ -58,6 +67,7 @@ fn logger() -> &'static Logger {
         ring: Mutex::new(VecDeque::with_capacity(RING)),
         serial: AtomicUsize::new(0),
         start: Instant::now(),
+        written: std::sync::atomic::AtomicU64::new(0),
     })
 }
 
@@ -105,9 +115,11 @@ impl log::Log for Logger {
         if (m.level() as usize) > max {
             return false;
         }
-        // other libraries only report problems, except in the most detailed level
-        let ours = m.target().starts_with("op") || m.target().starts_with("openpremier");
-        if ours || max >= level_index(log::LevelFilter::Trace) {
+        // other libraries only report problems: at the most detailed levels the windowing and
+        // graphics libraries write thousands of lines a second (gigabytes in minutes);
+        // OPENPREMIER_LOG_LIBRARIES=1 lets them through for debugging those libraries
+        let ours = m.target().starts_with("op_") || m.target().starts_with("openpremier");
+        if ours || *ALL_LIBRARIES {
             return true;
         }
         // the Vulkan loader reports missing third-party layers as errors; that is noise
@@ -131,10 +143,24 @@ impl log::Log for Logger {
         if cfg!(debug_assertions) {
             eprintln!("{text}");
         }
-        if self.enabled.load(Ordering::Relaxed)
-            && let Some(f) = self.file.lock().as_mut()
-        {
-            let _ = writeln!(f, "{text}");
+        if self.enabled.load(Ordering::Relaxed) {
+            let mut file = self.file.lock();
+            if let Some(f) = file.as_mut() {
+                let n = self
+                    .written
+                    .fetch_add(text.len() as u64 + 1, Ordering::Relaxed);
+                if n < MAX_FILE {
+                    let _ = writeln!(f, "{text}");
+                } else {
+                    // a runaway log must not fill the disk
+                    let _ = writeln!(
+                        f,
+                        "the log reached {} MB; later lines are only kept in the log viewer",
+                        MAX_FILE >> 20
+                    );
+                    *file = None;
+                }
+            }
         }
         let mut ring = self.ring.lock();
         if ring.len() >= RING {
@@ -167,8 +193,18 @@ pub fn init(dir: &Path, enabled: bool, level: &str) {
     let l = logger();
     let _ = std::fs::create_dir_all(dir);
     let path = dir.join("openpremier.log");
+    let previous = dir.join("openpremier.previous.log");
+    let too_big = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > MAX_FILE);
+    if too_big(&previous) {
+        let _ = std::fs::remove_file(&previous);
+    }
     if path.exists() {
-        let _ = std::fs::rename(&path, dir.join("openpremier.previous.log"));
+        // a log that ran away (older versions logged libraries without limit) is not kept
+        if too_big(&path) {
+            let _ = std::fs::remove_file(&path);
+        } else {
+            let _ = std::fs::rename(&path, &previous);
+        }
     }
     *l.dir.lock() = Some(dir.to_path_buf());
     if log::set_logger(l).is_ok() {

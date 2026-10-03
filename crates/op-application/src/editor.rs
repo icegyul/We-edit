@@ -696,6 +696,12 @@ impl Editor {
         if let Some(items) = new_items {
             for (item, placement) in items.iter().zip(place) {
                 if let Some(p) = placement {
+                    log::info!(
+                        "placing {} on the timeline at {:?} ({:?})",
+                        p.path.display(),
+                        p.at.map(|t| t.seconds()),
+                        p.track
+                    );
                     // nothing open yet: the first pasted file makes a sequence of its own
                     if self.active.is_none() {
                         self.sequence_from_item(*item);

@@ -4,6 +4,7 @@
 mod app;
 mod captions_panel;
 mod color;
+mod cursor;
 mod dialogs;
 mod effect_controls;
 mod effects_panel;
