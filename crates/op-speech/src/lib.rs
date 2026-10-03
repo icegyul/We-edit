@@ -6,6 +6,7 @@
 //! every few words. Words inside a timed span get times in proportion to their length, which is
 //! close enough to light up each word as it is said.
 
+mod decoder;
 mod mel;
 mod tokenizer;
 
@@ -13,7 +14,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use candle_core::{D, Device, IndexOp, Tensor};
-use candle_transformers::models::whisper::{self as m, Config, audio, model::Whisper};
+use candle_transformers::models::whisper::{
+    self as m, Config, audio,
+    model::{AudioEncoder, Whisper},
+};
 use thiserror::Error;
 
 pub use tokenizer::Tokenizer;
@@ -201,15 +205,28 @@ pub fn spread_words(text: &str, start: f64, end: f64) -> Vec<Word> {
         .collect()
 }
 
+/// What Whisper writes.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Task {
+    /// The words in the language spoken.
+    #[default]
+    Transcribe,
+    /// An English translation of what is said (Whisper only translates into English).
+    Translate,
+}
+
 /// A loaded model, ready to transcribe.
 pub struct Transcriber {
-    model: Whisper,
+    encoder: AudioEncoder,
+    decoder: decoder::Decoder,
+    config: Config,
     tok: Tokenizer,
     filters: Vec<f32>,
     device: Device,
     sot: u32,
     eot: u32,
     transcribe: u32,
+    translate: u32,
     no_timestamps: u32,
     no_speech: Option<u32>,
     ts_begin: u32,
@@ -222,6 +239,28 @@ struct Decoded {
     no_speech_prob: f64,
 }
 
+/// Samples per silence check (half a second).
+const CHUNK: usize = m::SAMPLE_RATE / 2;
+
+/// The level below which half a second counts as silence: 30 dB under the loud parts of this
+/// recording, and never above -50 dBFS.
+fn silence_level(pcm: &[f32]) -> f32 {
+    let mut levels: Vec<f32> = pcm.chunks(CHUNK).map(rms).collect();
+    if levels.is_empty() {
+        return 0.0;
+    }
+    levels.sort_by(f32::total_cmp);
+    let loud = levels[(levels.len() * 9 / 10).min(levels.len() - 1)];
+    (loud * 0.03).min(0.003)
+}
+
+fn rms(x: &[f32]) -> f32 {
+    if x.is_empty() {
+        return 0.0;
+    }
+    (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt()
+}
+
 impl Transcriber {
     pub fn load(dir: &Path) -> Result<Transcriber> {
         let device = Device::Cpu;
@@ -232,7 +271,10 @@ impl Transcriber {
         let weights = std::fs::read(dir.join("model.safetensors"))?;
         let vb = candle_nn::VarBuilder::from_buffered_safetensors(weights, m::DTYPE, &device)?;
         let filters = mel::filters(config.num_mel_bins, m::N_FFT, SAMPLE_RATE);
-        let model = Whisper::load(&vb, config.clone())?;
+        // candle's encoder, and our decoder with a self-attention cache in place of its own
+        let Whisper { encoder, .. } = Whisper::load(&vb, config.clone())?;
+        let decoder = decoder::Decoder::load(vb.pp("model.decoder"), &config)?;
+        drop(vb);
         let id = |t: &str| {
             tok.id(t)
                 .ok_or_else(|| SpeechError::Model(format!("the tokenizer has no {t}")))
@@ -240,6 +282,7 @@ impl Transcriber {
         let sot = id(m::SOT_TOKEN)?;
         let eot = id(m::EOT_TOKEN)?;
         let transcribe = id(m::TRANSCRIBE_TOKEN)?;
+        let translate = id(m::TRANSLATE_TOKEN)?;
         let no_timestamps = id(m::NO_TIMESTAMPS_TOKEN)?;
         let no_speech = m::NO_SPEECH_TOKENS.iter().find_map(|t| tok.id(t));
         let mut suppress = vec![false; config.vocab_size];
@@ -250,13 +293,16 @@ impl Transcriber {
         }
         suppress[no_timestamps as usize] = true;
         Ok(Transcriber {
-            model,
+            encoder,
+            decoder,
+            config,
             tok,
             filters,
             device,
             sot,
             eot,
             transcribe,
+            translate,
             no_timestamps,
             no_speech,
             ts_begin: no_timestamps + 1,
@@ -265,48 +311,61 @@ impl Transcriber {
     }
 
     /// Transcribes 16 kHz mono samples. `language` is a code such as "es" (None detects it).
-    /// `progress` gets 0..1. Returns the language used and the timed segments.
+    /// `progress` gets 0..1. Returns the language spoken and the timed segments.
     pub fn transcribe(
         &mut self,
         pcm: &[f32],
         language: Option<&str>,
+        task: Task,
         progress: &mut dyn FnMut(f32),
         cancel: &AtomicBool,
     ) -> Result<(String, Vec<Segment>)> {
-        let mel = audio::pcm_to_mel(&self.model.config, pcm, &self.filters);
-        let n_mels = self.model.config.num_mel_bins;
+        let mel = audio::pcm_to_mel(&self.config, pcm, &self.filters);
+        let n_mels = self.config.num_mel_bins;
         let mel_len = mel.len() / n_mels;
         let mel = Tensor::from_vec(mel, (1, n_mels, mel_len), &self.device)?;
         // frames that hold audio (the rest is padding)
         let content = (pcm.len() / m::HOP_LENGTH).min(mel_len);
+        let quiet = silence_level(pcm);
         let language = match language {
             Some(l) if LANGUAGES.contains(&l) => l.to_string(),
-            _ => self.detect_language(&mel)?,
+            _ => self.detect_language(&mel, pcm, content)?,
         };
         let lang_token = self
             .tok
             .id(&format!("<|{language}|>"))
             .ok_or_else(|| SpeechError::Model(format!("no language token for {language}")))?;
+        let task_token = match task {
+            Task::Transcribe => self.transcribe,
+            Task::Translate => self.translate,
+        };
+        let prompt = [self.sot, lang_token, task_token];
         let secs_per_frame = m::HOP_LENGTH as f64 / m::SAMPLE_RATE as f64;
+        let frames_per_chunk = CHUNK / m::HOP_LENGTH;
         let mut segments = Vec::new();
         let mut seek = 0usize;
         while seek < content {
             if cancel.load(Ordering::Relaxed) {
                 return Err(SpeechError::Cancelled);
             }
+            // silence costs nothing: skip it half a second at a time
+            let silent = |f: usize| {
+                let a = f * m::HOP_LENGTH;
+                let b = (a + CHUNK).min(pcm.len());
+                a >= pcm.len() || rms(&pcm[a..b]) < quiet
+            };
+            while seek < content && silent(seek) {
+                seek += frames_per_chunk;
+            }
+            if seek >= content {
+                break;
+            }
             progress(seek as f32 / content.max(1) as f32);
             let size = (content - seek).min(m::N_FRAMES);
-            let window = mel.narrow(2, seek, size)?;
-            let window = if size < m::N_FRAMES {
-                // the encoder expects exactly 30 seconds
-                let pad = Tensor::zeros((1, n_mels, m::N_FRAMES - size), m::DTYPE, &self.device)?;
-                Tensor::cat(&[&window, &pad], 2)?
-            } else {
-                window
-            };
+            let window = self.window(&mel, seek, size)?;
             let offset = seek as f64 * secs_per_frame;
             let window_secs = size as f64 * secs_per_frame;
-            let dr = self.decode_with_fallback(&window, lang_token, window_secs)?;
+            let dr = self.decode_with_fallback(&window, &prompt, window_secs)?;
             if dr.no_speech_prob > m::NO_SPEECH_THRESHOLD && dr.avg_logprob < m::LOGPROB_THRESHOLD {
                 seek += size;
                 continue;
@@ -324,27 +383,74 @@ impl Transcriber {
         Ok((language, segments))
     }
 
-    fn detect_language(&mut self, mel: &Tensor) -> Result<String> {
-        let n = mel.dim(2)?.min(m::N_FRAMES);
-        let mut window = mel.narrow(2, 0, n)?;
-        if n < m::N_FRAMES {
-            let n_mels = self.model.config.num_mel_bins;
-            let pad = Tensor::zeros((1, n_mels, m::N_FRAMES - n), m::DTYPE, &self.device)?;
-            window = Tensor::cat(&[&window, &pad], 2)?;
-        }
-        let features = self.model.encoder.forward(&window, true)?;
-        let tokens = Tensor::new(&[[self.sot]], &self.device)?;
-        let ys = self.model.decoder.forward(&tokens, &features, true)?;
-        let logits = self.model.decoder.final_linear(&ys.i(..1)?)?.i(0)?.i(0)?;
-        let logits: Vec<f32> = logits.to_vec1()?;
-        let best = LANGUAGES
-            .iter()
-            .filter_map(|l| {
-                let id = self.tok.id(&format!("<|{l}|>"))?;
-                Some((*l, logits.get(id as usize).copied()?))
+    /// `size` frames from `seek`, padded to the 30 seconds the encoder expects.
+    fn window(&self, mel: &Tensor, seek: usize, size: usize) -> Result<Tensor> {
+        let window = mel.narrow(2, seek, size)?;
+        Ok(if size < m::N_FRAMES {
+            let n_mels = self.config.num_mel_bins;
+            let pad = Tensor::zeros((1, n_mels, m::N_FRAMES - size), m::DTYPE, &self.device)?;
+            Tensor::cat(&[&window, &pad], 2)?
+        } else {
+            window
+        })
+    }
+
+    /// The language spoken, from up to three 30-second stretches with the most speech (the
+    /// start of a video is often music or silence, which Whisper takes for English).
+    fn detect_language(&mut self, mel: &Tensor, pcm: &[f32], content: usize) -> Result<String> {
+        let quiet = silence_level(pcm);
+        let mut windows: Vec<(usize, usize)> = (0..content.max(1))
+            .step_by(m::N_FRAMES)
+            .map(|f| {
+                let a = f * m::HOP_LENGTH;
+                let b = (a + m::N_SAMPLES).min(pcm.len());
+                let voiced = pcm
+                    .get(a..b)
+                    .unwrap_or(&[])
+                    .chunks(CHUNK)
+                    .filter(|c| rms(c) >= quiet)
+                    .count();
+                (f, voiced)
             })
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(l, _)| l.to_string())
+            .collect();
+        windows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        windows.truncate(3);
+        let codes: Vec<(&str, u32)> = LANGUAGES
+            .iter()
+            .filter_map(|l| Some((*l, self.tok.id(&format!("<|{l}|>"))?)))
+            .collect();
+        let mut score = vec![0.0f32; codes.len()];
+        for (f, voiced) in windows {
+            if voiced == 0 && !score.iter().all(|s| *s == 0.0) {
+                continue;
+            }
+            let size = (content - f.min(content))
+                .clamp(1, m::N_FRAMES)
+                .min(mel.dim(2)? - f);
+            let window = self.window(mel, f, size)?;
+            let features = self.encoder.forward(&window, true)?;
+            self.decoder.reset();
+            let ys = self.decoder.forward(&[self.sot], &features)?;
+            let logits: Vec<f32> = self.decoder.logits(&ys)?.i(0)?.i(0)?.to_vec1()?;
+            // probabilities among the language tokens, added up over the windows
+            let lang: Vec<f32> = codes
+                .iter()
+                .map(|(_, id)| {
+                    logits
+                        .get(*id as usize)
+                        .copied()
+                        .unwrap_or(f32::NEG_INFINITY)
+                })
+                .collect();
+            for (s, p) in score.iter_mut().zip(log_softmax(&lang)) {
+                *s += p.exp();
+            }
+        }
+        let best = codes
+            .iter()
+            .zip(&score)
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|((l, _), _)| l.to_string())
             .unwrap_or_else(|| "en".into());
         log::info!("detected language: {best}");
         Ok(best)
@@ -353,12 +459,15 @@ impl Transcriber {
     fn decode_with_fallback(
         &mut self,
         mel: &Tensor,
-        lang: u32,
+        prompt: &[u32],
         window_secs: f64,
     ) -> Result<Decoded> {
+        // the encoder runs once per window, whatever the number of tries
+        let features = self.encoder.forward(mel, true)?;
+        self.decoder.reset();
         let mut last = None;
         for (i, &t) in m::TEMPERATURES.iter().enumerate() {
-            let dr = self.decode(mel, lang, t, window_secs, i as u64)?;
+            let dr = self.decode(&features, prompt, t, window_secs, i as u64)?;
             let text = self.tok.decode(&dr.tokens, self.ts_begin);
             let ratio = compression_ratio(&text);
             let good =
@@ -373,41 +482,32 @@ impl Transcriber {
 
     fn decode(
         &mut self,
-        mel: &Tensor,
-        lang: u32,
+        features: &Tensor,
+        prompt: &[u32],
         temperature: f64,
         window_secs: f64,
         seed: u64,
     ) -> Result<Decoded> {
-        let features = self.model.encoder.forward(mel, true)?;
-        let prompt = vec![self.sot, lang, self.transcribe];
-        let mut tokens = prompt.clone();
+        self.decoder.restart();
+        let mut tokens: Vec<u32> = prompt.to_vec();
         let mut sum_logprob = 0.0f64;
         let mut no_speech_prob = 0.0f64;
         let mut rng = 0x9E37_79B9_7F4A_7C15u64 ^ seed.wrapping_mul(0x2545_F491_4F6C_DD1D);
-        let sample_len = self.model.config.max_target_positions / 2;
+        let capacity = self.decoder.capacity();
+        let sample_len = capacity / 2;
         // the last timestamp this window may use
         let max_ts = self.ts_begin + (window_secs / 0.02).round() as u32;
-        for i in 0..sample_len {
-            let input = Tensor::new(tokens.as_slice(), &self.device)?.unsqueeze(0)?;
-            let ys = self.model.decoder.forward(&input, &features, i == 0)?;
-            if i == 0
-                && let Some(ns) = self.no_speech
-            {
-                let first = self
-                    .model
-                    .decoder
-                    .final_linear(&ys.i((..1, ..1))?)?
-                    .i(0)?
-                    .i(0)?;
-                let probs: Vec<f32> = candle_nn::ops::softmax(&first, D::Minus1)?.to_vec1()?;
-                no_speech_prob = probs.get(ns as usize).copied().unwrap_or(0.0) as f64;
-            }
+        let mut ys = self.decoder.forward(prompt, features)?;
+        if let Some(ns) = self.no_speech {
+            let first = self.decoder.logits(&ys.i((..1, ..1))?)?.i(0)?.i(0)?;
+            let probs: Vec<f32> = candle_nn::ops::softmax(&first, D::Minus1)?.to_vec1()?;
+            no_speech_prob = probs.get(ns as usize).copied().unwrap_or(0.0) as f64;
+        }
+        for _ in 0..sample_len {
             let (_, seq_len, _) = ys.dims3()?;
             let logits = self
-                .model
                 .decoder
-                .final_linear(&ys.i((..1, seq_len - 1..))?)?
+                .logits(&ys.i((..1, seq_len - 1..))?)?
                 .i(0)?
                 .i(0)?;
             let mut logits: Vec<f32> = logits.to_vec1()?;
@@ -420,9 +520,10 @@ impl Transcriber {
             };
             sum_logprob += logprobs[next as usize] as f64;
             tokens.push(next);
-            if next == self.eot || tokens.len() > self.model.config.max_target_positions {
+            if next == self.eot || tokens.len() >= capacity {
                 break;
             }
+            ys = self.decoder.forward(&[next], features)?;
         }
         let generated = tokens[prompt.len()..].to_vec();
         let n = generated.len().max(1);
@@ -640,5 +741,21 @@ mod tests {
         assert_eq!(ModelSize::from_id("whisper-base"), Some(ModelSize::Base));
         let dir = tempfile::tempdir().unwrap();
         assert!(!ModelSize::Tiny.is_downloaded(dir.path()));
+    }
+
+    #[test]
+    fn silence_is_measured_against_the_recording() {
+        // ten seconds of speech-level tone, five of hiss
+        let mut pcm: Vec<f32> = (0..160_000)
+            .map(|i| (i as f32 * 0.07).sin() * 0.3)
+            .collect();
+        pcm.extend((0..80_000).map(|i| if i % 2 == 0 { 0.0002 } else { -0.0002 }));
+        let level = silence_level(&pcm);
+        assert!(level > rms(&pcm[170_000..178_000]));
+        assert!(level < rms(&pcm[..8_000]));
+        // a quiet recording is not all silence
+        let quiet: Vec<f32> = pcm.iter().map(|v| v * 0.05).collect();
+        assert!(silence_level(&quiet) < rms(&quiet[..8_000]));
+        assert_eq!(silence_level(&[]), 0.0);
     }
 }

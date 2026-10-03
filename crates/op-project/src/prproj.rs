@@ -1,4 +1,4 @@
-//! Read-only import of Premiere Pro 2024 project files (docs/prproj-spec.md).
+//! Read-only import of Premiere Pro 2024 project files.
 //!
 //! The file is a gzip container holding an XML identity/reference graph. This importer:
 //!
@@ -672,7 +672,7 @@ impl<'a> Importer<'a> {
     }
 
     /// (start, end, identity) of the transition items of a track. Their serialization is not
-    /// documented (docs/prproj-spec.md); times and the component identity are looked up the way
+    /// recognized; times and the component identity are looked up the way
     /// clip items store them, and items without them are skipped.
     fn transition_items(&mut self, tnode: usize) -> Vec<(i64, i64, Option<String>)> {
         let Some(items) = self.doc.path(tnode, "ClipTrack/TransitionItems/TrackItems") else {
@@ -1202,8 +1202,7 @@ struct ParsedParam {
     keys: Vec<(i64, String)>,
 }
 
-/// ParameterID -> our parameter key, for components whose layout is documented in
-/// docs/evidence/generated/premiere_effect_layouts.md.
+/// ParameterID -> our parameter key, for components whose parameter order is known.
 type ParamMap = &'static [(u32, &'static str)];
 
 const MOTION_MAP: ParamMap = &[
@@ -1238,10 +1237,9 @@ const LUMETRI_MAP: ParamMap = &[
 ];
 
 const MOSAIC_MAP: ParamMap = &[(1, "horizontal"), (2, "vertical")];
-/// Opacity's first parameter (docs/effects-catalog.md); the blend mode is not mapped yet.
+/// Opacity's first parameter; the blend mode is not mapped yet.
 const OPACITY_MAP: ParamMap = &[(1, "opacity")];
-/// Fast Blur's observed layout (docs/evidence/generated/premiere_effect_layouts.md), read into
-/// Gaussian Blur.
+/// Fast Blur's parameters, read into Gaussian Blur.
 const FAST_BLUR_MAP: ParamMap = &[(1, "blurriness"), (2, "dimensions"), (3, "repeat_edge")];
 
 /// Parameter layouts of foreign components imported as an equivalent effect.

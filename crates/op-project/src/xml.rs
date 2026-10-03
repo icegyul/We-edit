@@ -1,4 +1,4 @@
-//! A small bounded XML tree for interchange files (docs/prproj-spec.md 3).
+//! A small bounded XML tree for interchange files.
 //!
 //! Documents are treated as hostile: DTDs are rejected (so no external or custom entities),
 //! only the predefined and numeric character references are resolved, and element count,

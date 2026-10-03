@@ -3,7 +3,7 @@
 
 use std::sync::atomic::AtomicBool;
 
-use op_speech::{ModelSize, Transcriber};
+use op_speech::{ModelSize, Task, Transcriber};
 
 fn read_wav(path: &std::path::Path) -> Vec<f32> {
     let bytes = std::fs::read(path).unwrap();
@@ -39,7 +39,13 @@ fn transcribes_speech_with_word_times() {
     let start = std::time::Instant::now();
     let mut t = Transcriber::load(&size.dir(&models)).unwrap();
     let (lang, segs) = t
-        .transcribe(&pcm, None, &mut |_| {}, &AtomicBool::new(false))
+        .transcribe(
+            &pcm,
+            None,
+            Task::Transcribe,
+            &mut |_| {},
+            &AtomicBool::new(false),
+        )
         .unwrap();
     eprintln!("{lang} in {:.1} s", start.elapsed().as_secs_f32());
     for s in &segs {

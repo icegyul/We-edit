@@ -416,6 +416,10 @@ fn item_menu(s: &mut State, ui: &mut Ui, id: ItemId) {
             s.focus = Focus::Project;
             crate::app::proxy_menu(ui, s);
         }
+        if !std::path::Path::new(&a.path).exists() && ui.button(t("Link Media...")).clicked() {
+            ui.close();
+            s.command("op.file.linkmedia");
+        }
         if ui.button(t("Relink Media...")).clicked() {
             ui.close();
             if let Some(path) = rfd::FileDialog::new()

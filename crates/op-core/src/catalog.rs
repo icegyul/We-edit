@@ -172,8 +172,8 @@ pub struct EffectDef {
     pub name: &'static str,
     pub kind: EffectKind,
     pub category: &'static str,
-    /// `MatchName` identities observed in other applications' project and preset files for the
-    /// same component (docs/evidence). Only attested names are listed; importers keep any other
+    /// `MatchName` identities other applications write in their project files for the same
+    /// component. Only attested names are listed; importers keep any other
     /// component as an opaque, unrendered instance (DM-FX-003).
     pub match_names: &'static [&'static str],
     pub params: &'static [ParamSpec],

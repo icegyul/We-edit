@@ -115,8 +115,6 @@ Audio tracks and clips carry explicit channel layouts and routing maps. Automati
 
 Track automation state is modeled as `Off | Read | Write | Latch | Touch | Foreign(code)`, with independent safe-during-write flags and Automatch policy. The labels are a public behavioral contract; source numeric codes remain adapter-owned until mapped by controlled fixtures.
 
-Preset evidence contains at least two versioned initial-track payload shapes: a version-5 wrapped object array and a version-8 direct array with sends, panner assignments, track IDs and volume. Adapter structs for these shapes remain separate from the canonical runtime graph; missing fields are not invented as defaults.
-
 - **DM-AUD-001:** No import path silently reduces multichannel audio to stereo.
 - **DM-AUD-002:** Plugin latency and tail are modeled for compensation and export.
 - **DM-AUD-003:** Sample-accurate automation is evaluated in the same graph for live playback and offline export.

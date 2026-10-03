@@ -342,7 +342,7 @@ pub fn paste_attributes(
                     catalog::VOLUME => what.volume,
                     catalog::CHANNEL_VOLUME => what.channel_volume,
                     catalog::PANNER => what.panner,
-                    _ => what.effects && !src.is_fixed(),
+                    _ => what.effects && is_standard(src),
                 };
                 if !wanted {
                     continue;
@@ -375,6 +375,56 @@ pub fn paste_attributes(
 }
 
 use op_core::catalog;
+
+/// A standard effect (not a fixed effect, nor the text or caption a graphics clip draws).
+fn is_standard(c: &Component) -> bool {
+    c.def()
+        .is_none_or(|d| matches!(d.kind, EffectKind::VideoEffect | EffectKind::AudioEffect))
+}
+
+/// Remove Attributes: the chosen fixed effects go back to their defaults and, with `effects`,
+/// standard effects are removed; keyframes go with them.
+pub fn remove_attributes(
+    p: &mut Project,
+    sid: SequenceId,
+    clips: &[ClipId],
+    what: Attributes,
+    opts: EditOptions,
+) -> EditResult {
+    run(p, sid, opts, |ed| {
+        let mut any = false;
+        for id in clips {
+            let (r, mut c) = ed.clip(*id)?;
+            ed.writable(r)?;
+            let before = c.components.clone();
+            if what.effects {
+                c.components.retain(|x| !is_standard(x));
+            }
+            for comp in &mut c.components {
+                let wanted = match comp.effect.as_str() {
+                    catalog::MOTION => what.motion,
+                    catalog::OPACITY => what.opacity,
+                    catalog::VOLUME => what.volume,
+                    catalog::CHANNEL_VOLUME => what.channel_volume,
+                    catalog::PANNER => what.panner,
+                    _ => false,
+                };
+                if let (true, Some(def)) = (wanted, comp.def()) {
+                    let fresh = Component::new(def, &mut ed.ids);
+                    comp.params = fresh.params;
+                    comp.enabled = true;
+                }
+            }
+            if c.components != before {
+                any = true;
+                let t = ed.track_mut(r)?;
+                let i = t.index_of(c.id).unwrap();
+                t.clips[i] = c;
+            }
+        }
+        if any { Ok(()) } else { Err(EditError::Nothing) }
+    })
+}
 
 /// Nest: moves the clips into a new sequence and replaces them with one nested clip (plus a
 /// linked audio clip when audio was selected). Returns the new sequence and the new clips.
@@ -630,6 +680,48 @@ pub fn add_marker(p: &mut Project, sid: SequenceId, t: SeqTime) -> EditResult<Ma
 mod tests {
     use super::*;
     use crate::testutil::*;
+
+    #[test]
+    fn remove_attributes_resets_fixed_effects_and_drops_effects() {
+        let mut f = fixture();
+        let ids = f.put(0.0, 5.0, 0.0);
+        let seq = f.seq;
+        {
+            let ids_gen = &mut f.p.ids;
+            let motion = catalog::find(catalog::MOTION).unwrap();
+            let blur = catalog::find("op.video.gaussian_blur").unwrap();
+            let mut m = Component::new(motion, ids_gen);
+            m.params
+                .iter_mut()
+                .find(|x| x.key == "scale")
+                .unwrap()
+                .value = Value::Float(150.0);
+            let b = Component::new(blur, ids_gen);
+            let c = f.p.sequence_mut(seq).unwrap().clip_mut(ids[0]).unwrap();
+            c.components.retain(|x| x.effect != catalog::MOTION);
+            c.components.push(m);
+            c.components.push(b);
+        }
+        let what = Attributes {
+            opacity: false,
+            ..Attributes::default()
+        };
+        f.apply(|p| remove_attributes(p, seq, &[ids[0]], what, EditOptions::default()))
+            .unwrap();
+        let c = f.seq().clip(ids[0]).unwrap().clone();
+        let scale = c
+            .component(catalog::MOTION)
+            .unwrap()
+            .param("scale")
+            .unwrap();
+        assert_eq!(scale.value, Value::Float(100.0));
+        assert!(c.component("op.video.gaussian_blur").is_none());
+        // nothing left to remove
+        assert!(
+            f.apply(|p| remove_attributes(p, seq, &[ids[0]], what, EditOptions::default()))
+                .is_err()
+        );
+    }
 
     #[test]
     fn move_overwrites_and_carries_links() {

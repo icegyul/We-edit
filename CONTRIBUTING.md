@@ -34,5 +34,5 @@ copyrighted assets. Use public documentation and controlled observations with or
 fixtures. Record exact versions, environment, steps, output, hashes, and uncertainty. Private
 Adobe-generated files may be local oracles but must not be committed.
 
-Writable `.prproj` support stays disabled until the round-trip requirements in
-`docs/compatibility-validation.md` are validated.
+Writable `.prproj` support stays disabled until lossless round trips are demonstrated with
+original fixtures. Notes taken while studying other products stay outside this repository.

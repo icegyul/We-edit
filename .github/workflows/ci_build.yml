@@ -39,13 +39,11 @@ jobs:
           set -euo pipefail
           required=(
             docs/index.md
-            docs/compatibility-validation.md
             docs/architecture.md
             docs/data-model.md
-            docs/prproj-spec.md
             docs/keyboard-shortcuts.md
-            docs/effects-catalog.md
-            docs/panel-system-spec.md
+            docs/effects.md
+            docs/roadmap.md
             docs/plugin-api-spec.md
             docs/timeline-behavior.md
             docs/implementation-status.md

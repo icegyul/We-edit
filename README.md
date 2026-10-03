@@ -33,19 +33,21 @@ en todos los trabajos de producción.
 - Timeline multipista con insert, overwrite, razor, ripple, roll, slip, slide, rate stretch,
   snapping, nesting, marcadores, transiciones y keyframes.
 - Paneles acoplables para Proyecto, Source, Program, Timeline, Effect Controls, Effects, History,
-  Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics y Tools.
+  Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics, Subtítulos y Tools.
 - Lectura, decodificación y exportación multimedia mediante FFmpeg, con exportación que se puede
   pausar, vista previa de los fotogramas renderizados y velocidad de fotogramas configurable.
 - Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12, Metal u OpenGL (se elige en
   Preferencias).
 - Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático.
 - Cinco perfiles de rendimiento, de Ultra rendimiento a Calidad máxima, elegidos automáticamente
-  según el procesador, la memoria y la tarjeta gráfica; funciona incluso en equipos sin tarjeta
-  gráfica (modo Solo software).
+  según el procesador, la memoria y la tarjeta gráfica, o ajustados uno por uno; funciona incluso
+  en equipos sin tarjeta gráfica (modo Solo software).
 - Subtítulos animados automáticos al estilo TikTok: la voz de la secuencia se transcribe en el
   propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 12 estilos
-  (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...). También importa y exporta
-  SRT y WebVTT.
+  (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...), en el idioma hablado o
+  traducidos al inglés. El panel Subtítulos cambia el estilo de todos a la vez y permite corregir
+  el texto. También importa y exporta SRT y WebVTT.
+- Vincular medios: si los archivos se movieron, se ubican a mano o se buscan solos en el equipo.
 - Proxies como en Premiere Pro: copias ligeras de los clips para editar con fluidez material 4K o
   de cámara, con un botón para alternar entre proxies y originales; la exportación usa siempre el
   original.

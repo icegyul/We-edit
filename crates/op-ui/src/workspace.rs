@@ -1,4 +1,4 @@
-//! Panels and workspaces (panel-system-spec 4 and 6). A workspace is a complete docking layout
+//! Panels and workspaces. A workspace is a complete docking layout
 //! (UI-WS-001); user changes are kept per workspace and can be reset.
 
 use egui_dock::{DockState, NodeIndex};
@@ -21,10 +21,11 @@ pub enum Panel {
     Lumetri,
     Scopes,
     Graphics,
+    Captions,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 15] = [
+    pub const ALL: [Panel; 16] = [
         Panel::Project,
         Panel::Source,
         Panel::Program,
@@ -40,6 +41,7 @@ impl Panel {
         Panel::Lumetri,
         Panel::Scopes,
         Panel::Graphics,
+        Panel::Captions,
     ];
 
     pub fn title(self) -> &'static str {
@@ -59,6 +61,7 @@ impl Panel {
             Panel::Lumetri => "Lumetri Color",
             Panel::Scopes => "Lumetri Scopes",
             Panel::Graphics => "Essential Graphics",
+            Panel::Captions => "Captions",
         }
     }
 
@@ -129,8 +132,11 @@ impl Workspace {
             Workspace::Editing => {
                 // monitors on top, project / tools / timeline / meters below
                 let [bottom, top] = t.split_above(NodeIndex::root(), 0.5, vec![Program]);
-                let [_program, _source] =
-                    t.split_left(top, 0.5, vec![Source, EffectControls, AudioMixer, Graphics]);
+                let [_program, _source] = t.split_left(
+                    top,
+                    0.5,
+                    vec![Source, EffectControls, AudioMixer, Graphics, Captions],
+                );
                 let [timeline, _project] =
                     t.split_left(bottom, 0.3, vec![Project, Effects, Markers, History, Info]);
                 let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
@@ -173,8 +179,11 @@ impl Workspace {
                 t.split_right(timeline, 0.93, vec![Meters]);
             }
             Workspace::Graphics => {
-                let [left, _g] =
-                    t.split_right(NodeIndex::root(), 0.77, vec![Graphics, EffectControls]);
+                let [left, _g] = t.split_right(
+                    NodeIndex::root(),
+                    0.77,
+                    vec![Graphics, Captions, EffectControls],
+                );
                 let [bottom, top] = t.split_above(left, 0.52, vec![Program]);
                 t.split_left(top, 0.4, vec![Source, Project]);
                 let [timeline, _tools] = t.split_left(bottom, 0.02, vec![Tools]);
@@ -191,7 +200,7 @@ impl Workspace {
 
 /// Saved layouts carry this version in their file name; a new factory layout replaces layouts
 /// saved by older versions.
-pub const LAYOUT_VERSION: u32 = 2;
+pub const LAYOUT_VERSION: u32 = 3;
 
 /// Layout JSON as saved: rectangles that were never laid out are NaN, which JSON writes as
 /// null; they are restored as zero (egui_dock recomputes them on the next frame).

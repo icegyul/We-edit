@@ -1107,7 +1107,7 @@ fn draw_clip(
     painter.rect_filled(r, 2.0, fill);
     let inner = painter.with_clip_rect(r.intersect(g.body));
     let name_y = r.min.y + 2.0;
-    let profile = s.ed.prefs.profile().settings();
+    let profile = s.ed.prefs.performance();
     if c.is_video() {
         // head thumbnail (off in Ultra Performance)
         if profile.thumbnails

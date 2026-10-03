@@ -17,7 +17,7 @@ const ROW_H: f32 = 24.0;
 
 #[derive(Default)]
 pub struct EcView {
-    fonts: Vec<String>,
+    pub fonts: Vec<String>,
     kf_drag: Option<(ComponentId, String, usize)>,
     curve_drag: Option<usize>,
 }

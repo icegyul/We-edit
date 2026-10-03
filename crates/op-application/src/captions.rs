@@ -18,7 +18,7 @@ use parking_lot::Mutex;
 use crate::editor::Editor;
 use crate::media::MediaService;
 
-pub use op_speech::ModelSize;
+pub use op_speech::{ModelSize, Task};
 
 /// How new captions look and how many words each one holds.
 #[derive(Clone, Debug, PartialEq)]
@@ -43,9 +43,34 @@ impl Default for CaptionOptions {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TranscribeOptions {
     pub model: ModelSize,
-    /// Whisper language code, or None to detect it.
+    /// Whisper language code of the speech, or None to detect it.
     pub language: Option<String>,
+    /// Captions in the language spoken, or translated into English.
+    pub task: Task,
     pub captions: CaptionOptions,
+}
+
+/// English names of the languages offered in the transcription dialog, for messages.
+pub fn language_name(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "es" => "Spanish",
+        "en" => "English",
+        "pt" => "Portuguese",
+        "fr" => "French",
+        "de" => "German",
+        "it" => "Italian",
+        "ca" => "Catalan",
+        "nl" => "Dutch",
+        "pl" => "Polish",
+        "ru" => "Russian",
+        "tr" => "Turkish",
+        "ar" => "Arabic",
+        "hi" => "Hindi",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "zh" => "Chinese",
+        _ => return None,
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,7 +92,7 @@ pub struct CaptionJob {
     pub options: TranscribeOptions,
     progress: Arc<Mutex<CaptionProgress>>,
     cancel: Arc<AtomicBool>,
-    result: Arc<Mutex<Option<Result<Vec<Cue>, String>>>>,
+    result: Arc<Mutex<Option<Result<(String, Vec<Cue>), String>>>>,
 }
 
 impl CaptionJob {
@@ -79,7 +104,7 @@ impl CaptionJob {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
-    fn take(&self) -> Option<Result<Vec<Cue>, String>> {
+    fn take(&self) -> Option<Result<(String, Vec<Cue>), String>> {
         self.result.lock().take()
     }
 }
@@ -187,9 +212,10 @@ impl Editor {
             options.clone(),
         );
         log::info!(
-            "transcribing sequence with {} ({})",
+            "transcribing sequence with {} ({}, {:?})",
             opts.model.id(),
-            opts.language.as_deref().unwrap_or("auto")
+            opts.language.as_deref().unwrap_or("auto"),
+            opts.task
         );
         let spawned = std::thread::Builder::new()
             .name("captions".into())
@@ -217,16 +243,23 @@ impl Editor {
     pub(crate) fn poll_captions(&mut self) {
         let Some(job) = &self.captioning else { return };
         let Some(res) = job.take() else { return };
-        let (sid, opts) = (job.sequence, job.options.captions.clone());
+        let (sid, opts, task) = (job.sequence, job.options.captions.clone(), job.options.task);
         self.captioning = None;
         match res {
-            Ok(cues) if cues.is_empty() => self.info("No speech was found".to_string()),
-            Ok(cues) => {
+            Ok((_, cues)) if cues.is_empty() => self.info("No speech was found".to_string()),
+            Ok((lang, cues)) => {
                 if self.active != Some(sid) {
                     self.open_sequence(sid);
                 }
                 let n = self.create_captions(&cues, &opts);
-                self.info(format!("Created {n} captions"));
+                // say which language was heard, so a wrong guess is easy to spot and redo
+                let lang = language_name(&lang).map(str::to_string).unwrap_or(lang);
+                match task {
+                    Task::Transcribe => self.info(format!("Created {n} captions in {lang}")),
+                    Task::Translate => {
+                        self.info(format!("Created {n} captions translated from {lang}"))
+                    }
+                }
             }
             Err(e) if e == "cancelled" => {}
             Err(e) => self.error(format!("Captions not created: {e}")),
@@ -447,6 +480,73 @@ impl Editor {
         Ok(cues.len())
     }
 
+    /// Caption clips of the active sequence, in time order.
+    pub fn caption_clips(&self) -> Vec<ClipId> {
+        let Some(seq) = self.active_seq() else {
+            return Vec::new();
+        };
+        let mut v: Vec<(SeqTime, ClipId)> = seq
+            .video
+            .iter()
+            .flat_map(|t| &t.clips)
+            .filter(|c| c.component(catalog::CAPTION).is_some())
+            .map(|c| (c.start, c.id))
+            .collect();
+        v.sort();
+        v.into_iter().map(|(_, id)| id).collect()
+    }
+
+    /// Sets Caption parameters on several captions at once (one undo step; `merge` joins the
+    /// steps of a slider drag).
+    pub fn set_caption_values(
+        &mut self,
+        clips: &[ClipId],
+        values: Vec<(String, Value)>,
+        merge: Option<String>,
+    ) {
+        if clips.is_empty() || values.is_empty() {
+            return;
+        }
+        let clips = clips.to_vec();
+        let Some(sid) = self.active else { return };
+        self.edit_merge("Caption Style", merge, move |p| {
+            let s = p
+                .sequence_mut(sid)
+                .ok_or(EditError::NotFound("sequence".into()))?;
+            let mut n = 0;
+            for t in s.video.iter_mut() {
+                let t = Arc::make_mut(t);
+                for c in t.clips.iter_mut().filter(|c| clips.contains(&c.id)) {
+                    let Some(comp) = c
+                        .components
+                        .iter_mut()
+                        .find(|x| x.effect == catalog::CAPTION)
+                    else {
+                        continue;
+                    };
+                    for (k, v) in &values {
+                        if let Some(prm) = comp.param_mut(k) {
+                            prm.value = v.clone();
+                            n += 1;
+                        }
+                    }
+                    if values.iter().any(|(k, _)| k == "text")
+                        && let Some(Value::Text(t)) = values
+                            .iter()
+                            .find(|(k, _)| k == "text")
+                            .map(|(_, v)| v.clone())
+                    {
+                        c.name = t.chars().take(40).collect();
+                    }
+                }
+            }
+            if n == 0 {
+                return Err(EditError::Nothing);
+            }
+            Ok(())
+        });
+    }
+
     /// Gives every caption in the active sequence the look of the selected caption (style,
     /// font, colors, position; the words stay).
     pub fn apply_caption_style_to_all(&mut self) -> usize {
@@ -503,7 +603,7 @@ fn run_transcription(
     opts: &TranscribeOptions,
     progress: &Mutex<CaptionProgress>,
     cancel: &AtomicBool,
-) -> Result<Vec<Cue>, String> {
+) -> Result<(String, Vec<Cue>), String> {
     if !opts.model.is_downloaded(models) {
         *progress.lock() = CaptionProgress {
             stage: CaptionStage::Downloading,
@@ -534,6 +634,7 @@ fn run_transcription(
         .transcribe(
             &pcm,
             opts.language.as_deref(),
+            opts.task,
             &mut |f| progress.lock().fraction = f,
             cancel,
         )
@@ -556,7 +657,10 @@ fn run_transcription(
             end: w.end,
         })
         .collect();
-    Ok(captions::chunk(&words, opts.captions.max_words, 0.7, 0.6))
+    Ok((
+        lang,
+        captions::chunk(&words, opts.captions.max_words, 0.7, 0.6),
+    ))
 }
 
 #[cfg(test)]
@@ -627,6 +731,45 @@ mod tests {
             Value::Text("Bienvenidos".into()),
             "the words stay"
         );
+        // the Captions panel: one change for every caption, one undo step; text edits rename
+        let all = e.caption_clips();
+        assert_eq!(all.len(), 2);
+        let undo_before = e.history.labels().0.len();
+        e.set_caption_values(
+            &all,
+            vec![("font_size".into(), Value::Float(90.0))],
+            Some("drag".into()),
+        );
+        e.set_caption_values(
+            &all,
+            vec![("font_size".into(), Value::Float(96.0))],
+            Some("drag".into()),
+        );
+        assert_eq!(
+            e.history.labels().0.len(),
+            undo_before + 1,
+            "a drag is one step"
+        );
+        let seq = e.active_seq().unwrap();
+        for id in &all {
+            let c = seq.clip(*id).unwrap();
+            let size = &c
+                .component(catalog::CAPTION)
+                .unwrap()
+                .param("font_size")
+                .unwrap()
+                .value;
+            assert_eq!(*size, Value::Float(96.0));
+        }
+        e.seal();
+        e.set_caption_values(
+            &all[..1],
+            vec![("text".into(), Value::Text("Hola".into()))],
+            None,
+        );
+        assert_eq!(e.active_seq().unwrap().clip(all[0]).unwrap().name, "Hola");
+        e.undo();
+        assert_ne!(e.active_seq().unwrap().clip(all[0]).unwrap().name, "Hola");
         // round trip through a file
         let out = dir.path().join("out.vtt");
         assert_eq!(e.export_captions(&out).unwrap(), 2);

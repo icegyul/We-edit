@@ -1,6 +1,6 @@
 // Lumetri Color: one grading pass (LUTs, white balance, tone, creative, curves, wheels,
 // vignette). Sharpen runs as a separate pass. The formulas are this project's own; they aim for
-// the documented behavior of each control, not numerical parity (docs/effects-catalog.md 7).
+// the documented behavior of each control, not numerical parity.
 //
 // prm: 0 temperature, 1 tint, 2 exposure, 3 contrast, 4 highlights, 5 shadows, 6 whites,
 // 7 blacks, 8 saturation, 9 look intensity, 10 faded film, 11 vibrance, 12 creative saturation,

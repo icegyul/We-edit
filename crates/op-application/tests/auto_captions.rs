@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use op_application::captions::{CaptionOptions, ModelSize, TranscribeOptions};
+use op_application::captions::{CaptionOptions, ModelSize, Task, TranscribeOptions};
 use op_application::{Dirs, Editor, Focus, Preferences};
 use op_core::*;
 
@@ -36,6 +36,7 @@ fn transcribes_the_sequence_into_animated_captions() {
     assert!(ed.transcribe_captions(TranscribeOptions {
         model: ModelSize::Tiny,
         language: None,
+        task: Task::Transcribe,
         captions: CaptionOptions {
             style: 2,
             max_words: 3,
@@ -48,6 +49,8 @@ fn transcribes_the_sequence_into_animated_captions() {
         std::thread::sleep(Duration::from_millis(50));
     }
     eprintln!("status: {:?}", ed.status);
+    // the status says which language was heard
+    assert!(format!("{:?}", ed.status).contains("captions in English"));
     let cues = ed.caption_cues();
     let text: Vec<String> = cues.iter().map(|c| c.text()).collect();
     eprintln!("{text:?}");

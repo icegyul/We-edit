@@ -16,6 +16,7 @@ op-render.workspace = true
 op-audio.workspace = true
 op-application.workspace = true
 egui.workspace = true
+ab_glyph.workspace = true
 egui-wgpu.workspace = true
 eframe.workspace = true
 egui_dock.workspace = true

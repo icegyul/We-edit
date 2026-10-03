@@ -106,7 +106,7 @@ fn hard(b: f32, s: f32) -> f32 {
     return b + t - b * t;
 }
 
-// B(cb, cs) of the blend modes in catalog order (docs/effects-catalog.md 8), on straight colors.
+// B(cb, cs) of the blend modes in catalog order, on straight colors.
 fn blend_fn(mode: i32, cb: vec3<f32>, cs: vec3<f32>) -> vec3<f32> {
     switch mode {
         case 2: { return min(cb, cs); }

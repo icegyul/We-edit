@@ -32,7 +32,7 @@ pub struct Project {
     pub assets: IndexMap<AssetId, Arc<MediaAsset>>,
     pub sequences: IndexMap<SequenceId, Arc<Sequence>>,
     pub ids: IdGen,
-    /// Data kept verbatim from an imported foreign project (DM-004, docs/prproj-spec.md 9).
+    /// Data kept verbatim from an imported foreign project (DM-004).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign: Vec<ForeignPayload>,
 }

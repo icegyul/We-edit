@@ -1,15 +1,13 @@
 //! Keyboard shortcuts (docs/keyboard-shortcuts.md).
 //!
 //! Bindings are stored against logical commands identified by `(context, command)` (KBD-008).
-//! The default map is the English default inventory in
-//! docs/evidence/generated/premiere_shortcuts_default.json, so the shortcuts match what editors
-//! coming from Premiere Pro already know. A focused panel's binding wins over a global one
+//! The default map (data/default_shortcuts.json) uses the keys Premiere Pro documents for its
+//! default layout, so the shortcuts match what editors coming from it already know. A focused panel's binding wins over a global one
 //! (KBD-003). User changes are a separate named layer; the defaults are never modified (KBD-004).
 
 use serde::{Deserialize, Serialize};
 
-const DEFAULTS: &str =
-    include_str!("../../../docs/evidence/generated/premiere_shortcuts_default.json");
+const DEFAULTS: &str = include_str!("../data/default_shortcuts.json");
 
 /// Contexts that correspond to panels of this application.
 pub const GLOBAL: &str = "global";

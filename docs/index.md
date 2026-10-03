@@ -1,6 +1,6 @@
 # Technical documentation
 
-OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the implemented architecture, interoperability research and the tests still required before broader compatibility claims can be made.
+OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the plan, the implemented architecture and how it is tested.
 
 ## Project documentation
 
@@ -10,20 +10,15 @@ OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and m
 | [implementation-status.md](implementation-status.md) | Implemented modules, verified checks and known limits |
 | [drift-comparison.md](drift-comparison.md) | Review of the Drift editor's rendering and features, and what we adopted |
 | [release-process.md](release-process.md) | Package and release procedure |
-| [compatibility-validation.md](compatibility-validation.md) | Compatibility evidence and remaining validation work |
 | [architecture.md](architecture.md) | Rust subsystem boundaries and dependency direction |
 | [data-model.md](data-model.md) | Project, timeline, effect and audio data model |
-| [prproj-spec.md](prproj-spec.md) | Observed `.prproj` container and XML structure |
-| [keyboard-shortcuts.md](keyboard-shortcuts.md) | Keyboard command map and dispatch rules |
+| [keyboard-shortcuts.md](keyboard-shortcuts.md) | Default shortcuts and dispatch rules |
 | [timeline-behavior.md](timeline-behavior.md) | Editing, trimming, snapping, links and history |
-| [effects-catalog.md](effects-catalog.md) | Effect, transition and audio inventory |
-| [panel-system-spec.md](panel-system-spec.md) | Panels, docking, workspaces and multi-monitor behavior |
+| [effects.md](effects.md) | Effects, transitions, audio effects and graphics |
 | [plugin-api-spec.md](plugin-api-spec.md) | OpenFX and WebAssembly extension design |
-| [premiere-2024-static-data-audit.md](premiere-2024-static-data-audit.md) | Clean-room static observations |
-| [compatibility-research.md](compatibility-research.md) | Open questions and controlled-fixture plan |
 
-## Evidence
+## Clean-room policy
 
-The [evidence manifest](evidence/manifest.md) records the source and scope of each observation. Only derived technical facts are committed under `evidence/generated/`; proprietary Adobe programs and assets are not included.
-
-Generated indexes cover keyboard bindings, plugin names, effect layouts, `.prproj` classes, workspace topology and preset schemas. When an observation is incomplete or disputed, it remains documented as such until a reproducible test resolves it.
+OpenPremier is developed independently and contains no code, assets or data taken from Adobe
+products; see [legal/clean-room.md](legal/clean-room.md). Notes from studying other products are
+kept outside this repository.

@@ -1,4 +1,4 @@
-//! Project files and interchange (docs/prproj-spec.md, docs/data-model.md 9).
+//! Project files and interchange (docs/data-model.md 9).
 //!
 //! * `native`: the `.opproj` project format (read/write, atomic save).
 //! * `prproj`: read-only import of Premiere Pro project files. Writing that format is not

@@ -30,6 +30,8 @@ pub struct Preferences {
     /// Custom key bindings: (context, command) -> keys; an empty string unbinds.
     pub shortcuts: Vec<(String, String, String)>,
     pub ui_scale: f32,
+    /// Interface typeface: "system" (the system's interface font) or "classic" (bundled).
+    pub ui_font: String,
     pub audio_scrubbing: bool,
     pub hardware_encoding: bool,
     pub last_export_dir: Option<PathBuf>,
@@ -55,6 +57,8 @@ pub struct Preferences {
     pub performance_profile: Option<u8>,
     /// The first-start performance setup has been answered.
     pub performance_setup_done: bool,
+    /// Settings chosen one by one; when set, they replace the profile's.
+    pub performance_custom: Option<crate::performance::CustomSettings>,
     /// Video decoding: "auto", "always" (graphics card) or "never" (processor only).
     pub hardware_decoding: String,
     /// Graphics API: "auto", "vulkan", "dx12", "metal" or "gl"; used from the next start.
@@ -82,6 +86,7 @@ impl Default for Preferences {
             ripple_markers: true,
             shortcuts: Vec::new(),
             ui_scale: 1.0,
+            ui_font: "system".into(),
             audio_scrubbing: true,
             hardware_encoding: true,
             last_export_dir: None,
@@ -96,6 +101,7 @@ impl Default for Preferences {
             performance_mode: false,
             performance_profile: None,
             performance_setup_done: false,
+            performance_custom: None,
             hardware_decoding: "auto".into(),
             graphics_backend: "auto".into(),
         }
@@ -150,6 +156,14 @@ impl Preferences {
             Some(i) => Profile::from_index(i),
             None if self.performance_mode => Profile::Performance,
             None => Profile::Balanced,
+        }
+    }
+
+    /// What the performance profile, or the custom settings, set.
+    pub fn performance(&self) -> crate::performance::ProfileSettings {
+        match &self.performance_custom {
+            Some(c) => c.settings(),
+            None => self.profile().settings(),
         }
     }
 

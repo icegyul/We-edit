@@ -14,6 +14,7 @@ pub mod performance;
 pub mod prefs;
 pub mod proxies;
 pub mod recovery;
+pub mod relink;
 pub mod session;
 
 pub use editor::{APP_NAME, Editor, LoadedProject, Status, Transport};

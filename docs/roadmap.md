@@ -37,7 +37,10 @@ priority. Items move from "Next" to "Done" in the release that ships them.
 - Performance profiles (0.7): Ultra Performance, Performance, Balanced, Quality and Maximum
   Quality, recommended from the processor, memory and graphics card at first start; Software Only
   rendering and automatic fallback to the processor's rasterizer, so the program runs on
-  computers without a graphics card; effect shaders compiled in idle time.
+  computers without a graphics card; effect shaders compiled in idle time; custom settings
+  changed one by one.
+- **Link Media** (0.7): missing files located by hand (with the others in the same folder) or
+  found by searching the computer by name, duration, size and audio streams.
 
 ### Captions (0.6)
 
@@ -48,6 +51,9 @@ priority. Items move from "Next" to "Done" in the release that ships them.
   One Word, Typewriter, Bounce In, Neon, Creator, Fade In, Underline. Everything is editable in
   Effect Controls; Apply Caption Style to All restyles the sequence.
 - SRT and WebVTT import and export; New Caption for typed captions.
+- Captions panel (0.7): every caption with its time and editable text, and style controls for all
+  captions or the selected ones; spoken language and English translation choices; transcription
+  about a third faster and language detection over the most voiced parts.
 
 ### Effects
 
@@ -83,8 +89,8 @@ editor shows are valuable for the same audience; see [drift-comparison.md](drift
 
 ### 2. Titles, captions and graphics
 
-- **Caption editor:** a panel listing every caption with its text and times, to correct
-  transcription mistakes quickly, split and merge captions (today: Effect Controls per clip).
+- **Caption editor:** split and merge captions and edit their times in the Captions panel
+  (0.7 lists them with editable text and styles them all at once).
 - **Exact word timing:** align each word to the audio (Whisper cross-attention or forced
   alignment) instead of spreading a timed phrase over its words; faster transcription on the
   GPU (candle with CUDA or Metal).
@@ -123,8 +129,7 @@ editor shows are valuable for the same audience; see [drift-comparison.md](drift
 
 ### 6. Compatibility and platform
 
-- `.prproj` writing once lossless round-trip evidence exists (see
-  [compatibility-validation.md](compatibility-validation.md)).
+- `.prproj` writing once lossless round trips are demonstrated with original fixtures.
 - OpenFX plug-in hosting and a WebAssembly scripting API.
 - macOS notarization and signed Windows builds; Flatpak.
 - Accessibility, multi-monitor docking, HiDPI edge cases.

@@ -69,8 +69,9 @@ pub(crate) struct State {
     /// Settings of the last caption dialog (style, words per caption, model, language).
     pub caption_options: op_application::captions::CaptionOptions,
     pub caption_model: op_application::captions::ModelSize,
+    pub caption_translate: bool,
     pub caption_language: usize,
-    performance_applied: Option<op_application::performance::Profile>,
+    performance_applied: Option<op_application::performance::ProfileSettings>,
     /// This computer, checked once at start (for the recommended performance profile).
     pub hardware: op_application::performance::Hardware,
     /// Effect pipelines are still being compiled in idle frames.
@@ -83,6 +84,8 @@ pub(crate) struct State {
     pub proj: project_panel::ProjectView,
     pub fx: effects_panel::EffectsView,
     pub ec: effect_controls::EcView,
+    /// Captions panel: style edits go to every caption (else to the selected ones).
+    pub captions_all: bool,
     pub scopes: panels::ScopesView,
     pub meters: panels::MeterState,
     pub graphics: panels::GraphicsView,
@@ -174,6 +177,7 @@ fn panel_icon(p: Panel) -> Icon {
         Panel::Lumetri => Icon::Eye,
         Panel::Scopes => Icon::Grid,
         Panel::Graphics => Icon::Type,
+        Panel::Captions => Icon::List,
     }
 }
 
@@ -226,6 +230,7 @@ impl App {
         i18n::set(lang);
         let ui_scale = prefs.ui_scale;
         theme::apply(&cc.egui_ctx, ui_scale);
+        crate::fonts::install(&cc.egui_ctx, prefs.ui_font != "classic");
         egui_extras_install(&cc.egui_ctx);
         let recovery = autosave::begin_session(&dirs);
         let ed = Editor::new(dirs, prefs, true);
@@ -258,7 +263,8 @@ impl App {
             next_paste: 1,
             caption_options: Default::default(),
             caption_model: op_application::captions::ModelSize::Base,
-            caption_language: 0,
+            caption_language: crate::dialogs::default_caption_language(),
+            caption_translate: false,
             performance_applied: None,
             hardware,
             warming: true,
@@ -270,6 +276,7 @@ impl App {
             proj: project_panel::ProjectView::default(),
             fx: effects_panel::EffectsView::default(),
             ec: effect_controls::EcView::default(),
+            captions_all: true,
             scopes: panels::ScopesView::default(),
             meters: panels::MeterState::default(),
             graphics: panels::GraphicsView::default(),
@@ -548,6 +555,7 @@ fn file_menu(ui: &mut Ui, s: &mut State) {
     item(ui, s, "Save a Copy...", "cmd.file.savecopy");
     ui.separator();
     item(ui, s, "Import...", "cmd.file.import");
+    item(ui, s, "Link Media...", "op.file.linkmedia");
     ui.menu_button(t("Export"), |ui| {
         let has = s.ed.active.is_some();
         item_if(ui, s, "Media...", "cmd.file.export.movie", has);
@@ -602,6 +610,7 @@ fn edit_menu(ui: &mut Ui, s: &mut State) {
     item(ui, s, "Paste", "cmd.edit.paste");
     item(ui, s, "Paste Insert", "cmd.edit.pasteinsert");
     item(ui, s, "Paste Attributes...", "cmd.edit.pasteattributes");
+    item(ui, s, "Remove Attributes...", "cmd.edit.removeattributes");
     ui.separator();
     item(ui, s, "Clear", "cmd.edit.clear");
     item(ui, s, "Ripple Delete", "cmd.edit.rippledelete");
@@ -986,6 +995,10 @@ impl State {
                 }
             }
             "op.captions.import" => self.import_captions(),
+            "op.file.linkmedia" => match Dialog::link_media(self) {
+                Some(d) => self.dialogs.push(d),
+                None => self.ed.info(t("All media files are linked").to_string()),
+            },
             "op.captions.export" => self.export_captions(),
             "op.view.toggle_proxies" => {
                 let on = !self.ed.prefs.use_proxies;
@@ -1022,6 +1035,14 @@ impl State {
                 } else {
                     self.dialogs
                         .push(Dialog::PasteAttributes(op_timeline::Attributes::default()));
+                }
+            }
+            "cmd.edit.removeattributes" => {
+                if self.ed.selection.clips.is_empty() {
+                    self.ed.error(t("Select the clips first"));
+                } else {
+                    self.dialogs
+                        .push(Dialog::RemoveAttributes(op_timeline::Attributes::default()));
                 }
             }
             "cmd.edit.copy" => {
@@ -1197,13 +1218,7 @@ impl State {
 
     /// Time until the playing sequence shows its next frame.
     fn next_frame_delay(&self) -> Duration {
-        let cap = self
-            .ed
-            .prefs
-            .profile()
-            .settings()
-            .playback_fps_cap
-            .unwrap_or(60);
+        let cap = self.ed.prefs.performance().playback_fps_cap.unwrap_or(60);
         let max = Duration::from_secs_f64(1.0 / cap.max(1) as f64);
         let Some(seq) = self.ed.active_seq() else {
             return max;
@@ -1217,12 +1232,11 @@ impl State {
 
     /// Interface animations follow the performance profile.
     fn apply_performance_mode(&mut self, ctx: &egui::Context) {
-        let p = self.ed.prefs.profile();
-        if self.performance_applied == Some(p) {
+        let st = self.ed.prefs.performance();
+        if self.performance_applied == Some(st) {
             return;
         }
-        self.performance_applied = Some(p);
-        let st = p.settings();
+        self.performance_applied = Some(st);
         ctx.all_styles_mut(|s| {
             s.animation_time = st.animation_time;
             s.scroll_animation = if st.smooth_scroll {
@@ -1231,7 +1245,15 @@ impl State {
                 egui::style::ScrollAnimation::none()
             };
         });
-        log::info!("interface for the {} profile", p.label());
+        log::info!(
+            "interface for the {} profile{}",
+            self.ed.prefs.profile().label(),
+            if self.ed.prefs.performance_custom.is_some() {
+                " (custom)"
+            } else {
+                ""
+            }
+        );
     }
 
     /// Pastes media from the system clipboard. Returns false when it holds none.
@@ -1486,6 +1508,10 @@ impl State {
         self.program.reset();
         self.source.reset();
         self.thumbs.clear();
+        // files that moved: offer to find them, like Premiere's Link Media
+        if let Some(d) = Dialog::link_media(self) {
+            self.dialogs.push(d);
+        }
     }
 
     /// Opens a project given on the command line or dropped on the window, or imports media.
@@ -1929,6 +1955,7 @@ impl State {
             Panel::Lumetri => panels::lumetri(self, ui),
             Panel::Scopes => panels::scopes(self, ui),
             Panel::Graphics => panels::graphics(self, ui),
+            Panel::Captions => crate::captions_panel::captions(self, ui),
         }));
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);
@@ -1981,14 +2008,10 @@ impl State {
         self.tab_rects.clear();
         let busy = self.ed.tick() || self.opening.is_some();
         self.apply_performance_mode(ctx);
-        let profile = self.ed.prefs.profile().settings();
+        let profile = self.ed.prefs.performance();
         // the remaining effect pipelines compile two per idle frame from Balanced up; the
         // lighter profiles compile each one on first use and never spend the time up front
-        if self.warming
-            && self.ed.prefs.profile() >= op_application::performance::Profile::Balanced
-            && !self.ed.is_playing()
-            && self.dialogs.is_empty()
-        {
+        if self.warming && profile.warm_up && !self.ed.is_playing() && self.dialogs.is_empty() {
             self.warming = self.renderer.warm_up_step(2);
             if self.warming {
                 ctx.request_repaint_after(Duration::from_millis(15));
@@ -2297,7 +2320,11 @@ impl State {
 
 /// Details of a running export, shown over its progress bar.
 fn export_details(ui: &mut Ui, job: &op_application::ExportJob, p: &op_application::Progress) {
-    ui.label(RichText::new(job.settings.path.display().to_string()).strong());
+    ui.label(
+        RichText::new(job.settings.path.display().to_string())
+            .strong()
+            .family(crate::fonts::strong()),
+    );
     ui.label(tf("Frame {} of {}", &[&p.frame, &p.total]));
     ui.label(tf("Elapsed: {}", &[&widgets::clock(p.elapsed)]));
     if let Some(r) = p.remaining {
@@ -2336,11 +2363,26 @@ fn translate_status(text: &str) -> String {
     {
         return tf("Imported {} files", &[&n]);
     }
+    if let Some(rest) = text.strip_prefix("Created ") {
+        for (sep, fmt) in [
+            (" captions in ", "Created {} captions in {}"),
+            (
+                " captions translated from ",
+                "Created {} captions translated from {}",
+            ),
+        ] {
+            if let Some((n, lang)) = rest.split_once(sep) {
+                return tf(fmt, &[&n, &tn(lang)]);
+            }
+        }
+    }
     if let Some(n) = text.strip_suffix(" media files are offline") {
         return tf("{} media files are offline", &[&n]);
     }
     // messages with one variable part, from the editing engine and the exporter
-    const PATTERNS: [(&str, &str, &str); 14] = [
+    const PATTERNS: [(&str, &str, &str); 16] = [
+        ("Linked ", " media files", "Linked {} media files"),
+        ("Not linked: ", "", "Not linked: {}"),
         ("track ", " is locked", "Track {} is locked"),
         ("clips would overlap on ", "", "Clips would overlap on {}"),
         ("not enough media: ", "", "Not enough media: {}"),
@@ -2423,7 +2465,7 @@ impl TabViewer for Viewer<'_> {
             &text,
             20.0,
             egui::TextFormat {
-                font_id: egui::FontId::proportional(12.5),
+                font_id: egui::FontId::new(12.5, crate::fonts::strong()),
                 ..Default::default()
             },
         );

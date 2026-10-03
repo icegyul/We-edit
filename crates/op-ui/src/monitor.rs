@@ -182,7 +182,7 @@ fn render(
     let frames = PreviewFrames {
         service: s.ed.media.clone(),
         wait: if playing {
-            s.ed.prefs.profile().settings().frame_wait
+            s.ed.prefs.performance().frame_wait
         } else if scrubbing {
             Duration::ZERO
         } else {

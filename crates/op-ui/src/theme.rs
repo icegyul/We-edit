@@ -1,6 +1,6 @@
-//! Visual design: an original dark theme tuned for long editing sessions (panel-system-spec 7).
+//! Visual design: an original dark theme tuned for long editing sessions.
 
-use egui::{Color32, CornerRadius, Stroke, Style, Visuals};
+use egui::{Color32, CornerRadius, FontFamily, FontId, Shadow, Stroke, Style, TextStyle, Visuals};
 
 pub const BG: Color32 = Color32::from_rgb(0x1d, 0x1d, 0x20);
 pub const PANEL: Color32 = Color32::from_rgb(0x24, 0x24, 0x28);
@@ -60,14 +60,37 @@ pub fn apply(ctx: &egui::Context, scale: f32) {
     v.selection.bg_fill = ACCENT_DIM;
     v.selection.stroke = Stroke::new(1.0, TEXT_BRIGHT);
     v.window_stroke = Stroke::new(1.0, LINE);
-    v.window_corner_radius = CornerRadius::same(6);
-    v.menu_corner_radius = CornerRadius::same(4);
+    v.window_corner_radius = CornerRadius::same(8);
+    v.menu_corner_radius = CornerRadius::same(6);
+    // soft, short shadows: windows lift off the panels without a dark halo
+    v.window_shadow = Shadow {
+        offset: [0, 8],
+        blur: 24,
+        spread: 0,
+        color: Color32::from_black_alpha(110),
+    };
+    v.popup_shadow = Shadow {
+        offset: [0, 4],
+        blur: 12,
+        spread: 0,
+        color: Color32::from_black_alpha(90),
+    };
+    v.slider_trailing_fill = true;
     v.widgets.noninteractive.bg_fill = PANEL;
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, LINE);
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT);
     v.widgets.inactive.bg_fill = RAISED;
     v.widgets.inactive.weak_bg_fill = RAISED;
     v.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT);
+    // controls carry a faint rim, brighter under the pointer and blue while pressed
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0x3a, 0x3a, 0x42));
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0x58, 0x58, 0x63));
+    v.widgets.hovered.fg_stroke = Stroke::new(1.0, TEXT_BRIGHT);
+    v.widgets.active.bg_stroke = Stroke::new(1.0, ACCENT);
+    v.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
+    v.widgets.open.bg_fill = RAISED;
+    v.widgets.open.weak_bg_fill = RAISED;
+    v.widgets.open.bg_stroke = Stroke::new(1.0, ACCENT_DIM);
     v.widgets.hovered.bg_fill = Color32::from_rgb(0x3a, 0x3a, 0x42);
     v.widgets.hovered.weak_bg_fill = Color32::from_rgb(0x3a, 0x3a, 0x42);
     v.widgets.active.bg_fill = ACCENT_DIM;
@@ -78,10 +101,32 @@ pub fn apply(ctx: &egui::Context, scale: f32) {
         &mut v.widgets.active,
         &mut v.widgets.open,
     ] {
-        w.corner_radius = CornerRadius::same(3);
+        w.corner_radius = CornerRadius::same(4);
     }
+    style.text_styles = [
+        (
+            TextStyle::Small,
+            FontId::new(10.5, FontFamily::Proportional),
+        ),
+        (TextStyle::Body, FontId::new(12.5, FontFamily::Proportional)),
+        (
+            TextStyle::Button,
+            FontId::new(12.5, FontFamily::Proportional),
+        ),
+        (
+            TextStyle::Heading,
+            FontId::new(16.0, crate::fonts::strong()),
+        ),
+        (
+            TextStyle::Monospace,
+            FontId::new(12.0, FontFamily::Monospace),
+        ),
+    ]
+    .into();
     style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-    style.spacing.button_padding = egui::vec2(6.0, 2.0);
+    style.spacing.button_padding = egui::vec2(7.0, 2.0);
+    style.spacing.menu_margin = egui::Margin::same(5);
+    style.spacing.window_margin = egui::Margin::same(14);
     style.spacing.interact_size.y = 20.0;
     style.spacing.slider_width = 120.0;
     style.interaction.tooltip_delay = 0.4;

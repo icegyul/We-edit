@@ -2,7 +2,7 @@
 //! paste attributes, nest, color matte, tracks, interpret footage, keyboard shortcuts,
 //! preferences, project settings, import report and about.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use egui::{RichText, Ui};
 use op_application::captions::ModelSize;
@@ -55,10 +55,20 @@ pub struct ShortcutsForm {
     message: Option<String>,
 }
 
+/// File > Link Media: the files a project points to that are not there any more.
+pub struct LinkForm {
+    pub missing: Vec<op_application::relink::Missing>,
+    /// Files chosen or found for missing assets.
+    pub found: std::collections::HashMap<AssetId, PathBuf>,
+    pub search: Option<op_application::relink::Search>,
+}
+
 /// Graphics > Captions > Transcribe and Create Captions.
 pub struct CaptionForm {
     /// Index into CAPTION_LANGUAGES.
     pub language: usize,
+    /// Captions translated into English instead of in the language spoken.
+    pub translate: bool,
     pub model: op_application::captions::ModelSize,
     pub options: op_application::captions::CaptionOptions,
 }
@@ -90,9 +100,14 @@ pub enum Dialog {
         rate: Rate,
     },
     Gain {
+        /// 0 set, 1 adjust, 2 normalize max peak, 3 normalize all peaks
+        mode: u8,
         db: f64,
+        adjust: f64,
+        peak_target: f64,
     },
     PasteAttributes(Attributes),
+    RemoveAttributes(Attributes),
     Nest(String),
     RenameClip(ClipId, String),
     ColorMatte {
@@ -104,6 +119,7 @@ pub enum Dialog {
         audio: usize,
     },
     Captions(Box<CaptionForm>),
+    LinkMedia(Box<LinkForm>),
     /// First start: choose the recommended performance profile or pick one.
     PerformanceSetup {
         manual: bool,
@@ -398,9 +414,22 @@ impl Dialog {
         }
     }
 
+    /// Link Media for the current project, or None when nothing is missing.
+    pub fn link_media(s: &State) -> Option<Dialog> {
+        let missing = op_application::relink::offline(&s.ed.project);
+        (!missing.is_empty()).then(|| {
+            Dialog::LinkMedia(Box::new(LinkForm {
+                missing,
+                found: Default::default(),
+                search: None,
+            }))
+        })
+    }
+
     pub fn captions(s: &State) -> Dialog {
         Dialog::Captions(Box::new(CaptionForm {
             language: s.caption_language,
+            translate: s.caption_translate,
             model: s.caption_model,
             options: s.caption_options.clone(),
         }))
@@ -469,7 +498,12 @@ impl Dialog {
                 .iter()
                 .filter_map(|c| seq.clip(*c))
                 .find(|c| !c.is_video())?;
-        Some(Dialog::Gain { db: c.gain_db })
+        Some(Dialog::Gain {
+            mode: 0,
+            db: c.gain_db,
+            adjust: 0.0,
+            peak_target: 0.0,
+        })
     }
 
     pub fn preferences(s: &State) -> Dialog {
@@ -576,6 +610,19 @@ const CAPTION_LANGUAGES: &[(&str, &str)] = &[
     ("zh", "中文"),
 ];
 
+/// The transcription language offered first: the program's language, except English, whose
+/// users more often caption other languages (they get automatic detection).
+pub fn default_caption_language() -> usize {
+    let ui = crate::i18n::current().code();
+    if ui == "en" {
+        return 0;
+    }
+    CAPTION_LANGUAGES
+        .iter()
+        .position(|(code, _)| *code == ui)
+        .unwrap_or(0)
+}
+
 /// What each caption style does, for the dialog.
 fn caption_style_hint(i: usize) -> &'static str {
     match i {
@@ -623,12 +670,21 @@ fn modal<R>(
     width: f32,
     body: impl FnOnce(&mut Ui) -> R,
 ) -> (R, bool) {
-    let resp = egui::Modal::new(egui::Id::new(id)).show(ctx, |ui| {
-        ui.set_width(width);
-        ui.label(RichText::new(title).size(15.0).color(theme::TEXT_BRIGHT));
-        ui.add_space(8.0);
-        body(ui)
-    });
+    // dialogs get the room of a window, not the tight margin of a menu
+    let frame = egui::Frame::popup(&ctx.global_style()).inner_margin(egui::Margin::same(16));
+    let resp = egui::Modal::new(egui::Id::new(id))
+        .frame(frame)
+        .show(ctx, |ui| {
+            ui.set_width(width);
+            ui.label(
+                RichText::new(title)
+                    .size(16.0)
+                    .family(crate::fonts::strong())
+                    .color(theme::TEXT_BRIGHT),
+            );
+            ui.add_space(10.0);
+            body(ui)
+        });
     let esc = ctx.input(|i| i.key_pressed(egui::Key::Escape));
     (resp.inner, esc)
 }
@@ -1011,41 +1067,74 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             }
             !(ok || cancel || esc)
         }
-        Dialog::Gain { db } => {
-            let ((ok, cancel), esc) = modal(ctx, "gain", t("Audio Gain"), 300.0, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(t("Set Gain to"));
-                    ui.add(
-                        egui::DragValue::new(db)
-                            .range(-96.0..=96.0)
-                            .speed(0.1)
-                            .suffix(" dB"),
-                    );
-                });
+        Dialog::Gain {
+            mode,
+            db,
+            adjust,
+            peak_target,
+        } => {
+            let peaks = s.ed.selected_audio_peaks();
+            let ((ok, cancel), esc) = modal(ctx, "gain", t("Audio Gain"), 340.0, |ui| {
+                egui::Grid::new("gain-grid")
+                    .num_columns(2)
+                    .spacing([10.0, 8.0])
+                    .show(ui, |ui| {
+                        fn row(
+                            ui: &mut Ui,
+                            mode: &mut u8,
+                            m: u8,
+                            label: &'static str,
+                            v: &mut f64,
+                            max: f64,
+                        ) {
+                            ui.radio_value(mode, m, t(label));
+                            ui.add_enabled(
+                                *mode == m,
+                                egui::DragValue::new(v)
+                                    .range(-96.0..=max)
+                                    .speed(0.1)
+                                    .fixed_decimals(1)
+                                    .suffix(" dB"),
+                            );
+                            ui.end_row();
+                        }
+                        row(ui, mode, 0, "Set Gain to", db, 96.0);
+                        row(ui, mode, 1, "Adjust Gain by", adjust, 96.0);
+                        // both normalize choices share one target level
+                        row(ui, mode, 2, "Normalize Max Peak to", peak_target, 0.0);
+                        row(ui, mode, 3, "Normalize All Peaks to", peak_target, 0.0);
+                    });
+                ui.add_space(6.0);
+                // the loudest point of the selection as it plays now, gain included
+                let loudest = peaks
+                    .iter()
+                    .filter_map(|(_, g, p)| p.map(|p| 20.0 * (p.max(1e-6) as f64).log10() + g))
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let text = if peaks.iter().any(|(_, _, p)| p.is_none()) {
+                    t("Peak Amplitude: analyzing...").to_string()
+                } else if loudest.is_finite() && loudest > -120.0 {
+                    tf("Peak Amplitude: {} dB", &[&format!("{loudest:.1}")])
+                } else {
+                    t("Peak Amplitude: silent").to_string()
+                };
+                ui.label(RichText::new(text).color(theme::TEXT_DIM));
                 buttons(ui, t("OK"))
             });
+            if peaks.iter().any(|(_, _, p)| p.is_none()) {
+                ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            }
             if ok {
-                s.ed.set_gain(*db);
+                match *mode {
+                    1 => s.ed.adjust_gain(*adjust),
+                    2 => s.ed.normalize_gain(*peak_target, false),
+                    3 => s.ed.normalize_gain(*peak_target, true),
+                    _ => s.ed.set_gain(*db),
+                }
             }
             !(ok || cancel || esc)
         }
-        Dialog::PasteAttributes(a) => {
-            let ((ok, cancel), esc) = modal(ctx, "pasteattr", t("Paste Attributes"), 300.0, |ui| {
-                ui.label(RichText::new(t("Video Attributes")).color(theme::TEXT_DIM));
-                ui.checkbox(&mut a.motion, tn("Motion"));
-                ui.checkbox(&mut a.opacity, tn("Opacity"));
-                ui.checkbox(&mut a.effects, t("Effects"));
-                ui.label(RichText::new(t("Audio Attributes")).color(theme::TEXT_DIM));
-                ui.checkbox(&mut a.volume, tn("Volume"));
-                ui.checkbox(&mut a.channel_volume, tn("Channel Volume"));
-                ui.checkbox(&mut a.panner, tn("Panner"));
-                buttons(ui, t("OK"))
-            });
-            if ok {
-                s.ed.paste_attributes(*a);
-            }
-            !(ok || cancel || esc)
-        }
+        Dialog::PasteAttributes(a) => attributes_dialog(s, ctx, a, true),
+        Dialog::RemoveAttributes(a) => attributes_dialog(s, ctx, a, false),
         Dialog::Nest(name) => {
             let ((ok, cancel), esc) = modal(ctx, "nest", t("Nested Sequence Name"), 320.0, |ui| {
                 let r = ui.text_edit_singleline(name);
@@ -1130,6 +1219,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                         ui.label(
                             RichText::new(tf("Recommended profile: {}", &[&t(rec.label())]))
                                 .strong()
+                                .family(crate::fonts::strong())
                                 .color(theme::TEXT_BRIGHT),
                         );
                         ui.add(
@@ -1196,7 +1286,12 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                         } else {
                             t(choice.label()).to_string()
                         };
-                        ui.label(RichText::new(label).strong().color(theme::TEXT_BRIGHT));
+                        ui.label(
+                            RichText::new(label)
+                                .strong()
+                                .family(crate::fonts::strong())
+                                .color(theme::TEXT_BRIGHT),
+                        );
                         ui.add(
                             egui::Label::new(
                                 RichText::new(t(choice.description()))
@@ -1233,6 +1328,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             }
             chosen.is_none()
         }
+        Dialog::LinkMedia(form) => link_media_dialog(s, ctx, form),
         Dialog::Captions(form) => {
             let models = op_application::captions::models_dir(&s.ed);
             let ((ok, cancel), esc) = modal(
@@ -1252,7 +1348,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                         .num_columns(2)
                         .spacing([14.0, 8.0])
                         .show(ui, |ui| {
-                            ui.label(t("Language"));
+                            ui.label(t("Spoken Language"));
                             let current = CAPTION_LANGUAGES
                                 .get(form.language)
                                 .map(|(_, n)| if form.language == 0 { t(n) } else { *n })
@@ -1266,6 +1362,24 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                                         ui.selectable_value(&mut form.language, i, label);
                                     }
                                 });
+                            ui.end_row();
+
+                            ui.label(t("Captions In"));
+                            ui.vertical(|ui| {
+                                ui.radio_value(
+                                    &mut form.translate,
+                                    false,
+                                    t("The language spoken"),
+                                );
+                                ui.radio_value(
+                                    &mut form.translate,
+                                    true,
+                                    t("English (translated)"),
+                                )
+                                .on_hover_text(t(
+                                    "The speech model translates into English only; to caption in another language, choose it as the spoken language.",
+                                ));
+                            });
                             ui.end_row();
 
                             ui.label(t("Speech Model"));
@@ -1333,7 +1447,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                     ui.add_space(4.0);
                     ui.label(
                         RichText::new(t(
-                            "The style, colors and font can be changed later in Effect Controls; Graphics > Captions > Apply Caption Style to All copies one caption's look to the others.",
+                            "Style, colors and font can be changed later for every caption at once in the Captions panel (Window > Captions).",
                         ))
                         .size(11.5)
                         .color(theme::TEXT_DIM),
@@ -1343,6 +1457,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             );
             if ok {
                 s.caption_language = form.language;
+                s.caption_translate = form.translate;
                 s.caption_model = form.model;
                 s.caption_options = form.options.clone();
                 let language = CAPTION_LANGUAGES
@@ -1352,6 +1467,11 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 s.ed.transcribe_captions(op_application::captions::TranscribeOptions {
                     model: form.model,
                     language,
+                    task: if form.translate {
+                        op_application::captions::Task::Translate
+                    } else {
+                        op_application::captions::Task::Transcribe
+                    },
                     captions: form.options.clone(),
                 });
             }
@@ -1862,6 +1982,7 @@ pub fn command_name(cmd: &str) -> String {
         ("cmd.edit.paste", "Paste"),
         ("cmd.edit.pasteinsert", "Paste Insert"),
         ("cmd.edit.pasteattributes", "Paste Attributes..."),
+        ("cmd.edit.removeattributes", "Remove Attributes..."),
         ("cmd.edit.clear", "Clear"),
         ("cmd.edit.rippledelete", "Ripple Delete"),
         ("cmd.edit.selectall", "Select All"),
@@ -2345,6 +2466,7 @@ fn level_name(i: usize) -> &'static str {
 fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
     let mut open = true;
     let mut new_profile: Option<Profile> = None;
+    let mut new_custom: Option<op_application::performance::CustomSettings> = None;
     let mut show_log = false;
     let mut open_logs = false;
     window(ctx, t("Preferences"))
@@ -2362,7 +2484,7 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                 .show(ui, |ui| {
             let p = &mut s.ed.prefs;
             let mut log_changed = false;
-            ui.label(RichText::new(t("General")).strong().color(theme::TEXT_BRIGHT));
+            ui.label(RichText::new(t("General")).strong().family(crate::fonts::strong()).color(theme::TEXT_BRIGHT));
             ui.add_space(2.0);
             egui::Grid::new("prefs")
                 .num_columns(2)
@@ -2428,6 +2550,27 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                         }
                     });
                     ui.end_row();
+                    ui.label(t("Interface Font"));
+                    let fonts = [
+                        ("system", t("System (Segoe UI, San Francisco...)")),
+                        ("classic", t("Classic (built in)")),
+                    ];
+                    let shown = fonts
+                        .iter()
+                        .find(|(k, _)| *k == p.ui_font)
+                        .map(|(_, l)| *l)
+                        .unwrap_or(fonts[0].1);
+                    egui::ComboBox::from_id_salt("pref-font")
+                        .selected_text(shown)
+                        .show_ui(ui, |ui| {
+                            for (k, l) in fonts {
+                                if ui.selectable_label(p.ui_font == k, l).clicked() && p.ui_font != k {
+                                    p.ui_font = k.to_string();
+                                    crate::fonts::install(ctx, k == "system");
+                                }
+                            }
+                        });
+                    ui.end_row();
                     ui.label(t("Automatically Save Every"));
                     ui.add(
                         egui::DragValue::new(&mut p.autosave_minutes)
@@ -2438,6 +2581,7 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     ui.label(t("Autosaved Versions to Keep"));
                     ui.add(egui::DragValue::new(&mut p.autosave_keep).range(1..=100));
                     ui.end_row();
+                    let preview_before = (p.playback_resolution, p.paused_resolution, p.frame_cache_mb);
                     ui.label(t("Playback Resolution"));
                     egui::ComboBox::from_id_salt("pref-pres")
                         .selected_text(res_label(p.playback_resolution))
@@ -2488,7 +2632,7 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     // separates them (grids do not take plain spacing)
                     ui.label("");
                     ui.end_row();
-                    ui.label(RichText::new(t("Log")).strong().color(theme::TEXT_BRIGHT));
+                    ui.label(RichText::new(t("Log")).strong().family(crate::fonts::strong()).color(theme::TEXT_BRIGHT));
                     ui.end_row();
                     ui.label(t("Logging"));
                     log_changed |= ui
@@ -2530,12 +2674,21 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     ui.end_row();
                     ui.label(
                         RichText::new(t("Performance"))
-                            .strong()
+                            .strong().family(crate::fonts::strong())
                             .color(theme::TEXT_BRIGHT),
                     );
                     ui.end_row();
+                    // a preview setting changed by hand turns the profile into custom settings
+                    if (p.playback_resolution, p.paused_resolution, p.frame_cache_mb) != preview_before
+                        && p.performance_custom.is_none()
+                    {
+                        new_custom = Some(op_application::performance::CustomSettings::from_profile(
+                            p.profile(),
+                        ));
+                    }
                     ui.label(t("Performance Profile"));
                     let current = p.profile();
+                    let custom = p.performance_custom;
                     let mut level = current.index() as f32;
                     ui.vertical(|ui| {
                         ui.spacing_mut().slider_width = 240.0;
@@ -2572,20 +2725,94 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     ui.label("");
                     ui.vertical(|ui| {
                         ui.set_max_width(300.0);
-                        ui.label(
-                            RichText::new(t(current.label()))
-                                .strong()
-                                .color(theme::TEXT_BRIGHT),
-                        );
+                        let (name, about) = match custom {
+                            Some(c) => (
+                                t("Custom"),
+                                tf(
+                                    "Settings chosen one by one, starting from {}. Move the slider to go back to a profile.",
+                                    &[&t(Profile::from_index(c.base).label())],
+                                ),
+                            ),
+                            None => (t(current.label()), t(current.description()).to_string()),
+                        };
+                        ui.label(RichText::new(name).strong().family(crate::fonts::strong()).color(theme::TEXT_BRIGHT));
                         ui.add(
                             egui::Label::new(
-                                RichText::new(t(current.description()))
-                                    .size(11.5)
-                                    .color(theme::TEXT_DIM),
+                                RichText::new(about).size(11.5).color(theme::TEXT_DIM),
                             )
                             .wrap(),
                         );
                     });
+                    ui.end_row();
+                    // every setting a profile makes, to change one by one
+                    ui.label("");
+                    egui::CollapsingHeader::new(t("Custom Settings"))
+                        .id_salt("pref-perf-custom")
+                        .default_open(custom.is_some())
+                        .show(ui, |ui| {
+                            let mut c = custom.unwrap_or_else(|| {
+                                op_application::performance::CustomSettings::from_profile(current)
+                            });
+                            let before = c;
+                            egui::Grid::new("pref-perf-grid")
+                                .num_columns(2)
+                                .spacing([12.0, 6.0])
+                                .show(ui, |ui| {
+                                    ui.label(t("Interface Animations"));
+                                    ui.checkbox(&mut c.animations, "");
+                                    ui.end_row();
+                                    ui.label(t("Smooth Scrolling"));
+                                    ui.checkbox(&mut c.smooth_scroll, "");
+                                    ui.end_row();
+                                    ui.label(t("Redraws During Playback"));
+                                    let fps_label = |f: u32| {
+                                        if f == 0 {
+                                            t("Display refresh rate").to_string()
+                                        } else {
+                                            tf("{} per second", &[&f])
+                                        }
+                                    };
+                                    egui::ComboBox::from_id_salt("pref-fps")
+                                        .selected_text(fps_label(c.playback_fps))
+                                        .show_ui(ui, |ui| {
+                                            for f in [24u32, 30, 60, 0] {
+                                                ui.selectable_value(
+                                                    &mut c.playback_fps,
+                                                    f,
+                                                    fps_label(f),
+                                                );
+                                            }
+                                        });
+                                    ui.end_row();
+                                    ui.label(t("Frames Decoded Ahead"));
+                                    ui.add(egui::DragValue::new(&mut c.read_ahead).range(2..=96))
+                                        .on_hover_text(t(
+                                            "More frames ahead play smoother on slow disks and codecs, and use more memory.",
+                                        ));
+                                    ui.end_row();
+                                    ui.label(t("Timeline Thumbnails"));
+                                    ui.checkbox(&mut c.thumbnails, "");
+                                    ui.end_row();
+                                    ui.label(t("Audio Waveforms"));
+                                    ui.checkbox(&mut c.waveforms, "");
+                                    ui.end_row();
+                                    ui.label(t("Prepare Effects in Background"));
+                                    ui.checkbox(&mut c.warm_up, "").on_hover_text(t(
+                                        "Compiles every effect while the program is idle after it starts, so the first use of an effect does not pause playback.",
+                                    ));
+                                    ui.end_row();
+                                });
+                            ui.label(
+                                RichText::new(t(
+                                    "Playback Resolution, Paused Resolution and Frame Cache are above.",
+                                ))
+                                .size(11.0)
+                                .color(theme::TEXT_DIM),
+                            );
+                            if c != before {
+                                new_custom = Some(c);
+                            }
+                        });
                     ui.end_row();
                     ui.label(t("This Computer"));
                     let hw = &s.hardware;
@@ -2605,7 +2832,9 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                                 RichText::new(tf("Recommended: {}", &[&t(rec.label())]))
                                     .size(11.5),
                             );
-                            if rec != current && ui.small_button(t("Use Recommended")).clicked() {
+                            if (rec != current || custom.is_some())
+                                && ui.small_button(t("Use Recommended")).clicked()
+                            {
                                 new_profile = Some(rec);
                             }
                         });
@@ -2677,7 +2906,7 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
                     ui.end_row();
                     ui.label(
                         RichText::new(t("Pasted Images"))
-                            .strong()
+                            .strong().family(crate::fonts::strong())
                             .color(theme::TEXT_BRIGHT),
                     );
                     ui.end_row();
@@ -2737,6 +2966,8 @@ fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
     if let Some(p) = new_profile {
         let hw = s.hardware.clone();
         s.ed.set_performance_profile(p, Some(&hw));
+    } else if let Some(c) = new_custom {
+        s.ed.set_performance_custom(c);
     }
     if !open {
         let _ = s.ed.prefs.save(&s.ed.dirs);
@@ -3040,4 +3271,226 @@ pub fn hardware_summary(h: &Hardware) -> String {
         t("of memory"),
         h.gpu
     )
+}
+
+/// File > Link Media: locate missing files by hand or search this computer, then relink them.
+fn link_media_dialog(s: &mut State, ctx: &egui::Context, form: &mut LinkForm) -> bool {
+    use op_application::relink;
+    // results of a running search
+    if let Some(search) = &form.search {
+        let st = search.state.lock();
+        for (id, p) in &st.found {
+            form.found.entry(*id).or_insert_with(|| p.clone());
+        }
+        if st.running {
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
+    }
+    let searching = form.search.as_ref().is_some_and(|x| x.state.lock().running);
+    let mut locate: Option<usize> = None;
+    let mut start_search = false;
+    let mut link = false;
+    let mut close = false;
+    let total = form.missing.len();
+    let (_, esc) = modal(ctx, "link-media", t("Link Media"), 620.0, |ui| {
+        ui.label(tf(
+            "{} media files could not be found where the project expects them. Locate them, or let OpenPremier search this computer.",
+            &[&total],
+        ));
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical()
+            .max_height(300.0)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for (i, m) in form.missing.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(470.0);
+                            ui.label(
+                                RichText::new(&m.name)
+                                    .strong()
+                                    .family(crate::fonts::strong())
+                                    .color(theme::TEXT_BRIGHT),
+                            );
+                            match form.found.get(&m.asset) {
+                                Some(p) => ui.label(
+                                    RichText::new(tf("Found: {}", &[&p.display()]))
+                                        .size(11.0)
+                                        .color(egui::Color32::from_rgb(110, 200, 140)),
+                                ),
+                                None => ui.label(
+                                    RichText::new(tf("Missing: {}", &[&m.path]))
+                                        .size(11.0)
+                                        .color(theme::ERROR),
+                                ),
+                            };
+                        });
+                        if ui.button(t("Locate...")).clicked() {
+                            locate = Some(i);
+                        }
+                    });
+                    ui.add_space(3.0);
+                }
+            });
+        ui.add_space(6.0);
+        if let Some(search) = &form.search {
+            let st = search.state.lock();
+            ui.horizontal(|ui| {
+                if st.running {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new(tf("Searching... {} folders", &[&st.folders]))
+                            .color(theme::TEXT_DIM),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(tf(
+                            "Search finished: {} of {} found",
+                            &[&form.found.len(), &total],
+                        ))
+                        .color(theme::TEXT_DIM),
+                    );
+                }
+            });
+            if st.running {
+                let cur: String = st
+                    .current
+                    .chars()
+                    .rev()
+                    .take(80)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+                ui.label(RichText::new(cur).size(10.5).color(theme::TEXT_DIM));
+            }
+        }
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if searching {
+                if ui.button(t("Stop Search")).clicked()
+                    && let Some(x) = &form.search
+                {
+                    x.cancel();
+                }
+            } else if ui
+                .add_enabled(form.found.len() < total, egui::Button::new(t("Search Automatically")))
+                .on_hover_text(t(
+                    "Looks in the project folder, your media folders and every drive, by file name; when several files share a name, the one whose duration and size match wins.",
+                ))
+                .clicked()
+            {
+                start_search = true;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let n = form.found.len();
+                if ui
+                    .add_enabled(
+                        n > 0,
+                        egui::Button::new(
+                            RichText::new(tf("Link {} Files", &[&n])).color(egui::Color32::WHITE),
+                        )
+                        .fill(theme::ACCENT_DIM),
+                    )
+                    .clicked()
+                {
+                    link = true;
+                }
+                if ui.button(t("Offline All")).on_hover_text(t("Keep working without them; File > Link Media finds them later.")).clicked() {
+                    close = true;
+                }
+            });
+        });
+    });
+    if let Some(i) = locate {
+        let m = form.missing[i].clone();
+        let start = Path::new(&m.path)
+            .parent()
+            .filter(|d| d.is_dir())
+            .map(|d| d.to_path_buf())
+            .or_else(|| {
+                s.ed.path
+                    .as_ref()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            });
+        let mut dlg = rfd::FileDialog::new()
+            .set_title(tf("Where is {}?", &[&m.name]))
+            .set_file_name(&m.name);
+        if let Some(dir) = start {
+            dlg = dlg.set_directory(dir);
+        }
+        if let Some(p) = dlg.pick_file() {
+            // the others are often in the same folder
+            if let Some(dir) = p.parent() {
+                for (id, sib) in relink::siblings(dir, &form.missing) {
+                    form.found.entry(id).or_insert(sib);
+                }
+            }
+            form.found.insert(m.asset, p);
+        }
+    }
+    if start_search {
+        let hints: Vec<PathBuf> = form
+            .found
+            .values()
+            .filter_map(|p| p.parent().map(|d| d.to_path_buf()))
+            .collect();
+        let roots = relink::search_roots(s.ed.path.as_deref(), &hints);
+        let list: Vec<(MediaAsset, String)> = form
+            .missing
+            .iter()
+            .filter(|m| !form.found.contains_key(&m.asset))
+            .filter_map(|m| {
+                s.ed.project
+                    .asset(m.asset)
+                    .map(|a| (a.clone(), m.name.clone()))
+            })
+            .collect();
+        form.search = Some(relink::Search::start(list, roots));
+    }
+    if link {
+        if let Some(x) = &form.search {
+            x.cancel();
+        }
+        let links: Vec<(AssetId, PathBuf)> =
+            form.found.iter().map(|(a, p)| (*a, p.clone())).collect();
+        match s.ed.link_media(&links) {
+            Ok(n) => s.ed.info(format!("Linked {n} media files")),
+            Err(e) => s.ed.error(e),
+        }
+        return false;
+    }
+    if close || esc {
+        if let Some(x) = &form.search {
+            x.cancel();
+        }
+        return false;
+    }
+    true
+}
+
+/// Paste Attributes (from the copied clip) and Remove Attributes share their choices.
+fn attributes_dialog(s: &mut State, ctx: &egui::Context, a: &mut Attributes, paste: bool) -> bool {
+    let title = if paste {
+        t("Paste Attributes")
+    } else {
+        t("Remove Attributes")
+    };
+    let ((ok, cancel), esc) = modal(ctx, "attributes", title, 300.0, |ui| {
+        ui.label(RichText::new(t("Video Attributes")).color(theme::TEXT_DIM));
+        ui.checkbox(&mut a.motion, tn("Motion"));
+        ui.checkbox(&mut a.opacity, tn("Opacity"));
+        ui.checkbox(&mut a.effects, t("Effects"));
+        ui.label(RichText::new(t("Audio Attributes")).color(theme::TEXT_DIM));
+        ui.checkbox(&mut a.volume, tn("Volume"));
+        ui.checkbox(&mut a.channel_volume, tn("Channel Volume"));
+        ui.checkbox(&mut a.panner, tn("Panner"));
+        buttons(ui, t("OK"))
+    });
+    if ok && paste {
+        s.ed.paste_attributes(*a);
+    } else if ok {
+        s.ed.remove_attributes(*a);
+    }
+    !(ok || cancel || esc)
 }

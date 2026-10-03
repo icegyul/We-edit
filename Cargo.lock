@@ -3250,6 +3250,7 @@ dependencies = [
 name = "op-ui"
 version = "0.7.0"
 dependencies = [
+ "ab_glyph",
  "arboard",
  "dirs",
  "eframe",

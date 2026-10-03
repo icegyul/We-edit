@@ -1,7 +1,7 @@
 # Rust-first architecture map
 
 **Status:** draft; implemented alpha architecture, not validated as Premiere-compatible behavior.<br>
-**Applies after:** every row in `compatibility-validation.md` is validated.
+**Applies to:** the current Rust code base.
 
 ## 1. Decision drivers
 

@@ -10,8 +10,19 @@ OpenPremier follows semantic versioning. User-visible changes are grouped by rel
 - Automatic hardware check: the processor, its cores and threads, the memory and the graphics card (dedicated, integrated or none) choose a recommended profile. On the first start a Performance Setup window shows what was found and offers Use Recommended Settings or Choose Manually; Preferences shows the recommendation and Use Recommended at any time.
 - Software Only (processor) in Preferences > Graphics API, like Premiere Pro's Mercury Playback Engine Software Only: the interface and preview are drawn by the processor's rasterizer (WARP on Windows, llvmpipe on Linux), for computers without a usable graphics card or with broken drivers.
 - The Razor tool shows translucent scissors at the pointer over the timeline, so the clip underneath stays visible, with the red cut line between the blades.
+- Custom performance settings: Preferences > Performance > Custom Settings changes each thing a profile sets (interface animations, smooth scrolling, redraws during playback, frames decoded ahead, timeline thumbnails, audio waveforms and preparing effects in the background) one by one; changing one, or a preview resolution or the frame cache, switches to Custom, and the slider goes back to a profile.
+- Link Media (File > Link Media, and offered when a project opens with files that moved or were renamed), like Premiere Pro's: each missing file can be located by hand, and the other missing files in the same folder are linked with it; Search Automatically looks in the project folder, the user's media folders and every drive by file name, and when several files share a name it takes the one whose duration, size and audio streams match. Linking is one undo step and keeps each clip's interpretation and proxy; Offline All keeps working without them.
+- Captions panel (Window > Captions; in the Editing and Graphics workspaces): every caption of the sequence with its start time and editable text, and one set of style controls (caption style, font, font style, size, text and highlight colors, stroke, box, vertical position, maximum width, animation strength, all caps and shadow) that changes all captions at once, or only the selected ones. Clicking a caption's time selects it and moves the playhead to it.
+- Transcription choices: the spoken language (offered in the program's language) and Captions In: the language spoken or an English translation.
+- Audio Gain (G) has Premiere Pro's four choices: Set Gain to, Adjust Gain by, Normalize Max Peak to (one gain for the selection, so its loudest peak reaches the level) and Normalize All Peaks to (each clip its own gain), and shows the selection's peak amplitude.
+- Edit > Remove Attributes: puts Motion, Opacity, Volume, Channel Volume and Panner back to their defaults and removes effects from the selected clips, choosing which.
 
 ### Changed
+
+- Faster transcription: about a third less time for the same result. The speech model's text decoder keeps what it has already read instead of reading the whole sentence again for every word, the audio of each 30-second window is analyzed once however many tries it takes, and silence is skipped without analysis.
+- Better language detection: the spoken language is judged on up to three 30-second stretches with the most sound instead of the first 30 seconds, which were often music or silence and made Spanish speech come out as English. The status bar says which language was heard.
+- Lighter: about a fifth less memory at rest (155 MB against 199 MB in 0.6.0 on the test computer) and half the processor time at start; the program file is 8 % smaller (whole-program optimization).
+- A cleaner look: the interface uses the system's own font (Segoe UI on Windows, San Francisco on macOS, the desktop's sans-serif on Linux) with semibold panel names and window titles, controls have a faint rim that brightens under the pointer, windows and menus have rounder corners and softer shadows, and sliders fill up to their value. Preferences > Interface Font goes back to the classic font.
 
 - The program opens on computers without a graphics card: the window takes the best adapter that can draw it (dedicated, then integrated, then the software rasterizer).
 - Faster start: only the shaders every preview needs compile at start; effect shaders compile two per idle frame from the Balanced profile up, and on first use in the lighter profiles (with software rendering, compiling them all at start took several seconds of every core).
@@ -19,6 +30,7 @@ OpenPremier follows semantic versioning. User-visible changes are grouped by rel
 
 ### Fixed
 
+- Paste Attributes with Effects copied a graphic's text or caption onto the target clips as if it were an effect.
 - The underline of the active tab of a narrow panel (such as Audio Meters) ran into the neighbouring panel.
 - The Essential Graphics placeholder text wraps in a narrow panel instead of being cut off.
 

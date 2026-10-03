@@ -109,7 +109,7 @@ impl Editor {
             &prefs.hardware_decoding,
         ));
         media.set_use_proxies(prefs.use_proxies);
-        media.set_read_ahead(prefs.profile().settings().read_ahead);
+        media.set_read_ahead(prefs.performance().read_ahead);
         let source: Arc<dyn op_audio::AudioSource> = media.clone();
         let playback = if audio {
             op_audio::Playback::start(source)
@@ -436,7 +436,7 @@ impl Editor {
         }
         self.changed();
         if loaded.offline > 0 {
-            self.error(format!("{} media files are offline", loaded.offline));
+            self.info(format!("{} media files are offline", loaded.offline));
         }
         if loaded.native {
             self.prefs.add_recent(&loaded.path);
@@ -1247,6 +1247,7 @@ impl Editor {
         hw: Option<&crate::performance::Hardware>,
     ) {
         let st = p.settings();
+        self.prefs.performance_custom = None;
         self.prefs.performance_profile = Some(p.index());
         self.prefs.performance_mode = p <= crate::performance::Profile::Performance;
         self.prefs.playback_resolution = st.playback_resolution;
@@ -1260,6 +1261,14 @@ impl Editor {
             p.label(),
             self.prefs.frame_cache_mb
         );
+    }
+
+    /// Switches to settings chosen one by one (preview resolutions and the frame cache are
+    /// set as preferences of their own).
+    pub fn set_performance_custom(&mut self, c: crate::performance::CustomSettings) {
+        self.prefs.performance_custom = Some(c);
+        self.media.set_read_ahead(c.settings().read_ahead);
+        let _ = self.prefs.save(&self.dirs);
     }
 
     pub fn set_use_proxies(&mut self, on: bool) {

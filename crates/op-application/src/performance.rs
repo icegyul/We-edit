@@ -8,6 +8,8 @@
 
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum Profile {
     UltraPerformance,
@@ -79,6 +81,7 @@ impl Profile {
                 frame_wait: Duration::ZERO,
                 thumbnails: false,
                 waveforms: false,
+                warm_up: false,
             },
             Performance => ProfileSettings {
                 animation_time: 0.0,
@@ -92,6 +95,7 @@ impl Profile {
                 frame_wait: Duration::from_millis(3),
                 thumbnails: true,
                 waveforms: true,
+                warm_up: false,
             },
             Balanced => ProfileSettings {
                 animation_time: 0.06,
@@ -105,6 +109,7 @@ impl Profile {
                 frame_wait: Duration::from_millis(6),
                 thumbnails: true,
                 waveforms: true,
+                warm_up: true,
             },
             Quality => ProfileSettings {
                 animation_time: 1.0 / 12.0,
@@ -118,6 +123,7 @@ impl Profile {
                 frame_wait: Duration::from_millis(8),
                 thumbnails: true,
                 waveforms: true,
+                warm_up: true,
             },
             Maximum => ProfileSettings {
                 animation_time: 0.12,
@@ -131,6 +137,7 @@ impl Profile {
                 frame_wait: Duration::from_millis(10),
                 thumbnails: true,
                 waveforms: true,
+                warm_up: true,
             },
         }
     }
@@ -158,6 +165,66 @@ pub struct ProfileSettings {
     /// Timeline clip thumbnails and audio waveforms.
     pub thumbnails: bool,
     pub waveforms: bool,
+    /// Compile the remaining effect shaders while the program is idle after it starts.
+    pub warm_up: bool,
+}
+
+/// Settings chosen one by one (Preferences > Performance, Custom). Preview resolutions and the
+/// frame cache are preferences of their own; these are the rest of what a profile sets.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomSettings {
+    /// The profile the settings started from.
+    pub base: u8,
+    pub animations: bool,
+    pub smooth_scroll: bool,
+    /// Highest interface redraw rate during playback (0: the display's refresh rate).
+    pub playback_fps: u32,
+    pub read_ahead: i64,
+    pub thumbnails: bool,
+    pub waveforms: bool,
+    pub warm_up: bool,
+}
+
+impl Default for CustomSettings {
+    fn default() -> Self {
+        CustomSettings::from_profile(Profile::Balanced)
+    }
+}
+
+impl CustomSettings {
+    pub fn from_profile(p: Profile) -> CustomSettings {
+        let s = p.settings();
+        CustomSettings {
+            base: p.index(),
+            animations: s.animation_time > 0.0,
+            smooth_scroll: s.smooth_scroll,
+            playback_fps: s.playback_fps_cap.unwrap_or(0),
+            read_ahead: s.read_ahead,
+            thumbnails: s.thumbnails,
+            waveforms: s.waveforms,
+            warm_up: s.warm_up,
+        }
+    }
+
+    /// The base profile's settings with these choices.
+    pub fn settings(&self) -> ProfileSettings {
+        let base = Profile::from_index(self.base).settings();
+        ProfileSettings {
+            animation_time: match (self.animations, base.animation_time > 0.0) {
+                (false, _) => 0.0,
+                (true, true) => base.animation_time,
+                (true, false) => 0.06,
+            },
+            smooth_scroll: self.smooth_scroll,
+            playback_fps_cap: (self.playback_fps > 0).then_some(self.playback_fps.max(10)),
+            read_ahead: self.read_ahead.clamp(2, 96),
+            thumbnails: self.thumbnails,
+            waveforms: self.waveforms,
+            warm_up: self.warm_up,
+            ..base
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -301,5 +368,22 @@ mod tests {
             hw(GpuKind::Discrete, 8, 4.0).frame_cache_mb(Profile::Maximum),
             1024
         );
+    }
+
+    #[test]
+    fn custom_settings_start_from_a_profile() {
+        for p in Profile::ALL {
+            // unchanged, they are the profile's own
+            assert_eq!(CustomSettings::from_profile(p).settings(), p.settings());
+        }
+        let mut c = CustomSettings::from_profile(Profile::UltraPerformance);
+        c.animations = true;
+        c.waveforms = true;
+        c.playback_fps = 0;
+        let s = c.settings();
+        assert!(s.animation_time > 0.0 && s.waveforms && s.playback_fps_cap.is_none());
+        // the rest stays light
+        assert_eq!(s.playback_resolution, 4);
+        assert!(!s.thumbnails);
     }
 }

@@ -1,5 +1,5 @@
 //! Command dispatch. Command identifiers are the ones used by the default shortcut map
-//! (docs/evidence/generated/premiere_shortcuts_default.md), so menus, shortcuts and imported
+//! (crates/op-application/data/default_shortcuts.json), so menus, shortcuts and imported
 //! `.kys` maps all address the same commands.
 
 use op_core::catalog::{self, EffectKind};
@@ -621,6 +621,14 @@ impl Editor {
         });
     }
 
+    /// Edit > Remove Attributes.
+    pub fn remove_attributes(&mut self, what: Attributes) {
+        let clips = self.selection.clips.clone();
+        self.seq_edit("Remove Attributes", |p, sid, opts| {
+            op_timeline::remove_attributes(p, sid, &clips, what, opts)
+        });
+    }
+
     /// Insert (`,`) or overwrite (`.`) from the Source Monitor, with three-point rules: the
     /// sequence In (or the playhead) is the destination; sequence In and Out together set the
     /// duration.
@@ -955,6 +963,84 @@ impl Editor {
                 }
             }
             if any { Ok(()) } else { Err(EditError::Nothing) }
+        });
+    }
+
+    /// Audio Gain > Adjust Gain by.
+    pub fn adjust_gain(&mut self, db: f64) {
+        self.nudge_volume(db);
+    }
+
+    /// The loudest sample (0..1, before the clip's gain) of the part of its source an audio clip
+    /// plays, from the waveform peaks; None until they are ready.
+    pub fn clip_peak(&self, c: &Clip) -> Option<f32> {
+        let ClipSource::Asset { asset, stream, .. } = c.source else {
+            return None;
+        };
+        let peaks = self.media.peaks(asset, stream)?;
+        let audio = op_audio::AudioSource::audio(&*self.media, asset, stream)?;
+        let rate = audio.info.rate as f64;
+        let r = c.source_range();
+        let a = (r.start.seconds() * rate).floor() as i64;
+        let b = (r.end.seconds() * rate).ceil() as i64;
+        let mut peak = 0f32;
+        for ch in 0..peaks.channels {
+            let (lo, hi) = peaks.range(ch, a, b);
+            peak = peak.max(-lo).max(hi);
+        }
+        Some(peak)
+    }
+
+    /// The selected audio clips with their peaks (None while a waveform is being made).
+    pub fn selected_audio_peaks(&self) -> Vec<(ClipId, f64, Option<f32>)> {
+        let Some(seq) = self.active_seq() else {
+            return Vec::new();
+        };
+        self.selection
+            .clips
+            .iter()
+            .filter_map(|id| seq.clip(*id))
+            .filter(|c| !c.is_video())
+            .map(|c| (c.id, c.gain_db, self.clip_peak(c)))
+            .collect()
+    }
+
+    /// Audio Gain > Normalize Max Peak to (`each` false: one gain for all, so the loudest peak
+    /// of the selection reaches `target_db`) or Normalize All Peaks to (`each` true: every clip
+    /// gets its own gain).
+    pub fn normalize_gain(&mut self, target_db: f64, each: bool) {
+        let clips = self.selected_audio_peaks();
+        if clips.is_empty() {
+            return;
+        }
+        if clips.iter().any(|(_, _, p)| p.is_none()) {
+            self.error(
+                "The waveforms of the selected clips are not ready yet; try again in a moment",
+            );
+            return;
+        }
+        let db = |p: f32| 20.0 * (p.max(1e-6) as f64).log10();
+        let loudest = clips.iter().filter_map(|(_, _, p)| *p).fold(0f32, f32::max);
+        if loudest <= 1e-6 {
+            self.error("The selected clips are silent");
+            return;
+        }
+        let gains: Vec<(ClipId, f64)> = clips
+            .iter()
+            .map(|(id, _, p)| {
+                let p = if each { p.unwrap_or(0.0) } else { loudest };
+                let g = if p <= 1e-6 { 0.0 } else { target_db - db(p) };
+                (*id, g.clamp(-96.0, 96.0))
+            })
+            .collect();
+        self.seq_edit("Audio Gain", |p, sid, _| {
+            let s = p.sequence_mut(sid).unwrap();
+            for (id, g) in &gains {
+                if let Some(c) = s.clip_mut(*id) {
+                    c.gain_db = *g;
+                }
+            }
+            Ok(())
         });
     }
 

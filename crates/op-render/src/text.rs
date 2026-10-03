@@ -133,6 +133,27 @@ impl Fonts {
         self.loaded.lock().insert(key, font.clone());
         font
     }
+
+    /// The file contents and face index of an installed family (regular or semibold), only
+    /// when that exact family is installed.
+    pub fn face_data(&self, family: &str, semibold: bool) -> Option<(Vec<u8>, u32)> {
+        let families = [fontdb::Family::Name(family)];
+        let id = self.db.query(&fontdb::Query {
+            families: &families,
+            weight: if semibold {
+                fontdb::Weight::SEMIBOLD
+            } else {
+                fontdb::Weight::NORMAL
+            },
+            stretch: fontdb::Stretch::Normal,
+            style: fontdb::Style::Normal,
+        })?;
+        let mut out = None;
+        self.db.with_face_data(id, |data, index| {
+            out = Some((data.to_vec(), index));
+        });
+        out
+    }
 }
 
 /// Exact Euclidean distance transform (Felzenszwalb-Huttenlocher) of a binary mask; returns
