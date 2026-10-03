@@ -30,6 +30,8 @@ pub struct Preferences {
     /// Custom key bindings: (context, command) -> keys; an empty string unbinds.
     pub shortcuts: Vec<(String, String, String)>,
     pub ui_scale: f32,
+    /// AI assistants (`OpenPremier --mcp`) may edit the open project.
+    pub assistant_control: bool,
     /// Interface typeface: "system" (the system's interface font) or "classic" (bundled).
     pub ui_font: String,
     pub audio_scrubbing: bool,
@@ -87,6 +89,7 @@ impl Default for Preferences {
             shortcuts: Vec::new(),
             ui_scale: 1.0,
             ui_font: "system".into(),
+            assistant_control: false,
             audio_scrubbing: true,
             hardware_encoding: true,
             last_export_dir: None,

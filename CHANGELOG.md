@@ -2,6 +2,28 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.8.0 - 2026-10-03
+
+### Added
+
+- AI assistants can edit with OpenPremier through the Model Context Protocol: `OpenPremier --mcp` serves Claude Code, Codex, Cursor and other MCP clients with 28 tools (project and media, sequences, adding, moving, cutting and speeding up clips, effects and their parameters, transitions, titles, automatic captions, markers, looking at a rendered frame, exporting, any menu command, undo). With Preferences > AI Assistants on, the tools edit the open project live (only from this computer, with a random key; off by default), each change one undo step; otherwise they work on a project of their own. See docs/assistants.md.
+- Every common picture format imports and pastes: besides PNG, JPEG, TIFF, WebP, BMP, GIF, TGA, EXR, DPX and PSD, now SVG, AVIF, HEIC/HEIF, JPEG XL, JPEG 2000, ICO, DDS, QOI, PCX, PNM, SGI, XBM/XPM, Sun Raster and Radiance HDR. The import dialog has an Images filter.
+- Pasting (Ctrl+V) with the pointer over the timeline puts the pasted media there: at the time under the pointer, on the track under it when it is free; video files bring their sound to free audio tracks. Without an open sequence, the pasted media starts one.
+
+### Changed
+
+- Exports are about three and a half times faster when the encoder runs on the processor (ProRes, DNxHR, PNG, and H.264/HEVC without a hardware encoder): FFmpeg encoded on a single core, now it uses all of them. A one-second 1080p clip with 100 effects exports at 40 frames per second instead of 11 on the test computer, and ten stacked layers of ten effects at 21 instead of 6.
+- Exports read each frame back from the graphics card while the next one renders, instead of waiting for it.
+- A heavy-load benchmark (`cargo test --release --test stress_render -- --ignored`) measures one clip with 100 effects and ten stacked layers of ten effects, on the graphics card or on the processor's rasterizer like a computer without one; see docs/performance.md.
+- The Hand tool shows a hand (open, and closed while dragging) instead of the system's four-arrow cursor.
+- Transcription choices read Caption Language: Same as spoken (transcribe) or Translate to English. Tests showed that choosing a spoken language other than the real one does not translate.
+- The interface code is split into smaller modules (dialogs and the main window each in several files).
+
+### Fixed
+
+- TGA and ICO pictures did not decode ("the image has no picture").
+- A one-frame GIF became a one-frame clip instead of a still.
+
 ## 0.7.0 - 2026-10-02
 
 ### Added

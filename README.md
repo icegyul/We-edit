@@ -24,7 +24,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.7.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
+La versión `0.8.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -48,6 +48,11 @@ en todos los trabajos de producción.
   traducidos al inglés. El panel Subtítulos cambia el estilo de todos a la vez y permite corregir
   el texto. También importa y exporta SRT y WebVTT.
 - Vincular medios: si los archivos se movieron, se ubican a mano o se buscan solos en el equipo.
+- Asistentes de IA: Claude Code, Codex u otro cliente MCP pueden editar con OpenPremier
+  (`OpenPremier --mcp`), incluso en vivo sobre el proyecto abierto. Ver
+  [docs/assistants.md](docs/assistants.md).
+- Cualquier formato de imagen habitual (también SVG, AVIF, HEIC y JPEG XL); lo que se pega con
+  Ctrl+V sobre la línea de tiempo queda donde está el puntero.
 - Proxies como en Premiere Pro: copias ligeras de los clips para editar con fluidez material 4K o
   de cámara, con un botón para alternar entre proxies y originales; la exportación usa siempre el
   original.
@@ -116,7 +121,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.7.0-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.8.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

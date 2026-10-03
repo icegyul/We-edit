@@ -1187,43 +1187,77 @@ impl Editor {
         });
     }
 
-    /// Adds a graphics clip (text or shape) at the playhead on the lowest free targeted video
-    /// track above existing material, five seconds long.
-    /// Places a project item at the playhead on the first free video track above the material
-    /// there, like a new graphic (used for pasted images). Selects the new clip.
-    pub fn place_on_top(&mut self, item: ItemId) -> Option<ClipId> {
+    /// Places a media item on the timeline at `at` (the playhead when None), like a paste: video
+    /// on `track` when that is a free video track there, else on the first free track above
+    /// what plays at that moment (a new one if needed); audio on free audio tracks the same way.
+    /// Returns the first new clip.
+    pub fn place_item(
+        &mut self,
+        item: ItemId,
+        at: Option<SeqTime>,
+        track: Option<TrackRef>,
+    ) -> Option<ClipId> {
         let sid = self.active?;
         let spec = SourceClip::from_item(&self.project, item).ok()?;
-        spec.video.as_ref()?;
-        let t = self.playhead();
+        let t = at.unwrap_or_else(|| self.playhead()).max(SeqTime::ZERO);
         let seq = self.project.sequence(sid)?.clone();
         let range = SeqRange::with_duration(t, spec.duration());
-        let occupied_top = seq
-            .video
-            .iter()
-            .enumerate()
-            .filter(|(_, tr)| tr.clips_in(range).next().is_some())
-            .map(|(i, _)| i + 1)
-            .max()
-            .unwrap_or(0);
-        let index = (occupied_top..seq.video.len() + 1)
-            .find(|i| {
-                seq.video
-                    .get(*i)
-                    .is_none_or(|tr| tr.clips_in(range).next().is_none() && !tr.locked)
+        let free = |tr: &Track| tr.clips_in(range).next().is_none() && !tr.locked;
+        let video = spec.video.as_ref().map(|_| {
+            let wanted = track
+                .filter(|r| r.kind == TrackKind::Video)
+                .map(|r| r.index)
+                .filter(|i| seq.video.get(*i).is_some_and(|tr| free(tr)));
+            wanted.unwrap_or_else(|| {
+                let occupied_top = seq
+                    .video
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, tr)| tr.clips_in(range).next().is_some())
+                    .map(|(i, _)| i + 1)
+                    .max()
+                    .unwrap_or(0);
+                (occupied_top..seq.video.len() + 1)
+                    .find(|i| seq.video.get(*i).is_none_or(|tr| free(tr)))
+                    .unwrap_or(seq.video.len())
             })
-            .unwrap_or(seq.video.len());
-        let patch = Patch {
-            video: Some(index),
-            audio: vec![],
-        };
-        let ids = self.seq_edit("Paste Image", |p, sid, opts| {
-            while p.sequence(sid).unwrap().video.len() <= index {
+        });
+        let mut audio = Vec::new();
+        let first_audio = track
+            .filter(|r| r.kind == TrackKind::Audio)
+            .map(|r| r.index)
+            .unwrap_or(0);
+        let mut next_new = seq.audio.len();
+        for _ in &spec.audio {
+            let found = (first_audio..seq.audio.len())
+                .chain(0..first_audio)
+                .find(|i| !audio.contains(&Some(*i)) && free(&seq.audio[*i]));
+            audio.push(Some(found.unwrap_or_else(|| {
+                next_new += 1;
+                next_new - 1
+            })));
+        }
+        let (need_v, need_a) = (
+            video.map(|v| v + 1).unwrap_or(0),
+            audio.iter().flatten().map(|a| a + 1).max().unwrap_or(0),
+        );
+        let patch = Patch { video, audio };
+        let ids = self.seq_edit("Paste", |p, sid, opts| {
+            let s = p.sequence(sid).unwrap();
+            let (have_v, have_a) = (s.video.len(), s.audio.len());
+            for _ in have_v..need_v {
                 let tid = p.ids.track();
                 p.sequence_mut(sid)
                     .unwrap()
                     .video
                     .push(std::sync::Arc::new(Track::new(tid, TrackKind::Video)));
+            }
+            for _ in have_a..need_a {
+                let tid = p.ids.track();
+                p.sequence_mut(sid)
+                    .unwrap()
+                    .audio
+                    .push(std::sync::Arc::new(Track::new(tid, TrackKind::Audio)));
             }
             overwrite(p, sid, &spec, t, &patch, opts)
         })?;
@@ -1231,6 +1265,13 @@ impl Editor {
         ids.first().copied()
     }
 
+    /// Places a media item at the playhead above what plays there.
+    pub fn place_on_top(&mut self, item: ItemId) -> Option<ClipId> {
+        self.place_item(item, None, None)
+    }
+
+    /// Adds a graphics clip (text or shape) at the playhead on the lowest free targeted video
+    /// track above existing material, five seconds long.
     pub fn add_graphic(&mut self, effect: &str, shape: Option<u32>) -> Option<ClipId> {
         let sid = self.active?;
         let t = self.playhead();
@@ -1491,6 +1532,43 @@ mod tests {
     }
 
     #[test]
+    fn pasted_media_lands_where_the_pointer_is() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
+        let (mut e, _d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        e.load_source(item);
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        // V1 is busy until 10 s: pointing at V1 at 4 s goes above it, at 12 s stays on V1
+        let busy = e
+            .place_item(
+                item,
+                Some(SeqTime::from_seconds(4.0)),
+                Some(TrackRef::video(0)),
+            )
+            .unwrap();
+        let free = e
+            .place_item(
+                item,
+                Some(SeqTime::from_seconds(12.0)),
+                Some(TrackRef::video(0)),
+            )
+            .unwrap();
+        let seq = e.active_seq().unwrap();
+        let (r, c) = seq.find_clip(busy).unwrap();
+        assert_eq!(
+            (r, c.start),
+            (TrackRef::video(1), SeqTime::from_seconds(4.0))
+        );
+        let (r, c) = seq.find_clip(free).unwrap();
+        assert_eq!(
+            (r, c.start),
+            (TrackRef::video(0), SeqTime::from_seconds(12.0))
+        );
+        assert_eq!(e.selection.clips, vec![free]);
+    }
+
+    #[test]
     fn three_point_edits_and_undo() {
         let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, _d) = editor();
@@ -1572,7 +1650,8 @@ mod tests {
         ];
         let path = d.path().join("Pasted Image.png");
         std::fs::write(&path, png).unwrap();
-        e.place_after_import.push(path.clone());
+        e.place_after_import
+            .push(crate::editor::Placement::at_playhead(path.clone()));
         let root = e.project.root;
         e.import(vec![path], root);
         let start = std::time::Instant::now();

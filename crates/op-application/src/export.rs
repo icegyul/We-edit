@@ -306,6 +306,7 @@ fn run(
         .unwrap_or(0);
     let video_frames = if s.video.is_some() { total } else { 0 };
     let steps = video_frames.max(1);
+    let mut in_flight: Option<op_render::output::PendingRead> = None;
     for n in 0..steps {
         if pause.load(Ordering::Relaxed) {
             let since = Instant::now();
@@ -350,8 +351,9 @@ fn run(
                 }));
             }
             let t1 = Instant::now();
-            let planes = if (frame.width, frame.height) == (v.width, v.height) {
-                r.delivery_planes(&frame, v.codec.input())
+            // the frame's planes are read back while the next frame renders
+            let pending = if (frame.width, frame.height) == (v.width, v.height) {
+                r.begin_delivery(&frame, v.codec.input())
             } else {
                 // odd sizes: render at the exact output size
                 let fixed = r.work(v.width, v.height);
@@ -362,16 +364,20 @@ fn run(
                     frame.size(),
                     &fixed,
                 );
-                let p = r.delivery_planes(&fixed, v.codec.input());
+                let p = r.begin_delivery(&fixed, v.codec.input());
                 r.recycle(fixed);
                 p
             };
             r.recycle(frame);
-            stage[1] += t1.elapsed().as_secs_f64();
-            // time blocked here means the encoder is the slowest stage
-            let t2 = Instant::now();
-            writer.send(Packet::Video(planes))?;
-            stage[2] += t2.elapsed().as_secs_f64();
+            let previous = in_flight.replace(pending);
+            if let Some(prev) = previous {
+                let planes = r.end_read(prev);
+                stage[1] += t1.elapsed().as_secs_f64();
+                // time blocked here means the encoder is the slowest stage
+                let t2 = Instant::now();
+                writer.send(Packet::Video(planes))?;
+                stage[2] += t2.elapsed().as_secs_f64();
+            }
         }
         // audio up to the end of this frame (or everything, for audio-only exports)
         if let (Some(m), Some(a)) = (mixer.as_mut(), s.audio.as_ref()) {
@@ -415,6 +421,9 @@ fn run(
             let left = (total - n - 1) as f32 / pr.fps.max(1e-3);
             pr.remaining = Some(Duration::from_secs_f32(left));
         }
+    }
+    if let (Some(r), Some(prev)) = (renderer.as_mut(), in_flight.take()) {
+        writer.send(Packet::Video(r.end_read(prev)))?;
     }
     writer.finish()
 }

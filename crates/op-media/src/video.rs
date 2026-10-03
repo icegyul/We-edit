@@ -708,7 +708,11 @@ impl VideoDecoder {
         let index = index.max(0);
         if self.is_still {
             if self.still.is_none() {
-                self.seek_to(0, 0.0).ok();
+                // a freshly opened file is at its picture already; seeking a single-image file
+                // (TGA, ICO) can leave the demuxer at its end
+                if self.last.is_some() || self.eof {
+                    self.seek_to(0, 0.0).ok();
+                }
                 let f = self
                     .decode_next()?
                     .ok_or_else(|| MediaError::Unsupported("the image has no picture".into()))?;

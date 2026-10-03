@@ -17,7 +17,7 @@ pub mod recovery;
 pub mod relink;
 pub mod session;
 
-pub use editor::{APP_NAME, Editor, LoadedProject, Status, Transport};
+pub use editor::{APP_NAME, Editor, LoadedProject, Placement, Status, Transport};
 pub use export::{ExportJob, ExportSettings, PreviewImage, Progress};
 pub use keymap::{Binding, Chord, Keymap};
 pub use media::MediaService;

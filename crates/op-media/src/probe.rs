@@ -130,9 +130,57 @@ fn map_primaries(v: u32) -> Primaries {
 }
 
 const STILL_CODECS: &[&str] = &[
-    "png", "mjpeg", "bmp", "tiff", "webp", "targa", "dpx", "exr", "jpeg2000", "sgi", "qoi", "psd",
-    "ppm", "pgm", "pam",
+    "png",
+    "mjpeg",
+    "bmp",
+    "tiff",
+    "webp",
+    "targa",
+    "dpx",
+    "exr",
+    "jpeg2000",
+    "sgi",
+    "qoi",
+    "psd",
+    "ppm",
+    "pgm",
+    "pam",
+    "pbm",
+    "pgmyuv",
+    "pfm",
+    "phm",
+    "svg",
+    "pcx",
+    "xbm",
+    "xpm",
+    "xwd",
+    "dds",
+    "jpegxl",
+    "jpegls",
+    "sunrast",
+    "gem",
+    "pictor",
+    "photocd",
+    "radiance_hdr",
+    "vbn",
+    "cri",
 ];
+
+/// Image files whose container is shared with video (AVIF and HEIC hold one AV1 or HEVC frame
+/// in an MP4-style box, JPEG XL its own): their extension says they are pictures.
+pub const STILL_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "jfif", "jpe", "pjpeg", "pjp", "bmp", "dib", "gif", "tif", "tiff",
+    "webp", "tga", "icb", "vda", "vst", "dpx", "exr", "jp2", "j2k", "jpf", "jpx", "jpm", "sgi",
+    "rgb", "rgba", "bw", "qoi", "psd", "ppm", "pgm", "pbm", "pam", "pnm", "pfm", "phm", "svg",
+    "svgz", "pcx", "xbm", "xpm", "xwd", "dds", "ico", "cur", "jxl", "jls", "ras", "sun", "hdr",
+    "pic", "avif", "heic", "heif", "hif", "pcd", "cri",
+];
+
+fn still_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| STILL_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
 
 /// Nominal frame rate. The container's base rate (r_frame_rate) is preferred when it is a
 /// standard rate; the average rate is skewed by the last frame's duration in short files and by
@@ -190,7 +238,8 @@ pub fn probe(path: &Path) -> Result<MediaAsset> {
         };
         let codec = stream.parameters().id().name().to_string();
         match stream.parameters().medium() {
-            Type::Video if video.is_none() => {
+            // an icon file holds one picture per size: the largest is used
+            Type::Video if video.is_none() || format_name == "ico" => {
                 // cover art in audio files is a "video" stream with the attached-picture disposition
                 if stream
                     .disposition()
@@ -202,14 +251,22 @@ pub fn probe(path: &Path) -> Result<MediaAsset> {
                 if cp.width <= 0 || cp.height <= 0 {
                     continue;
                 }
+                if let Some(v) = &video
+                    && (cp.width as u64 * cp.height as u64) <= (v.width as u64 * v.height as u64)
+                {
+                    continue;
+                }
                 let (pix_name, depth, alpha) = pixel_info(cp.format);
                 let is_image_format =
                     format_name.contains("image2") || format_name.ends_with("_pipe");
                 let frames_hint = stream.frames();
+                // an animated GIF or WebP is a clip; a one-frame picture of any kind is a still
                 let is_still = (is_image_format && STILL_CODECS.contains(&codec.as_str()))
                     || (STILL_CODECS.contains(&codec.as_str())
                         && frames_hint <= 1
-                        && stream_dur.seconds() < 0.2);
+                        && stream_dur.seconds() < 0.2)
+                    || (still_extension(path) && frames_hint <= 1 && codec != "gif")
+                    || (codec == "gif" && frames_hint == 1);
                 let rate = frame_rate(&stream);
                 let frames = if is_still {
                     1

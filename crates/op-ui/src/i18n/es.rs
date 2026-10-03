@@ -1850,12 +1850,15 @@ pub static ES: &[(&str, &str)] = &[
         "Seleccionar este subtítulo e ir a él",
     ),
     ("Spoken Language", "Idioma hablado"),
-    ("Captions In", "Subtítulos en"),
-    ("The language spoken", "El idioma hablado"),
-    ("English (translated)", "Inglés (traducido)"),
+    ("Caption Language", "Idioma de los subtítulos"),
     (
-        "The speech model translates into English only; to caption in another language, choose it as the spoken language.",
-        "El modelo de voz solo traduce al inglés; para subtitular en otro idioma, elíjalo como idioma hablado.",
+        "Same as spoken (transcribe)",
+        "El mismo que se habla (transcribir)",
+    ),
+    ("Translate to English", "Traducir al inglés"),
+    (
+        "The speech model only translates into English. Choosing a spoken language other than the real one does not translate; it lowers the quality.",
+        "El modelo de voz solo traduce al inglés. Elegir un idioma hablado distinto del real no traduce; empeora el resultado.",
     ),
     (
         "Style, colors and font can be changed later for every caption at once in the Captions panel (Window > Captions).",
@@ -1947,4 +1950,25 @@ pub static ES: &[(&str, &str)] = &[
         "Los clips seleccionados están en silencio",
     ),
     ("reversed", "invertido"),
+    ("Images", "Imágenes"),
+    ("AI Assistants", "Asistentes de IA"),
+    ("Assistant Control", "Control por asistentes"),
+    (
+        "Let AI assistants edit the open project",
+        "Permitir que los asistentes de IA editen el proyecto abierto",
+    ),
+    (
+        "Claude Code, Codex and other assistants that use the Model Context Protocol can then import, cut, add effects, titles and captions, look at frames and export in this window. Every change is one undo step.",
+        "Claude Code, Codex y otros asistentes que usan el Model Context Protocol podrán importar, cortar, agregar efectos, títulos y subtítulos, ver fotogramas y exportar en esta ventana. Cada cambio es un paso de deshacer.",
+    ),
+    ("Connect an Assistant", "Conectar un asistente"),
+    ("Copy Command", "Copiar comando"),
+    (
+        "Other assistants: run \"{}\" with the argument --mcp.",
+        "Otros asistentes: ejecute \"{}\" con el argumento --mcp.",
+    ),
+    (
+        "Assistants cannot connect: {}",
+        "Los asistentes no pueden conectarse: {}",
+    ),
 ];

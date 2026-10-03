@@ -1,0 +1,23 @@
+[package]
+name = "op-mcp"
+description = "OpenPremier for AI assistants: a Model Context Protocol server that edits projects"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+op-core.workspace = true
+op-timeline.workspace = true
+op-media.workspace = true
+op-render.workspace = true
+op-application.workspace = true
+serde_json.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

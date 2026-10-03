@@ -452,7 +452,17 @@ fn try_video(
             "{name} does not accept {wanted:?}"
         )));
     };
-    let ctx = ff::codec::context::Context::new_with_codec(codec);
+    let mut ctx = ff::codec::context::Context::new_with_codec(codec);
+    // FFmpeg encodes on one core unless told otherwise; ProRes, DNxHR and PNG split each frame
+    // into slices, x264 and x265 take the count for their own threads (0: one per core)
+    ctx.set_threading(ff::threading::Config {
+        kind: if matches!(s.codec, VideoCodec::Png) {
+            ff::threading::Type::Frame
+        } else {
+            ff::threading::Type::Slice
+        },
+        count: 0,
+    });
     let mut enc = ctx.encoder().video()?;
     enc.set_width(s.width);
     enc.set_height(s.height);

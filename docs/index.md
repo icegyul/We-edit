@@ -15,6 +15,8 @@ OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and m
 | [keyboard-shortcuts.md](keyboard-shortcuts.md) | Default shortcuts and dispatch rules |
 | [timeline-behavior.md](timeline-behavior.md) | Editing, trimming, snapping, links and history |
 | [effects.md](effects.md) | Effects, transitions, audio effects and graphics |
+| [assistants.md](assistants.md) | Editing with AI assistants (Model Context Protocol) |
+| [performance.md](performance.md) | Heavy-load benchmark results and what they mean for smaller computers |
 | [plugin-api-spec.md](plugin-api-spec.md) | OpenFX and WebAssembly extension design |
 
 ## Clean-room policy

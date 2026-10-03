@@ -93,6 +93,13 @@ impl Renderer {
     /// Reads several textures back with one submission and one wait (blocking). Buffers are
     /// reused between calls.
     pub fn read_textures(&mut self, list: &[(&Tex, u32)]) -> Vec<Vec<u8>> {
+        let pending = self.begin_read(list);
+        self.end_read(pending)
+    }
+
+    /// Starts reading textures back: the copies are queued and the call returns at once, so the
+    /// GPU works on them while the caller prepares the next frame. `end_read` collects them.
+    pub fn begin_read(&mut self, list: &[(&Tex, u32)]) -> PendingRead {
         let mut enc = self
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -140,7 +147,7 @@ impl Renderer {
         }
         // pending passes must run first
         self.submit();
-        self.gpu.queue.submit(Some(enc.finish()));
+        let index = self.gpu.queue.submit(Some(enc.finish()));
         let (tx, rx) = std::sync::mpsc::channel();
         for (i, (buffer, ..)) in jobs.iter().enumerate() {
             let tx = tx.clone();
@@ -148,10 +155,29 @@ impl Renderer {
                 let _ = tx.send((i, r.is_ok()));
             });
         }
-        drop(tx);
-        let _ = self.device().poll(wgpu::PollType::wait_indefinitely());
+        PendingRead {
+            jobs,
+            index,
+            mapped: rx,
+            post: Post::None,
+        }
+    }
+
+    /// Waits for reads started with `begin_read` (only for their own submission, not for work
+    /// queued after them) and returns the pixels, tightly packed.
+    pub fn end_read(&mut self, pending: PendingRead) -> Vec<Vec<u8>> {
+        let PendingRead {
+            jobs,
+            index,
+            mapped,
+            post,
+        } = pending;
+        let _ = self.device().poll(wgpu::PollType::Wait {
+            submission_index: Some(index),
+            timeout: None,
+        });
         let mut ok = vec![false; jobs.len()];
-        for (i, r) in rx.iter() {
+        for (i, r) in mapped.try_iter() {
             ok[i] = r;
         }
         let mut out = Vec::with_capacity(jobs.len());
@@ -181,11 +207,20 @@ impl Renderer {
             }
             out.push(data);
         }
-        out
+        match post {
+            Post::None => out,
+            Post::Planes { bytes, alpha } => split_planes(out, bytes, alpha),
+        }
     }
 
     /// Converts a finished frame to the planes an encoder expects (tightly packed rows).
     pub fn delivery_planes(&mut self, frame: &Tex, input: VideoInput) -> Vec<Vec<u8>> {
+        let pending = self.begin_delivery(frame, input);
+        self.end_read(pending)
+    }
+
+    /// Like `delivery_planes`, without waiting: `end_read` returns the planes.
+    pub fn begin_delivery(&mut self, frame: &Tex, input: VideoInput) -> PendingRead {
         let (w, h) = (frame.width, frame.height);
         let (planes, cx, cy, bytes) = input.planes();
         let bits = input.bits() as f32;
@@ -199,13 +234,13 @@ impl Renderer {
                 frame.size(),
                 &t,
             );
-            let data = self.read_texture(&t, 4);
+            let pending = self.begin_read(&[(&t, 4)]);
+            // the copy is queued before anything can draw into the texture again
             self.put(t);
-            return vec![data];
+            return pending;
         }
         let (cw, ch) = (w.div_ceil(1 << cx), h.div_ceil(1 << cy));
         let wide = bytes == 2;
-        let mut out = Vec::new();
         // luma
         let (luma_entry, luma_fmt, luma_bpp) = if wide {
             ("fs_luma16", wgpu::TextureFormat::R16Uint, 2)
@@ -251,28 +286,17 @@ impl Renderer {
         if let Some(a) = &a {
             list.push((a, 2));
         }
-        let mut data = self.read_textures(&list);
-        let alpha = (planes == 4).then(|| data.pop().unwrap_or_default());
-        let inter = data.pop().unwrap_or_default();
-        out.push(data.pop().unwrap_or_default());
+        let mut pending = self.begin_read(&list);
+        pending.post = Post::Planes {
+            bytes,
+            alpha: planes == 4,
+        };
         self.put(y);
         self.put(c);
         if let Some(a) = a {
             self.put(a);
         }
-        let s = bytes;
-        let mut u = Vec::with_capacity(inter.len() / 2);
-        let mut v = Vec::with_capacity(inter.len() / 2);
-        for px in inter.chunks_exact(2 * s) {
-            u.extend_from_slice(&px[..s]);
-            v.extend_from_slice(&px[s..]);
-        }
-        out.push(u);
-        out.push(v);
-        if let Some(alpha) = alpha {
-            out.push(alpha);
-        }
-        out
+        pending
     }
 
     /// Straight RGBA8 of a frame (thumbnails, still export, tests).
@@ -407,4 +431,40 @@ impl Renderer {
         self.scopes.insert(key, r.clone());
         r
     }
+}
+
+/// Reads in flight (see `Output::begin_read`).
+pub struct PendingRead {
+    jobs: Vec<(wgpu::Buffer, u64, u32, u32, u32)>,
+    index: wgpu::SubmissionIndex,
+    mapped: std::sync::mpsc::Receiver<(usize, bool)>,
+    post: Post,
+}
+
+/// What happens to the pixels once read.
+enum Post {
+    None,
+    /// Luma, interleaved chroma and maybe alpha become Y, U, V (and A) planes.
+    Planes {
+        bytes: usize,
+        alpha: bool,
+    },
+}
+
+fn split_planes(mut data: Vec<Vec<u8>>, s: usize, alpha: bool) -> Vec<Vec<u8>> {
+    let a = alpha.then(|| data.pop().unwrap_or_default());
+    let inter = data.pop().unwrap_or_default();
+    let mut out = vec![data.pop().unwrap_or_default()];
+    let mut u = Vec::with_capacity(inter.len() / 2);
+    let mut v = Vec::with_capacity(inter.len() / 2);
+    for px in inter.chunks_exact(2 * s) {
+        u.extend_from_slice(&px[..s]);
+        v.extend_from_slice(&px[s..]);
+    }
+    out.push(u);
+    out.push(v);
+    if let Some(a) = a {
+        out.push(a);
+    }
+    out
 }

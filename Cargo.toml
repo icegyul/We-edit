@@ -4,7 +4,7 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/openpremier"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.98"
 license = "GPL-3.0-or-later"
@@ -21,6 +21,7 @@ op-speech = { path = "crates/op-speech" }
 op-audio = { path = "crates/op-audio" }
 op-application = { path = "crates/op-application" }
 op-ui = { path = "crates/op-ui" }
+op-mcp = { path = "crates/op-mcp" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["preserve_order"] }

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-10-02 (version 0.7.0)<br>
+**Updated:** 2026-10-03 (version 0.8.0)<br>
 **Companion documents:** [implementation-status.md](implementation-status.md) (technical status and
 validation gaps), [CHANGELOG.md](../CHANGELOG.md) (what each release changed),
 [drift-comparison.md](drift-comparison.md) (lessons from another open-source editor).
@@ -42,6 +42,15 @@ priority. Items move from "Next" to "Done" in the release that ships them.
 - **Link Media** (0.7): missing files located by hand (with the others in the same folder) or
   found by searching the computer by name, duration, size and audio streams.
 
+- Exports encode on every processor core (0.8): about 3.5 times faster with ProRes, DNxHR, PNG
+  and software H.264/HEVC; frames are read back from the GPU while the next one renders.
+
+### AI assistants (0.8)
+
+- `OpenPremier --mcp`: the Model Context Protocol for Claude Code, Codex and other clients, with
+  28 tools for media, editing, effects, titles, captions, frames and export; live in the open
+  window when the user allows it. See [assistants.md](assistants.md).
+
 ### Captions (0.6)
 
 - Graphics > Captions > Transcribe and Create Captions: local speech recognition (Whisper Tiny,
@@ -66,6 +75,9 @@ priority. Items move from "Next" to "Done" in the release that ships them.
   equivalent.
 
 ### Projects and platforms
+
+- Every common picture format (0.8): SVG, AVIF, HEIC, JPEG XL, JPEG 2000, ICO, DDS, QOI and more
+  besides the usual ones; pasting puts media at the pointer's place on the timeline.
 
 - Native `.opproj`, OTIO, FCP XML and EDL interchange; partial read-only `.prproj` import.
 - Windows ZIP, Linux AppImage and macOS disk images (Apple silicon and Intel), installable and
@@ -127,7 +139,13 @@ editor shows are valuable for the same audience; see [drift-comparison.md](drift
   RVM and Video Depth Anything).
 - Auto-reframe for vertical formats.
 
-### 6. Compatibility and platform
+### 6. AI assistants
+
+- Tools for keyframes, color (Lumetri) presets, audio levels and ducking, and the caption list.
+- Progress of exports and transcriptions started by an assistant, reported back to it.
+- SVG rasterized at the size it is shown, so logos stay sharp when scaled up.
+
+### 7. Compatibility and platform
 
 - `.prproj` writing once lossless round trips are demonstrated with original fixtures.
 - OpenFX plug-in hosting and a WebAssembly scripting API.

@@ -69,6 +69,21 @@ impl Gpu {
         Self::from_adapter(&adapter)
     }
 
+    /// A device on the software rasterizer (WARP, llvmpipe), like a computer without a graphics
+    /// card; for measuring what such computers manage.
+    pub fn software() -> Result<Arc<Gpu>, GpuError> {
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        desc.backends = backends();
+        let instance = wgpu::Instance::new(desc);
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            force_fallback_adapter: true,
+            compatible_surface: None,
+            ..Default::default()
+        }))
+        .map_err(|e| GpuError::Adapter(e.to_string()))?;
+        Self::from_adapter(&adapter)
+    }
+
     pub fn from_adapter(adapter: &wgpu::Adapter) -> Result<Arc<Gpu>, GpuError> {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("OpenPremier renderer"),

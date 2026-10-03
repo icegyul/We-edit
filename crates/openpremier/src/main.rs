@@ -12,6 +12,9 @@ Usage: openpremier [options] [project or media files...]
 Options:
   --portable     keep settings, caches and autosaves next to the program
   --self-test    check FFmpeg and the GPU renderer without opening a window
+  --mcp          serve AI assistants (Model Context Protocol over standard input and
+                 output): edits the open OpenPremier window when it allows assistants,
+                 else a project of its own (the first project file given, if any)
   --version      print the version
   --help         print this help
 ";
@@ -115,6 +118,24 @@ fn self_test() -> Result<(), String> {
     Ok(())
 }
 
+/// `--mcp`: hands assistants' tool calls to the open program, or to an editor of its own.
+fn serve_assistants(dirs: op_application::Dirs, project: Option<&PathBuf>) {
+    if let Some(mut open) = op_mcp::live::Remote::connect(&dirs.config) {
+        log::info!("assistant session: editing the open program");
+        op_mcp::serve_stdio(&mut open);
+        return;
+    }
+    log::info!("assistant session: editing a project of its own");
+    let prefs = op_application::Preferences::load(&dirs);
+    let mut ed = op_application::Editor::new(dirs, prefs, false);
+    if let Some(p) = project
+        && let Err(e) = ed.open(p)
+    {
+        log::warn!("{}: {e}", p.display());
+    }
+    op_mcp::serve_stdio(&mut op_mcp::Local(ed));
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
@@ -163,6 +184,10 @@ fn main() {
         .filter(|a| !a.starts_with("--"))
         .map(PathBuf::from)
         .collect();
+    if args.iter().any(|a| a == "--mcp") {
+        serve_assistants(dirs, open.first());
+        return;
+    }
     let backend = op_application::Preferences::load(&dirs).graphics_backend;
     if let Err(e) = op_ui::run(op_ui::Options {
         open,

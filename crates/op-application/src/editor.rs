@@ -85,7 +85,7 @@ pub struct Editor {
     )>,
     pub importing: usize,
     /// Files being imported that go onto the timeline as soon as they are ready (pasted media).
-    pub place_after_import: Vec<PathBuf>,
+    pub place_after_import: Vec<Placement>,
     pub exports: Vec<crate::export::ExportJob>,
     pub proxies: crate::proxies::ProxyQueue,
     /// Automatic captions being transcribed.
@@ -100,6 +100,26 @@ pub struct Editor {
     recovery_at: Instant,
     /// Bumped on every change that needs a redraw of the monitors.
     pub frame_generation: u64,
+}
+
+/// Where a file being imported goes on the timeline once it is in the project (pasting).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Placement {
+    pub path: PathBuf,
+    /// Sequence time; None: the playhead.
+    pub at: Option<SeqTime>,
+    /// The track under the pointer, used when it is free there.
+    pub track: Option<TrackRef>,
+}
+
+impl Placement {
+    pub fn at_playhead(path: PathBuf) -> Placement {
+        Placement {
+            path,
+            at: None,
+            track: None,
+        }
+    }
 }
 
 impl Editor {
@@ -647,14 +667,14 @@ impl Editor {
         }
         let n = added.len();
         self.importing = self.importing.saturating_sub(n);
-        let place: Vec<bool> = added
+        let place: Vec<Option<Placement>> = added
             .iter()
             .map(|(_, a)| {
                 let at = self
                     .place_after_import
                     .iter()
-                    .position(|p| Path::new(&a.path) == p.as_path());
-                at.map(|i| self.place_after_import.remove(i)).is_some()
+                    .position(|p| Path::new(&a.path) == p.path.as_path());
+                at.map(|i| self.place_after_import.remove(i))
             })
             .collect();
         let still = self.prefs.still_seconds;
@@ -674,9 +694,14 @@ impl Editor {
             Ok(items)
         });
         if let Some(items) = new_items {
-            for (item, on_timeline) in items.iter().zip(place) {
-                if on_timeline {
-                    self.place_on_top(*item);
+            for (item, placement) in items.iter().zip(place) {
+                if let Some(p) = placement {
+                    // nothing open yet: the first pasted file makes a sequence of its own
+                    if self.active.is_none() {
+                        self.sequence_from_item(*item);
+                    } else {
+                        self.place_item(*item, p.at, p.track);
+                    }
                 }
             }
             self.items = items;

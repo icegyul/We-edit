@@ -18,6 +18,7 @@ op-media.workspace = true
 op-render.workspace = true
 op-application.workspace = true
 op-ui.workspace = true
+op-mcp.workspace = true
 log.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]

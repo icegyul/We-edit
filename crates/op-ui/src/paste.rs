@@ -14,13 +14,10 @@ use parking_lot::Mutex;
 const MAX_DOWNLOAD: u64 = 200 << 20;
 
 /// Extensions of files pasted as media (anything the importer reads).
-const MEDIA_EXT: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "tga", "exr", "dpx", "mp4", "mov",
-    "m4v", "mkv", "avi", "webm", "mxf", "mts", "m2ts", "mpg", "mpeg", "wav", "mp3", "aac", "m4a",
-    "flac", "ogg", "aif", "aiff",
+const VIDEO_AUDIO_EXT: &[&str] = &[
+    "mp4", "mov", "m4v", "mkv", "avi", "webm", "mxf", "mts", "m2ts", "mpg", "mpeg", "wmv", "flv",
+    "3gp", "ts", "wav", "mp3", "aac", "m4a", "flac", "ogg", "opus", "aif", "aiff", "wma",
 ];
-
-const IMAGE_EXT: &[&str] = &["png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff"];
 
 pub struct Bitmap {
     pub width: usize,
@@ -60,8 +57,8 @@ pub struct Job {
     pub source: String,
     pub data: Arc<Mutex<Option<Result<Payload, String>>>>,
     pub folder: Option<PathBuf>,
-    /// Put the imported clip on the timeline.
-    pub place: bool,
+    /// Where the imported clip goes on the timeline (time, track), if it goes there.
+    pub place: Option<(Option<op_core::SeqTime>, Option<op_core::TrackRef>)>,
     pub preview: Option<egui::TextureHandle>,
 }
 
@@ -73,7 +70,8 @@ fn ext_of(p: &Path) -> String {
 }
 
 pub fn is_media(p: &Path) -> bool {
-    MEDIA_EXT.contains(&ext_of(p).as_str())
+    let e = ext_of(p);
+    VIDEO_AUDIO_EXT.contains(&e.as_str()) || op_media::probe::STILL_EXTENSIONS.contains(&e.as_str())
 }
 
 /// A web link that points at an image file.
@@ -84,7 +82,9 @@ fn image_url(t: &str) -> Option<String> {
     }
     let path = t.split(['?', '#']).next().unwrap_or(t);
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    IMAGE_EXT.contains(&ext.as_str()).then(|| t.to_string())
+    op_media::probe::STILL_EXTENSIONS
+        .contains(&ext.as_str())
+        .then(|| t.to_string())
 }
 
 /// The first `<img src="http...">` of copied web content.
@@ -166,6 +166,26 @@ pub fn sniff(b: &[u8]) -> Option<&'static str> {
         Some("bmp")
     } else if b.starts_with(b"II*\0") || b.starts_with(b"MM\0*") {
         Some("tif")
+    } else if b.len() > 12 && &b[4..8] == b"ftyp" && matches!(&b[8..12], b"avif" | b"avis") {
+        Some("avif")
+    } else if b.len() > 12
+        && &b[4..8] == b"ftyp"
+        && matches!(&b[8..12], b"heic" | b"heix" | b"mif1" | b"msf1")
+    {
+        Some("heic")
+    } else if b.starts_with(&[0xFF, 0x0A]) || b.starts_with(b"\0\0\0\x0CJXL ") {
+        Some("jxl")
+    } else if b.starts_with(&[0, 0, 1, 0]) {
+        Some("ico")
+    } else if b.starts_with(b"qoif") {
+        Some("qoi")
+    } else if b.starts_with(b"8BPS") {
+        Some("psd")
+    } else if String::from_utf8_lossy(&b[..b.len().min(512)])
+        .to_ascii_lowercase()
+        .contains("<svg")
+    {
+        Some("svg")
     } else {
         None
     }

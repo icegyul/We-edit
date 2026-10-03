@@ -119,6 +119,9 @@ pub struct TimelineView {
     context: Option<Hit>,
     rename_track: Option<(TrackRef, String)>,
     area_w: f32,
+    /// The time and track under the pointer over the tracks, with the frame it was seen in
+    /// (pasting puts media there).
+    pointer: Option<(u64, SeqTime, Option<TrackRef>)>,
 }
 
 impl Default for TimelineView {
@@ -132,6 +135,7 @@ impl Default for TimelineView {
             context: None,
             rename_track: None,
             area_w: 800.0,
+            pointer: None,
         }
     }
 }
@@ -144,6 +148,14 @@ impl TimelineView {
             audio_height: self.audio_height,
             ..Default::default()
         }
+    }
+
+    /// The time and track under the pointer if it is over the tracks now (this frame or the
+    /// one before).
+    pub fn pointer_target(&self, pass: u64) -> Option<(SeqTime, Option<TrackRef>)> {
+        self.pointer
+            .filter(|(seen, _, _)| seen + 1 >= pass)
+            .map(|(_, t, r)| (t, r))
     }
 
     /// Cancels a drag in progress (Escape). Returns whether there was one.
@@ -444,6 +456,17 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         scroll: view.scroll.max(0.0),
         rows,
     };
+    if let Some(p) = ui.input(|i| i.pointer.hover_pos())
+        && area.contains(p)
+        && ui.rect_contains_pointer(area)
+    {
+        let pass = ui.ctx().cumulative_pass_nr();
+        s.tl.pointer = Some((
+            pass,
+            g.t(p.x).max(SeqTime::ZERO),
+            g.row_at(p.y).map(|r| r.r),
+        ));
+    }
 
     corner(
         s,
@@ -1396,6 +1419,22 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
         painter.rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(74, 156, 255, 30));
         painter.rect_stroke(r, 0.0, Stroke::new(1.0, theme::ACCENT), StrokeKind::Inside);
     }
+    // the hand: open over the timeline, closed while it drags the view
+    if s.ed.tool == Tool::Hand
+        && let Some(p) = resp.hover_pos().or_else(|| {
+            matches!(s.tl.drag, Some(TlDrag::Hand { .. }))
+                .then(|| ui.input(|i| i.pointer.latest_pos()))
+                .flatten()
+        })
+    {
+        ui.ctx().set_cursor_icon(CursorIcon::None);
+        let fg = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("hand-cursor"),
+        ));
+        let closed = matches!(s.tl.drag, Some(TlDrag::Hand { .. }));
+        crate::icons::hand(&fg, p, 22.0, closed);
+    }
     // razor preview: translucent scissors at the pointer, and the cut line over a clip
     if s.ed.tool == Tool::Razor
         && let Some(p) = resp.hover_pos()
@@ -1473,7 +1512,7 @@ fn input(
     {
         let h = hit(&seq, g, p);
         let cursor = match (tool, h) {
-            (Tool::Hand, _) => Some(CursorIcon::Grab),
+            (Tool::Hand, _) => Some(CursorIcon::None),
             (Tool::Zoom, _) => Some(if m.alt {
                 CursorIcon::ZoomOut
             } else {
