@@ -2,7 +2,7 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
-## 0.8.1 - unreleased
+## 0.8.1 - 2026-10-04
 
 ### Added
 

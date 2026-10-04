@@ -29,6 +29,14 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.8.1" date="2026-10-04">
+      <description>
+        <p>
+          Inter, a free typeface close to San Francisco, as the interface font; any installed
+          font or font file can be used in the interface, titles and captions.
+        </p>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-10-03">
       <description>
         <p>
