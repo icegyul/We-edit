@@ -1971,4 +1971,16 @@ pub static ES: &[(&str, &str)] = &[
         "Assistants cannot connect: {}",
         "Los asistentes no pueden conectarse: {}",
     ),
+    (
+        "Inter (included, like San Francisco)",
+        "Inter (incluida, parecida a San Francisco)",
+    ),
+    ("Installed fonts", "Fuentes instaladas"),
+    ("Add Font...", "Agregar fuente..."),
+    (
+        "Adds any .ttf or .otf font file to the program: it works in titles, captions and the interface, without installing it in the system",
+        "Agrega cualquier archivo de fuente .ttf u .otf al programa: sirve en títulos, subtítulos y en la interfaz, sin instalarla en el sistema",
+    ),
+    ("Fonts", "Fuentes"),
+    ("That font could not be read", "No se pudo leer esa fuente"),
 ];

@@ -2,6 +2,16 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.8.1 - unreleased
+
+### Added
+
+- Any font in the program: Preferences > Interface Font lists every installed font and Add Font... takes any .ttf or .otf file, which then works in titles, captions and the interface without being installed in the system (the files are kept in the program's data folder, Fonts).
+
+### Changed
+
+- The interface typeface is now Inter by default, included in the program (open source, SIL Open Font License; the free typeface closest to Apple's San Francisco), so the interface looks the same on Windows, macOS and Linux. The system font, egui's classic font and any other font remain choices.
+
 ## 0.8.0 - 2026-10-03
 
 ### Added

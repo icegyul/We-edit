@@ -15,6 +15,7 @@ pub(super) fn level_name(i: usize) -> &'static str {
 pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -> bool {
     let mut open = true;
     let mut new_profile: Option<Profile> = None;
+    let mut font_error = false;
     let mut new_custom: Option<op_application::performance::CustomSettings> = None;
     let mut show_log = false;
     let mut open_logs = false;
@@ -100,26 +101,87 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                     });
                     ui.end_row();
                     ui.label(t("Interface Font"));
-                    let fonts = [
-                        ("system", t("System (Segoe UI, San Francisco...)")),
-                        ("classic", t("Classic (built in)")),
-                    ];
-                    let shown = fonts
-                        .iter()
-                        .find(|(k, _)| *k == p.ui_font)
-                        .map(|(_, l)| *l)
-                        .unwrap_or(fonts[0].1);
-                    egui::ComboBox::from_id_salt("pref-font")
-                        .selected_text(shown)
-                        .show_ui(ui, |ui| {
-                            for (k, l) in fonts {
-                                if ui.selectable_label(p.ui_font == k, l).clicked() && p.ui_font != k {
-                                    p.ui_font = k.to_string();
-                                    crate::fonts::install(ctx, k == "system");
+                    if s.ec.fonts.is_empty() {
+                        s.ec.fonts = op_render::text::Fonts::global().families();
+                    }
+                    let shown = match p.ui_font.as_str() {
+                        "inter" => t("Inter (included, like San Francisco)").to_string(),
+                        "system" => t("System (Segoe UI, San Francisco...)").to_string(),
+                        "classic" => t("Classic (built in)").to_string(),
+                        other => crate::fonts::label(other),
+                    };
+                    let mut chosen: Option<String> = None;
+                    ui.horizontal(|ui| {
+                        egui::ComboBox::from_id_salt("pref-font")
+                            .selected_text(shown)
+                            .width(230.0)
+                            .height(360.0)
+                            .show_ui(ui, |ui| {
+                                for (k, l) in [
+                                    ("inter", t("Inter (included, like San Francisco)")),
+                                    ("system", t("System (Segoe UI, San Francisco...)")),
+                                    ("classic", t("Classic (built in)")),
+                                ] {
+                                    if ui.selectable_label(p.ui_font == k, l).clicked() {
+                                        chosen = Some(k.to_string());
+                                    }
+                                }
+                                ui.separator();
+                                ui.label(
+                                    RichText::new(t("Installed fonts"))
+                                        .size(11.0)
+                                        .color(theme::TEXT_DIM),
+                                );
+                                for f in &s.ec.fonts {
+                                    let key = format!("family:{f}");
+                                    if ui.selectable_label(p.ui_font == key, f).clicked() {
+                                        chosen = Some(key);
+                                    }
+                                }
+                            });
+                        if ui
+                            .button(t("Add Font..."))
+                            .on_hover_text(t(
+                                "Adds any .ttf or .otf font file to the program: it works in titles, captions and the interface, without installing it in the system",
+                            ))
+                            .clicked()
+                            && let Some(files) = rfd::FileDialog::new()
+                                .add_filter(t("Fonts"), &["ttf", "otf", "ttc"])
+                                .pick_files()
+                        {
+                            let fonts = op_render::text::Fonts::global();
+                            for f in files {
+                                match fonts.add_file(&f) {
+                                    Some(names) => {
+                                        s.ec.fonts.clear();
+                                        chosen = names.first().map(|n| format!("family:{n}"));
+                                    }
+                                    None => font_error = true,
                                 }
                             }
-                        });
+                        }
+                    });
+                    if let Some(k) = chosen
+                        && p.ui_font != k
+                    {
+                        if crate::fonts::install(ctx, &k) {
+                            p.ui_font = k;
+                        } else {
+                            // that font cannot be read: keep the previous one
+                            crate::fonts::install(ctx, &p.ui_font);
+                            font_error = true;
+                        }
+                    }
                     ui.end_row();
+                    if font_error {
+                        ui.label("");
+                        ui.label(
+                            RichText::new(t("That font could not be read"))
+                                .size(11.5)
+                                .color(theme::ERROR),
+                        );
+                        ui.end_row();
+                    }
                     ui.label(t("Automatically Save Every"));
                     ui.add(
                         egui::DragValue::new(&mut p.autosave_minutes)

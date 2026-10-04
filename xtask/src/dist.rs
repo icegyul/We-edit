@@ -89,6 +89,9 @@ pub fn write_docs(dir: &Path, platform: &str) -> Result {
         fs::create_dir_all(dir.join("licenses"))?;
         fs::copy(&ff_license, dir.join("licenses/FFmpeg-LICENSE.txt"))?;
     }
+    let inter = root.join("crates/op-ui/assets/fonts/Inter-OFL.txt");
+    fs::create_dir_all(dir.join("licenses"))?;
+    fs::copy(&inter, dir.join("licenses/Inter-OFL.txt"))?;
     let version = util::version()?;
     let start = if platform == "windows" {
         format!(
@@ -164,6 +167,9 @@ fn third_party_notices() -> Result<String> {
         "License: GNU General Public License version 3 or later (licenses/FFmpeg-LICENSE.txt).\r\n",
     );
     text.push_str("Source code: https://ffmpeg.org/releases/ and https://github.com/BtbN/FFmpeg-Builds (build scripts).\r\n\r\n");
+    text.push_str("Inter typeface (Inter Regular and SemiBold), Copyright (c) 2016 The Inter Project Authors, SIL Open Font License 1.1 (licenses/Inter-OFL.txt), https://github.com/rsms/inter
+
+");
     text.push_str("Speech models for automatic captions are not included: OpenAI Whisper (tiny, base or small; MIT License, https://github.com/openai/whisper) is downloaded from https://huggingface.co/openai when the user asks for captions.\r\n\r\n");
     text.push_str("Rust crates (name, version, license, repository):\r\n\r\n");
     for (n, v, l, r) in rows {

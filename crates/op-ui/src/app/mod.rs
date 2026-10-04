@@ -184,7 +184,8 @@ impl App {
         i18n::set(lang);
         let ui_scale = prefs.ui_scale;
         theme::apply(&cc.egui_ctx, ui_scale);
-        crate::fonts::install(&cc.egui_ctx, prefs.ui_font != "classic");
+        op_render::text::set_user_fonts_dir(dirs.data.join("Fonts"));
+        crate::fonts::install(&cc.egui_ctx, &prefs.ui_font);
         egui_extras_install(&cc.egui_ctx);
         let recovery = autosave::begin_session(&dirs);
         let ed = Editor::new(dirs, prefs, true);

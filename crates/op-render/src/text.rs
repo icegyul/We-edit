@@ -40,12 +40,20 @@ pub struct TextImage {
 
 /// Font lookup with a bundled fallback.
 pub struct Fonts {
-    db: fontdb::Database,
+    db: parking_lot::RwLock<fontdb::Database>,
     loaded: Mutex<HashMap<(String, u32), FontArc>>,
     fallback: FontArc,
 }
 
 static FONTS: std::sync::OnceLock<Arc<Fonts>> = std::sync::OnceLock::new();
+
+/// A folder of fonts the user added to the program (they work in titles, captions and the
+/// interface without being installed in the system). Set before the first use of `Fonts`.
+static USER_FONTS: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_user_fonts_dir(dir: std::path::PathBuf) {
+    let _ = USER_FONTS.set(dir);
+}
 
 impl Fonts {
     /// The process-wide font set (system fonts are scanned once, on first use).
@@ -54,10 +62,13 @@ impl Fonts {
             .get_or_init(|| {
                 let mut db = fontdb::Database::new();
                 db.load_system_fonts();
+                if let Some(dir) = USER_FONTS.get() {
+                    db.load_fonts_dir(dir);
+                }
                 let fallback = FontArc::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
                     .expect("bundled font");
                 Arc::new(Fonts {
-                    db,
+                    db: parking_lot::RwLock::new(db),
                     loaded: Mutex::new(HashMap::new()),
                     fallback,
                 })
@@ -69,12 +80,43 @@ impl Fonts {
     pub fn families(&self) -> Vec<String> {
         let mut v: Vec<String> = self
             .db
+            .read()
             .faces()
             .filter_map(|f| f.families.first().map(|(n, _)| n.clone()))
             .collect();
         v.sort_by_key(|s| s.to_lowercase());
         v.dedup();
         v
+    }
+
+    /// Adds a font file to the program's fonts folder and makes its fonts available right away.
+    /// Returns the family names it holds (None when it is not a font or cannot be copied).
+    pub fn add_file(&self, path: &std::path::Path) -> Option<Vec<String>> {
+        let data = std::fs::read(path).ok()?;
+        let before: std::collections::HashSet<fontdb::ID> =
+            self.db.read().faces().map(|f| f.id).collect();
+        let mut db = self.db.write();
+        db.load_font_data(data.clone());
+        let mut names: Vec<String> = db
+            .faces()
+            .filter(|f| !before.contains(&f.id))
+            .filter_map(|f| f.families.first().map(|(n, _)| n.clone()))
+            .collect();
+        names.sort();
+        names.dedup();
+        drop(db);
+        if names.is_empty() {
+            // already known to the system or the folder, or not a font
+            let probe = ab_glyph::FontRef::try_from_slice(&data).ok()?;
+            let _ = probe;
+            return None;
+        }
+        if let Some(dir) = USER_FONTS.get() {
+            let _ = std::fs::create_dir_all(dir);
+            let _ = std::fs::write(dir.join(path.file_name()?), &data);
+        }
+        self.loaded.lock().clear();
+        Some(names)
     }
 
     /// The bundled font used for characters the chosen font lacks.
@@ -117,12 +159,12 @@ impl Fonts {
                 fontdb::Style::Normal
             },
         };
-        let font = self
-            .db
+        let db = self.db.read();
+        let font = db
             .query(&query)
             .and_then(|id| {
                 let mut out = None;
-                self.db.with_face_data(id, |data, index| {
+                db.with_face_data(id, |data, index| {
                     out = ab_glyph::FontVec::try_from_vec_and_index(data.to_vec(), index)
                         .ok()
                         .map(FontArc::new);
@@ -138,7 +180,8 @@ impl Fonts {
     /// when that exact family is installed.
     pub fn face_data(&self, family: &str, semibold: bool) -> Option<(Vec<u8>, u32)> {
         let families = [fontdb::Family::Name(family)];
-        let id = self.db.query(&fontdb::Query {
+        let db = self.db.read();
+        let id = db.query(&fontdb::Query {
             families: &families,
             weight: if semibold {
                 fontdb::Weight::SEMIBOLD
@@ -149,7 +192,7 @@ impl Fonts {
             style: fontdb::Style::Normal,
         })?;
         let mut out = None;
-        self.db.with_face_data(id, |data, index| {
+        db.with_face_data(id, |data, index| {
             out = Some((data.to_vec(), index));
         });
         out

@@ -32,7 +32,8 @@ pub struct Preferences {
     pub ui_scale: f32,
     /// AI assistants (`OpenPremier --mcp`) may edit the open project.
     pub assistant_control: bool,
-    /// Interface typeface: "system" (the system's interface font) or "classic" (bundled).
+    /// Interface typeface: "inter" (included), "system", "classic" (egui's), "family:<name>"
+    /// (an installed font) or "file:<path>" (a font file).
     pub ui_font: String,
     pub audio_scrubbing: bool,
     pub hardware_encoding: bool,
@@ -88,7 +89,7 @@ impl Default for Preferences {
             ripple_markers: true,
             shortcuts: Vec::new(),
             ui_scale: 1.0,
-            ui_font: "system".into(),
+            ui_font: "inter".into(),
             assistant_control: false,
             audio_scrubbing: true,
             hardware_encoding: true,
