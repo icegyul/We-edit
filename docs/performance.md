@@ -1,6 +1,6 @@
 # Performance under heavy load
 
-**Updated:** 2026-10-03 (version 0.8.0)
+**Updated:** 2026-10-04 (version 0.9.0)
 
 `crates/op-application/tests/stress_render.rs` exports four seconds of 1080p 25 fps (a
 detailed moving test picture) to ProRes 422 HQ in four cases and reports frames per second and
@@ -33,6 +33,18 @@ What they show:
   AMF, VideoToolbox) were not affected by this and stay the fastest choice.
 - **Reading frames back** from the graphics card costs 8 to 12 ms per 1080p frame; it now
   overlaps with rendering the next frame.
+
+## Effect previews
+
+The Effects panel is a list of names, as usual. The button at the right of the search box
+switches to an **icon view**, with each effect and transition as a card with a picture. The pictures are
+made by the real renderer (a small test picture with a diagonal and a frame, so distortions and
+keys have an edge to bend), 14 frames of 192x108 each, two cards per screen refresh, and kept for
+the last 90 cards. Nothing is rendered while the list is shown. Preferences > Performance
+(Custom) sets **Effect Previews** for the icon view: Still Pictures, Animated on Hover or Always
+Animated (List Only hides the icon view button). The profiles choose for you: Ultra Performance
+and Performance have no icon view, Balanced shows still pictures, Quality animates on hover and
+Maximum always animates.
 
 ## Smaller computers
 

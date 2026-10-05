@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-10-03 (version 0.8.0)<br>
+**Updated:** 2026-10-04 (version 0.9.0)<br>
 **Companion documents:** [implementation-status.md](implementation-status.md) (technical status and
 validation gaps), [CHANGELOG.md](../CHANGELOG.md) (what each release changed),
 [drift-comparison.md](drift-comparison.md) (lessons from another open-source editor).
@@ -44,6 +44,29 @@ priority. Items move from "Next" to "Done" in the release that ships them.
 
 - Exports encode on every processor core (0.8): about 3.5 times faster with ProRes, DNxHR, PNG
   and software H.264/HEVC; frames are read back from the GPU while the next one renders.
+
+### Color nodes, icon view and batches (0.9)
+
+- Color Nodes: a node graph for grading (serial, parallel and layer nodes, primaries, curves
+  including hue and saturation curves, qualifier, windows, keys, LUTs). See
+  [color-nodes.md](color-nodes.md).
+- The Effects panel has an icon view (off by default; the list of names stays the normal view)
+  with an animated picture for every effect.
+- Fourteen new effects: a Noise & Grain set (Film Stock Grain with 8, 16, 35 and 65 mm and pushed
+  stocks, Sensor Noise, Salt & Pepper, TV Static, Fractal Noise, Dust & Scratches) and a Cinema
+  category (Film Emulation with ten looks, Bleach Bypass, Cinematic Split Tone, Gate Weave,
+  Pro-Mist Diffusion, Anamorphic Streaks, Chromatic Aberration, Super 8 Film).
+- Remove Silence from Files: batch cutting, and a separate section for filler words, repeats and
+  retakes in the dialog.
+
+### Silence and speech cutting (0.9)
+
+- Clip > Remove Silence: five ways to find silence (loudness, relative, adaptive noise floor,
+  speech band, neural voice detector), words found in a transcript (fillers in six languages,
+  repeated words and phrases, repeated takes, dead air between words), review over the waveform,
+  five presets, and cut / leave gaps / speed up / markers. Also `detect_silence` and
+  `remove_silence` for assistants and `--remove-silence` on the command line. See
+  [silence.md](silence.md).
 
 ### AI assistants (0.8)
 
@@ -139,7 +162,15 @@ editor shows are valuable for the same audience; see [drift-comparison.md](drift
   RVM and Video Depth Anything).
 - Auto-reframe for vertical formats.
 
-### 6. AI assistants
+### 6. Silence and speech editing
+
+- **Exact word times** (a CTC aligner) so word cuts are exact and repeats Whisper writes once are
+  found; a larger neural voice detector (Silero) for hard recordings.
+- Edit the transcript like text: delete words to cut them (Descript, Drift).
+- Multi-track and multicam: cut silences in one microphone only, switching cameras on who speaks.
+- Save the dialog's settings in the project and add a keyboard shortcut.
+
+### 6b. AI assistants
 
 - Tools for keyframes, color (Lumetri) presets, audio levels and ducking, and the caption list.
 - Progress of exports and transcriptions started by an assistant, reported back to it.

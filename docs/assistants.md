@@ -1,6 +1,6 @@
 # Editing with AI assistants
 
-**Updated:** 2026-10-03 (version 0.8.0)
+**Updated:** 2026-10-04 (version 0.9.0)
 
 OpenPremier speaks the [Model Context Protocol](https://modelcontextprotocol.io) (MCP), so an AI
 assistant such as Claude Code, Codex, Cursor or any other MCP client can edit video with it:
@@ -54,6 +54,7 @@ Edit > Preferences > AI Assistants has buttons that copy these commands with the
 | `list_effects`, `add_effect`, `set_effect_params`, `remove_effect` | Effects, including Motion, Opacity and Volume |
 | `add_transition` | A transition at a clip's start or end |
 | `add_text` | A title |
+| `detect_silence`, `remove_silence` | Find and cut silences, fillers, repeated words and takes (see [silence.md](silence.md)) |
 | `transcribe_captions`, `set_caption_style` | Animated captions from the speech, and their look |
 | `add_marker`, `set_playhead` | Markers and the playhead |
 | `render_frame` | The picture at a time, so the assistant can see the result |

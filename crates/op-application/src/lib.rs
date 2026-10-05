@@ -5,6 +5,7 @@ pub mod autosave;
 pub mod captions;
 pub mod commands;
 pub mod editor;
+pub mod effect_preview;
 pub mod export;
 pub mod keymap;
 pub mod logging;
@@ -16,6 +17,7 @@ pub mod proxies;
 pub mod recovery;
 pub mod relink;
 pub mod session;
+pub mod silence;
 
 pub use editor::{APP_NAME, Editor, LoadedProject, Placement, Status, Transport};
 pub use export::{ExportJob, ExportSettings, PreviewImage, Progress};

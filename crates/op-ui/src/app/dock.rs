@@ -47,6 +47,7 @@ pub(crate) fn panel_icon(p: Panel) -> Icon {
         Panel::Markers => Icon::Marker,
         Panel::Info => Icon::List,
         Panel::Lumetri => Icon::Eye,
+        Panel::ColorNodes => Icon::Eye,
         Panel::Scopes => Icon::Grid,
         Panel::Graphics => Icon::Type,
         Panel::Captions => Icon::List,

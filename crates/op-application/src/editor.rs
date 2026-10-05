@@ -90,6 +90,11 @@ pub struct Editor {
     pub proxies: crate::proxies::ProxyQueue,
     /// Automatic captions being transcribed.
     pub captioning: Option<crate::captions::CaptionJob>,
+    /// An editor that works for a batch, without a window: no autosave, no crash-recovery file.
+    pub background: bool,
+    /// Audio being analyzed for silences, and the latest analysis.
+    pub silencing: Option<crate::silence::SilenceJob>,
+    pub silence_result: Option<Arc<crate::silence::Detection>>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
     autosaving: Arc<AtomicBool>,
@@ -170,6 +175,9 @@ impl Editor {
             exports: Vec::new(),
             proxies: Default::default(),
             captioning: None,
+            background: false,
+            silencing: None,
+            silence_result: None,
             last_import_report: None,
             autosave_at: Instant::now(),
             autosaving: Arc::new(AtomicBool::new(false)),
@@ -1135,8 +1143,11 @@ impl Editor {
         self.poll_exports();
         self.poll_proxies();
         self.poll_captions();
-        self.autosave();
-        self.keep_recovery();
+        self.poll_silence();
+        if !self.background {
+            self.autosave();
+            self.keep_recovery();
+        }
         if let Some(monitor) = self.transport.playing {
             if !self.playback.is_playing() {
                 self.transport.playing = None;

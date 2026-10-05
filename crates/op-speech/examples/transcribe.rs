@@ -24,6 +24,7 @@ fn main() {
             &pcm,
             args.get(2).map(String::as_str),
             task,
+            args.get(4).map(String::as_str),
             &mut |_| {},
             &AtomicBool::new(false),
         )

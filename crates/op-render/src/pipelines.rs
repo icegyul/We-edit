@@ -42,6 +42,13 @@ const MODULES: &[(&str, &str, Layout)] = &[
         include_str!("shaders/lumetri.wgsl"),
         Layout::Lumetri,
     ),
+    ("cinema", include_str!("shaders/cinema.wgsl"), Layout::Main),
+    ("grade", include_str!("shaders/grade.wgsl"), Layout::Grade),
+    (
+        "graphmatte",
+        include_str!("shaders/graphmatte.wgsl"),
+        Layout::Main,
+    ),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -52,6 +59,8 @@ pub enum Layout {
     Convert,
     /// uniform, sampler, image, curves, two 3D LUTs
     Lumetri,
+    /// uniform, sampler, image, curves, 3D LUT, matte
+    Grade,
 }
 
 pub const WORK: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
@@ -178,6 +187,21 @@ impl Pipelines {
                     texture_entry(3, float, d2),
                     texture_entry(4, float, d3),
                     texture_entry(5, float, d3),
+                ],
+            ),
+        );
+
+        layouts.insert(
+            Layout::Grade,
+            make(
+                "grade",
+                &[
+                    uniform_entry(0, true, frag),
+                    sampler_entry,
+                    texture_entry(2, float, d2),
+                    texture_entry(3, float, d2),
+                    texture_entry(4, float, d3),
+                    texture_entry(5, float, d2),
                 ],
             ),
         );

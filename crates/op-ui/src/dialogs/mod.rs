@@ -24,6 +24,8 @@ mod paste;
 mod preferences;
 mod sequence;
 mod shortcuts;
+mod silence;
+mod silence_batch;
 
 use export::*;
 use media::*;
@@ -32,6 +34,8 @@ pub use preferences::hardware_summary;
 use preferences::*;
 use sequence::*;
 use shortcuts::*;
+use silence::{SilenceForm, silence_dialog};
+use silence_batch::{BatchForm, silence_batch_dialog};
 
 /// What to do after the unsaved-changes question.
 pub enum Then {
@@ -135,6 +139,8 @@ pub enum Dialog {
     },
     Captions(Box<CaptionForm>),
     LinkMedia(Box<LinkForm>),
+    Silence(Box<SilenceForm>),
+    SilenceBatch(Box<BatchForm>),
     /// First start: choose the recommended performance profile or pick one.
     PerformanceSetup {
         manual: bool,
@@ -1048,6 +1054,8 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             chosen.is_none()
         }
         Dialog::LinkMedia(form) => link_media_dialog(s, ctx, form),
+        Dialog::Silence(form) => silence_dialog(s, ctx, form),
+        Dialog::SilenceBatch(form) => silence_batch_dialog(s, ctx, form),
         Dialog::Captions(form) => {
             let models = op_application::captions::models_dir(&s.ed);
             let ((ok, cancel), esc) = modal(
@@ -1191,6 +1199,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                     } else {
                         op_application::captions::Task::Transcribe
                     },
+                    verbatim: false,
                     captions: form.options.clone(),
                 });
             }

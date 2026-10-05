@@ -82,6 +82,7 @@ impl Profile {
                 thumbnails: false,
                 waveforms: false,
                 warm_up: false,
+                previews: PreviewMode::Off,
             },
             Performance => ProfileSettings {
                 animation_time: 0.0,
@@ -96,6 +97,7 @@ impl Profile {
                 thumbnails: true,
                 waveforms: true,
                 warm_up: false,
+                previews: PreviewMode::Off,
             },
             Balanced => ProfileSettings {
                 animation_time: 0.06,
@@ -110,6 +112,7 @@ impl Profile {
                 thumbnails: true,
                 waveforms: true,
                 warm_up: true,
+                previews: PreviewMode::Still,
             },
             Quality => ProfileSettings {
                 animation_time: 1.0 / 12.0,
@@ -124,6 +127,7 @@ impl Profile {
                 thumbnails: true,
                 waveforms: true,
                 warm_up: true,
+                previews: PreviewMode::Hover,
             },
             Maximum => ProfileSettings {
                 animation_time: 0.12,
@@ -138,7 +142,40 @@ impl Profile {
                 thumbnails: true,
                 waveforms: true,
                 warm_up: true,
+                previews: PreviewMode::Always,
             },
+        }
+    }
+}
+
+/// How the Effects panel shows its previews.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+pub enum PreviewMode {
+    /// A list of names, no pictures.
+    Off,
+    /// Pictures of each effect at its strongest, not moving.
+    Still,
+    /// Pictures that move while the pointer is over them.
+    #[default]
+    Hover,
+    /// Pictures that always move.
+    Always,
+}
+
+impl PreviewMode {
+    pub const ALL: [PreviewMode; 4] = [
+        PreviewMode::Off,
+        PreviewMode::Still,
+        PreviewMode::Hover,
+        PreviewMode::Always,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PreviewMode::Off => "List Only",
+            PreviewMode::Still => "Still Pictures",
+            PreviewMode::Hover => "Animated on Hover",
+            PreviewMode::Always => "Always Animated",
         }
     }
 }
@@ -167,6 +204,8 @@ pub struct ProfileSettings {
     pub waveforms: bool,
     /// Compile the remaining effect shaders while the program is idle after it starts.
     pub warm_up: bool,
+    /// Pictures in the Effects panel.
+    pub previews: PreviewMode,
 }
 
 /// Settings chosen one by one (Preferences > Performance, Custom). Preview resolutions and the
@@ -184,6 +223,7 @@ pub struct CustomSettings {
     pub thumbnails: bool,
     pub waveforms: bool,
     pub warm_up: bool,
+    pub previews: PreviewMode,
 }
 
 impl Default for CustomSettings {
@@ -204,6 +244,7 @@ impl CustomSettings {
             thumbnails: s.thumbnails,
             waveforms: s.waveforms,
             warm_up: s.warm_up,
+            previews: s.previews,
         }
     }
 
@@ -222,6 +263,7 @@ impl CustomSettings {
             thumbnails: self.thumbnails,
             waveforms: self.waveforms,
             warm_up: self.warm_up,
+            previews: self.previews,
             ..base
         }
     }

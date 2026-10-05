@@ -10,19 +10,20 @@ closest one here and list every replacement in the import report.
 
 The catalog lives in `crates/op-core/src/catalog.rs`; this page is generated from it.
 
-## Video effects (73)
+## Video effects (88)
 
 | Category | Components |
 |---|---|
 | Adjust | Channel Mixer, Extract, Levels, ProcAmp |
 | Blur & Sharpen | Directional Blur, Gaussian Blur, Radial Blur, Sharpen, Unsharp Mask |
 | Channel | Invert |
-| Color Correction | Brightness & Contrast, Color Balance, Duotone, Leave Color, Lumetri Color, Tint |
+| Color Correction | Brightness & Contrast, Color Balance, Color Nodes, Duotone, Leave Color, Lumetri Color, Tint |
 | Distort | Corner Pin, Lens Distortion, Mirror, Offset, Ripple, Spherize, Transform, Twirl, Wave Warp, Zoom Pulse |
 | Generate | Lens Flare, Light Leaks, Ramp |
 | Image Control | Black & White, Color Replace, Gamma Correction |
 | Keying | Color Key, Luma Key, Track Matte Key, Ultra Key |
-| Noise & Grain | Film Grain, Noise |
+| Noise & Grain | Dust & Scratches, Film Grain, Film Stock Grain, Fractal Noise, Noise, Salt & Pepper Noise, Sensor Noise, TV Static |
+| Cinema | Anamorphic Streaks, Bleach Bypass, Chromatic Aberration, Cinematic Split Tone, Film Emulation, Gate Weave, Pro-Mist Diffusion, Super 8 Film |
 | Perspective | Basic 3D, Drop Shadow |
 | Stylize | CRT Screen, Digital Glitch, Emboss, Find Edges, Glow, Halation, Halftone, Kaleidoscope, Mosaic, Motion Tile, Neon Edges, Oil Paint, Old Film, Pencil Sketch, Posterize, RGB Split, Radiant Glow, Replicate, Solarize, Strobe Light, Threshold, VHS Tape, Vignette |
 | Time | Posterize Time |
@@ -58,8 +59,10 @@ The catalog lives in `crates/op-core/src/catalog.rs`; this page is generated fro
 ## Graphics
 
 Text, Shape and Caption components draw on graphics clips. Captions animate word by word with
-twelve styles (Classic, Boxed, Karaoke, Highlight Box, Pop, One Word, Typewriter, Bounce In,
-Neon, Creator, Fade In and Underline) driven by the time of each word.
+26 styles (Classic, Boxed, Karaoke, Highlight Box, Pop, One Word, Typewriter, Bounce In,
+Neon, Creator, Fade In, Underline, Slide Up, Slide In, Zoom In, Drop In, Elastic, Rainbow, Wave,
+Shake, Glitch, Letter by Letter, Spotlight, Hop, Highlighter and Glow Pulse) driven by the time
+of each word.
 
 ## Testing
 

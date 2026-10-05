@@ -1207,6 +1207,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1d926b4d407d372f141f93bb444696142c29d32962ccbd3531117cf3aa0bfa9"
 
 [[package]]
+name = "earshot"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afea66474c4036a7e5fa4b072a3b0a09cd0b01f00134da3115d76b7cc5899f03"
+
+[[package]]
 name = "ecolor"
 version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3133,7 +3139,7 @@ dependencies = [
 
 [[package]]
 name = "op-application"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "crossbeam-channel",
  "dirs",
@@ -3144,6 +3150,7 @@ dependencies = [
  "op-media",
  "op-project",
  "op-render",
+ "op-silence",
  "op-speech",
  "op-timeline",
  "parking_lot",
@@ -3156,7 +3163,7 @@ dependencies = [
 
 [[package]]
 name = "op-audio"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cpal",
  "log",
@@ -3170,7 +3177,7 @@ dependencies = [
 
 [[package]]
 name = "op-core"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "indexmap",
  "serde",
@@ -3180,13 +3187,14 @@ dependencies = [
 
 [[package]]
 name = "op-mcp"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "log",
  "op-application",
  "op-core",
  "op-media",
  "op-render",
+ "op-silence",
  "op-timeline",
  "serde_json",
  "tempfile",
@@ -3194,7 +3202,7 @@ dependencies = [
 
 [[package]]
 name = "op-media"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ffmpeg-next",
  "libc",
@@ -3208,7 +3216,7 @@ dependencies = [
 
 [[package]]
 name = "op-project"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "flate2",
  "indexmap",
@@ -3223,7 +3231,7 @@ dependencies = [
 
 [[package]]
 name = "op-render"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ab_glyph",
  "bytemuck",
@@ -3240,8 +3248,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-silence"
+version = "0.9.0"
+dependencies = [
+ "earshot",
+]
+
+[[package]]
 name = "op-speech"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -3255,14 +3270,14 @@ dependencies = [
 
 [[package]]
 name = "op-timeline"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "op-core",
 ]
 
 [[package]]
 name = "op-ui"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ab_glyph",
  "arboard",
@@ -3280,6 +3295,7 @@ dependencies = [
  "op-media",
  "op-project",
  "op-render",
+ "op-silence",
  "op-timeline",
  "parking_lot",
  "raw-window-handle",
@@ -3295,7 +3311,7 @@ dependencies = [
 
 [[package]]
 name = "openpremier"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "log",
  "op-application",
@@ -5715,7 +5731,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "serde_json",
  "sha2",

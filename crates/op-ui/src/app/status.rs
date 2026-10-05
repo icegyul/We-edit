@@ -59,6 +59,7 @@ impl State {
         let stage = match p.stage {
             op_application::captions::CaptionStage::Downloading => t("Downloading speech model"),
             op_application::captions::CaptionStage::MixingAudio => t("Preparing audio"),
+            op_application::captions::CaptionStage::Analyzing => t("Analyzing audio"),
             op_application::captions::CaptionStage::Transcribing => t("Transcribing"),
         };
         ui.add(
@@ -241,8 +242,12 @@ pub(crate) fn translate_status(text: &str) -> String {
         return tf("{} media files are offline", &[&n]);
     }
     // messages with one variable part, from the editing engine and the exporter
-    const PATTERNS: [(&str, &str, &str); 17] = [
+    const PATTERNS: [(&str, &str, &str); 21] = [
         ("Linked ", " media files", "Linked {} media files"),
+        ("Removed ", " stretches", "Removed {} stretches"),
+        ("Sped up ", " stretches", "Sped up {} stretches"),
+        ("Marked ", " stretches", "Marked {} stretches"),
+        ("Silence not analyzed: ", "", "Silence not analyzed: {}"),
         (
             "Assistants cannot connect: ",
             "",

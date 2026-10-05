@@ -413,6 +413,7 @@ pub const CAT_GENERATE: &str = "Generate";
 pub const CAT_IMAGE: &str = "Image Control";
 pub const CAT_KEYING: &str = "Keying";
 pub const CAT_NOISE: &str = "Noise & Grain";
+pub const CAT_CINEMA: &str = "Cinema";
 pub const CAT_PERSPECTIVE: &str = "Perspective";
 pub const CAT_STYLIZE: &str = "Stylize";
 pub const CAT_TIME: &str = "Time";
@@ -565,6 +566,20 @@ pub const CAPTION_STYLES: &[&str] = &[
     "Creator",
     "Fade In",
     "Underline",
+    "Slide Up",
+    "Slide In",
+    "Zoom In",
+    "Drop In",
+    "Elastic",
+    "Rainbow",
+    "Wave",
+    "Shake",
+    "Glitch",
+    "Letter by Letter",
+    "Spotlight",
+    "Hop",
+    "Highlighter",
+    "Glow Pulse",
 ];
 
 static TEXT_PARAMS: [ParamSpec; 25] = [
@@ -1082,6 +1097,10 @@ const LUMETRI_CREATIVE: &str = "Creative";
 const LUMETRI_CURVES: &str = "Curves";
 const LUMETRI_WHEELS: &str = "Color Wheels";
 const LUMETRI_VIGNETTE: &str = "Vignette";
+
+/// The color node graph is stored as JSON in a hidden text parameter and edited in the Color
+/// Nodes panel.
+static COLOR_NODES: [ParamSpec; 1] = [g(text("graph", "Graph", ""), "_graph")];
 
 static LUMETRI: [ParamSpec; 34] = [
     g(file("input_lut", "Input LUT"), LUMETRI_BASIC),
@@ -1627,6 +1646,259 @@ static TRACK_MATTE: [ParamSpec; 3] = [
         &["Matte Alpha", "Matte Luma"],
     ),
     boolean("reverse", "Reverse", false),
+];
+
+static STOCK_GRAIN: [ParamSpec; 6] = [
+    choice(
+        "stock",
+        "Film Stock",
+        2,
+        &["8 mm", "16 mm", "35 mm", "65 mm", "Pushed (High ISO)"],
+    ),
+    pct("amount", "Amount", 40.0),
+    pct("roughness", "Clumping", 40.0),
+    pct("color", "Color Grain", 25.0),
+    f(
+        "shadows",
+        "Shadows Weight",
+        0.0,
+        -100.0,
+        100.0,
+        Unit::Percent,
+    ),
+    boolean("animated", "Animated", true),
+];
+
+static SENSOR_NOISE: [ParamSpec; 5] = [
+    pct("luma", "Luminance Noise", 35.0),
+    pct("chroma", "Color Noise", 35.0),
+    fs(
+        "blotch",
+        "Color Blotch Size",
+        4.0,
+        1.0,
+        60.0,
+        1.0,
+        20.0,
+        Unit::Pixels,
+    ),
+    pct("shadows", "Shadow Bias", 60.0),
+    boolean("animated", "Animated", true),
+];
+
+static SALT_PEPPER: [ParamSpec; 4] = [
+    pct("amount", "Amount", 10.0),
+    fs("size", "Speck Size", 1.0, 1.0, 20.0, 1.0, 8.0, Unit::Pixels),
+    boolean("color", "Colored Specks", false),
+    boolean("animated", "Animated", true),
+];
+
+static TV_STATIC: [ParamSpec; 5] = [
+    pct("amount", "Amount", 40.0),
+    fs("size", "Snow Size", 2.0, 1.0, 40.0, 1.0, 12.0, Unit::Pixels),
+    pct("scan_lines", "Scan Lines", 30.0),
+    pct("bands", "Noisy Bands", 40.0),
+    boolean("animated", "Animated", true),
+];
+
+static FRACTAL_NOISE: [ParamSpec; 11] = [
+    fs(
+        "size",
+        "Feature Size",
+        160.0,
+        4.0,
+        4000.0,
+        8.0,
+        800.0,
+        Unit::Pixels,
+    ),
+    int("octaves", "Complexity", 5, 1, 8),
+    f("evolution", "Evolution", 0.0, -1000.0, 1000.0, Unit::None),
+    pct("opacity", "Opacity", 70.0),
+    f(
+        "brightness",
+        "Brightness",
+        0.0,
+        -100.0,
+        100.0,
+        Unit::Percent,
+    ),
+    f("contrast", "Contrast", 100.0, 0.0, 400.0, Unit::Percent),
+    choice(
+        "blend",
+        "Blend Mode",
+        1,
+        &[
+            "Normal",
+            "Overlay",
+            "Add",
+            "Multiply",
+            "Screen",
+            "Soft Light",
+        ],
+    ),
+    boolean("colored", "Color Noise", false),
+    fs(
+        "offset_x",
+        "Offset X",
+        0.0,
+        -100000.0,
+        100000.0,
+        -2000.0,
+        2000.0,
+        Unit::Pixels,
+    ),
+    fs(
+        "offset_y",
+        "Offset Y",
+        0.0,
+        -100000.0,
+        100000.0,
+        -2000.0,
+        2000.0,
+        Unit::Pixels,
+    ),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static FILM_DUST: [ParamSpec; 7] = [
+    pct("dust", "Dust", 40.0),
+    pct("hairs", "Hairs", 20.0),
+    pct("scratches", "Scratches", 25.0),
+    fs(
+        "size",
+        "Size",
+        100.0,
+        20.0,
+        400.0,
+        20.0,
+        300.0,
+        Unit::Percent,
+    ),
+    choice("kind", "Specks", 2, &["Dark", "Light", "Both"]),
+    fs(
+        "rate",
+        "Changes Per Second",
+        12.0,
+        1.0,
+        60.0,
+        1.0,
+        30.0,
+        Unit::None,
+    ),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static FILM_EMULATION: [ParamSpec; 2] = [
+    choice(
+        "look",
+        "Film Look",
+        0,
+        &[
+            "Warm Negative",
+            "Cool Stock",
+            "Bleach Bypass",
+            "Cross Process",
+            "Two-Strip Technicolor",
+            "Silver Noir",
+            "Day for Night",
+            "Faded Matte",
+            "Teal and Orange",
+            "Seventies",
+        ],
+    ),
+    pct("amount", "Amount", 100.0),
+];
+
+static BLEACH_BYPASS: [ParamSpec; 3] = [
+    pct("amount", "Amount", 100.0),
+    f("contrast", "Contrast", 1.15, 0.5, 2.0, Unit::None),
+    pct("color", "Color Kept", 55.0),
+];
+
+static SPLIT_TONE: [ParamSpec; 7] = [
+    pct("amount", "Amount", 100.0),
+    angle("shadow_hue", "Shadow Hue", 190.0),
+    angle("highlight_hue", "Highlight Hue", 30.0),
+    pct("shadow_strength", "Shadow Strength", 60.0),
+    pct("highlight_strength", "Highlight Strength", 60.0),
+    f("balance", "Balance", 0.0, -100.0, 100.0, Unit::Percent),
+    f("saturation", "Saturation", 110.0, 0.0, 200.0, Unit::Percent),
+];
+
+static GATE_WEAVE: [ParamSpec; 5] = [
+    fs("weave", "Weave", 3.0, 0.0, 60.0, 0.0, 15.0, Unit::Pixels),
+    f("rotation", "Rotation", 0.15, 0.0, 10.0, Unit::None),
+    fs(
+        "rate",
+        "Frames Per Second",
+        24.0,
+        1.0,
+        60.0,
+        1.0,
+        30.0,
+        Unit::None,
+    ),
+    pct("flicker", "Flicker", 20.0),
+    int("seed", "Random Seed", 1, 0, 9999),
+];
+
+static PRO_MIST: [ParamSpec; 4] = [
+    pct("amount", "Amount", 40.0),
+    fs(
+        "radius",
+        "Radius",
+        24.0,
+        1.0,
+        300.0,
+        1.0,
+        100.0,
+        Unit::Pixels,
+    ),
+    pct("threshold", "Highlight Threshold", 55.0),
+    f("warmth", "Warmth", 0.0, -100.0, 100.0, Unit::Percent),
+];
+
+static ANAMORPHIC: [ParamSpec; 4] = [
+    pct("threshold", "Threshold", 80.0),
+    fs(
+        "length",
+        "Streak Length",
+        400.0,
+        4.0,
+        3000.0,
+        4.0,
+        1200.0,
+        Unit::Pixels,
+    ),
+    pct("intensity", "Intensity", 60.0),
+    color("tint", "Tint", 0.35, 0.6, 1.0),
+];
+
+static CHROMATIC: [ParamSpec; 3] = [
+    fs("amount", "Amount", 6.0, 0.0, 100.0, 0.0, 30.0, Unit::Pixels),
+    choice("mode", "Mode", 0, &["Radial", "Linear"]),
+    angle("angle", "Angle", 0.0),
+];
+
+static SUPER_8: [ParamSpec; 8] = [
+    pct("grain", "Grain", 50.0),
+    fs(
+        "weave",
+        "Gate Weave",
+        3.0,
+        0.0,
+        40.0,
+        0.0,
+        15.0,
+        Unit::Pixels,
+    ),
+    pct("flicker", "Flicker", 35.0),
+    pct("warmth", "Warmth", 60.0),
+    pct("fade", "Fade", 25.0),
+    pct("leak", "Light Leak", 35.0),
+    pct("vignette", "Vignette", 45.0),
+    pct("saturation", "Saturation", 90.0),
 ];
 
 static NOISE: [ParamSpec; 3] = [
@@ -2872,6 +3144,14 @@ pub static CATALOG: &[EffectDef] = &[
         ["AE.ADBE Lumetri"],
         LUMETRI
     ),
+    def!(
+        "op.video.color_nodes",
+        "Color Nodes",
+        VideoEffect,
+        CAT_COLOR,
+        [],
+        COLOR_NODES
+    ),
     def!("op.video.tint", "Tint", VideoEffect, CAT_COLOR, [], TINT),
     def!(
         "op.video.black_white",
@@ -3003,6 +3283,118 @@ pub static CATALOG: &[EffectDef] = &[
         TRACK_MATTE
     ),
     def!("op.video.noise", "Noise", VideoEffect, CAT_NOISE, [], NOISE),
+    def!(
+        "op.video.stock_grain",
+        "Film Stock Grain",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        STOCK_GRAIN
+    ),
+    def!(
+        "op.video.sensor_noise",
+        "Sensor Noise",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        SENSOR_NOISE
+    ),
+    def!(
+        "op.video.salt_pepper",
+        "Salt & Pepper Noise",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        SALT_PEPPER
+    ),
+    def!(
+        "op.video.tv_static",
+        "TV Static",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        TV_STATIC
+    ),
+    def!(
+        "op.video.fractal_noise",
+        "Fractal Noise",
+        VideoEffect,
+        CAT_NOISE,
+        ["AE.ADBE Fractal Noise"],
+        FRACTAL_NOISE
+    ),
+    def!(
+        "op.video.film_dust",
+        "Dust & Scratches",
+        VideoEffect,
+        CAT_NOISE,
+        [],
+        FILM_DUST
+    ),
+    def!(
+        "op.video.film_emulation",
+        "Film Emulation",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        FILM_EMULATION
+    ),
+    def!(
+        "op.video.bleach_bypass",
+        "Bleach Bypass",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        BLEACH_BYPASS
+    ),
+    def!(
+        "op.video.split_tone",
+        "Cinematic Split Tone",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        SPLIT_TONE
+    ),
+    def!(
+        "op.video.gate_weave",
+        "Gate Weave",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        GATE_WEAVE
+    ),
+    def!(
+        "op.video.pro_mist",
+        "Pro-Mist Diffusion",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        PRO_MIST
+    ),
+    def!(
+        "op.video.anamorphic_streaks",
+        "Anamorphic Streaks",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        ANAMORPHIC
+    ),
+    def!(
+        "op.video.chromatic_aberration",
+        "Chromatic Aberration",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        CHROMATIC
+    ),
+    def!(
+        "op.video.super_8",
+        "Super 8 Film",
+        VideoEffect,
+        CAT_CINEMA,
+        [],
+        SUPER_8
+    ),
     def!(
         "op.video.drop_shadow",
         "Drop Shadow",

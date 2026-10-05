@@ -43,6 +43,7 @@ fn transcribes_speech_with_word_times() {
             &pcm,
             None,
             Task::Transcribe,
+            None,
             &mut |_| {},
             &AtomicBool::new(false),
         )

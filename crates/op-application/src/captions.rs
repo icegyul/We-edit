@@ -47,7 +47,22 @@ pub struct TranscribeOptions {
     pub language: Option<String>,
     /// Captions in the language spoken, or translated into English.
     pub task: Task,
+    /// Write what was said as it was said, hesitations included (for finding filler words);
+    /// off writes clean text.
+    pub verbatim: bool,
     pub captions: CaptionOptions,
+}
+
+/// Text placed before the speech to make the decoder keep hesitations.
+pub fn verbatim_prompt(language: Option<&str>) -> &'static str {
+    match language {
+        Some("es") => "Eh, o sea, este, mm, bueno, eh... ¿no? Pues, mmm, tipo, ya sabes.",
+        Some("pt") => "Hum, é, tipo, né, ahn, então... hmm, assim, sabe.",
+        Some("fr") => "Euh, ben, genre, du coup, hum, bah... enfin, voilà, quoi.",
+        Some("de") => "Äh, ähm, also, ja, halt, hm... sozusagen, quasi.",
+        Some("it") => "Ehm, cioè, tipo, allora, mmm, eh... insomma, praticamente.",
+        _ => "Um, uh, so, like, you know, I mean, hmm, uh... well, er.",
+    }
 }
 
 /// English names of the languages offered in the transcription dialog, for messages.
@@ -77,6 +92,7 @@ pub fn language_name(code: &str) -> Option<&'static str> {
 pub enum CaptionStage {
     Downloading,
     MixingAudio,
+    Analyzing,
     Transcribing,
 }
 
@@ -123,16 +139,29 @@ fn speech_audio(
     progress: &Mutex<CaptionProgress>,
     cancel: &AtomicBool,
 ) -> Result<Vec<f32>, String> {
+    audio_16k(project, sid, media, None, progress, cancel)
+}
+
+/// Like `speech_audio` for `range` (start and length in seconds) of the sequence only; the audio
+/// of clips that are not enabled is left out.
+pub(crate) fn audio_16k(
+    project: &Project,
+    sid: SequenceId,
+    media: &Arc<MediaService>,
+    range: Option<(SeqTime, f64)>,
+    progress: &Mutex<CaptionProgress>,
+    cancel: &AtomicBool,
+) -> Result<Vec<f32>, String> {
     let seq = project
         .sequence(sid)
         .ok_or("the sequence no longer exists")?;
-    let secs = seq.duration().seconds();
+    let (origin, secs) = range.unwrap_or((SeqTime::ZERO, seq.duration().seconds()));
     if secs <= 0.0 {
         return Err("the sequence is empty".into());
     }
     let mut streams = Vec::new();
     for t in &seq.audio {
-        for c in &t.clips {
+        for c in t.clips.iter().filter(|c| c.enabled) {
             if let ClipSource::Asset { asset, stream, .. } = &c.source
                 && !streams.contains(&(*asset, *stream))
             {
@@ -161,7 +190,7 @@ fn speech_audio(
         }
         let n = block.min(total - done);
         let mut buf = vec![0f32; n * 2];
-        let t = SeqTime::ZERO + Dur::from_seconds(done as f64 / rate as f64);
+        let t = origin + Dur::from_seconds(done as f64 / rate as f64);
         mixer.render(project, sid, t, 1.0, &mut buf, source);
         let mono: Vec<f32> = buf
             .as_chunks::<2>()
@@ -595,21 +624,19 @@ impl Editor {
     }
 }
 
-fn run_transcription(
-    project: &Project,
-    sid: SequenceId,
-    media: &Arc<MediaService>,
+/// Downloads the speech model when it is not on this computer yet.
+pub(crate) fn ensure_model(
     models: &Path,
-    opts: &TranscribeOptions,
+    model: ModelSize,
     progress: &Mutex<CaptionProgress>,
     cancel: &AtomicBool,
-) -> Result<(String, Vec<Cue>), String> {
-    if !opts.model.is_downloaded(models) {
+) -> Result<(), String> {
+    if !model.is_downloaded(models) {
         *progress.lock() = CaptionProgress {
             stage: CaptionStage::Downloading,
             fraction: 0.0,
         };
-        opts.model
+        model
             .download(models, &mut |done, total| {
                 progress.lock().fraction = done as f32 / total.max(1) as f32;
                 !cancel.load(Ordering::Relaxed)
@@ -619,11 +646,17 @@ fn run_transcription(
                 e => e.to_string(),
             })?;
     }
-    *progress.lock() = CaptionProgress {
-        stage: CaptionStage::MixingAudio,
-        fraction: 0.0,
-    };
-    let pcm = speech_audio(project, sid, media, progress, cancel)?;
+    Ok(())
+}
+
+/// The words of 16 kHz mono speech, with the language heard.
+pub(crate) fn transcribe_words(
+    pcm: &[f32],
+    models: &Path,
+    opts: &TranscribeOptions,
+    progress: &Mutex<CaptionProgress>,
+    cancel: &AtomicBool,
+) -> Result<(String, Vec<TimedWord>), String> {
     *progress.lock() = CaptionProgress {
         stage: CaptionStage::Transcribing,
         fraction: 0.0,
@@ -632,9 +665,11 @@ fn run_transcription(
     let mut t = op_speech::Transcriber::load(&opts.model.dir(models)).map_err(|e| e.to_string())?;
     let (lang, segments) = t
         .transcribe(
-            &pcm,
+            pcm,
             opts.language.as_deref(),
             opts.task,
+            opts.verbatim
+                .then(|| verbatim_prompt(opts.language.as_deref())),
             &mut |f| progress.lock().fraction = f,
             cancel,
         )
@@ -657,6 +692,25 @@ fn run_transcription(
             end: w.end,
         })
         .collect();
+    Ok((lang, words))
+}
+
+fn run_transcription(
+    project: &Project,
+    sid: SequenceId,
+    media: &Arc<MediaService>,
+    models: &Path,
+    opts: &TranscribeOptions,
+    progress: &Mutex<CaptionProgress>,
+    cancel: &AtomicBool,
+) -> Result<(String, Vec<Cue>), String> {
+    ensure_model(models, opts.model, progress, cancel)?;
+    *progress.lock() = CaptionProgress {
+        stage: CaptionStage::MixingAudio,
+        fraction: 0.0,
+    };
+    let pcm = speech_audio(project, sid, media, progress, cancel)?;
+    let (lang, words) = transcribe_words(&pcm, models, opts, progress, cancel)?;
     Ok((
         lang,
         captions::chunk(&words, opts.captions.max_words, 0.7, 0.6),

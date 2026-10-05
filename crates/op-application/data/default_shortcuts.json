@@ -146,6 +146,11 @@
  },
  {
   "context": "global",
+  "command": "cmd.edit.redo",
+  "keys": "Ctrl+Y"
+ },
+ {
+  "context": "global",
   "command": "cmd.edit.rippledelete",
   "keys": "Shift+Delete"
  },

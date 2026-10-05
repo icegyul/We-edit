@@ -24,7 +24,7 @@ no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
 
 ## Estado actual
 
-La versión `0.8.1` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
+La versión `0.9.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
 compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
 en todos los trabajos de producción.
 
@@ -43,10 +43,20 @@ en todos los trabajos de producción.
   según el procesador, la memoria y la tarjeta gráfica, o ajustados uno por uno; funciona incluso
   en equipos sin tarjeta gráfica (modo Solo software).
 - Subtítulos animados automáticos al estilo TikTok: la voz de la secuencia se transcribe en el
-  propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 12 estilos
+  propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 26 estilos
   (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...), en el idioma hablado o
   traducidos al inglés. El panel Subtítulos cambia el estilo de todos a la vez y permite corregir
   el texto. También importa y exporta SRT y WebVTT.
+- Quitar silencios (menú Clip): detecta y corta silencios, muletillas, palabras repetidas y tomas
+  repetidas con cinco métodos (volumen, relativo, ruido adaptable, banda de voz y detector de voz
+  por IA), con vista previa para revisar cada corte y también por línea de comandos
+  (`--remove-silence`). Ver [docs/silence.md](docs/silence.md).
+- Color por nodos (efecto Color Nodes y panel del espacio Color): un grafo de correctores en serie,
+  paralelo y por capas, con primarios, curvas, calificador por tono/saturación/luminancia,
+  ventanas, máscaras y LUT. Ver [docs/color-nodes.md](docs/color-nodes.md).
+- El panel Efectos muestra una imagen de cada efecto, animada al pasar el cursor o siempre
+  (según el perfil de rendimiento), y Clip › Quitar silencios de archivos corta muchos archivos
+  por lotes.
 - Vincular medios: si los archivos se movieron, se ubican a mano o se buscan solos en el equipo.
 - Asistentes de IA: Claude Code, Codex u otro cliente MCP pueden editar con OpenPremier
   (`OpenPremier --mcp`), incluso en vivo sobre el proyecto abierto. Ver
@@ -121,7 +131,7 @@ Los resultados se guardan en `dist/`.
 
 ```text
 OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.8.1-x86_64.AppImage --self-test
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.9.0-x86_64.AppImage --self-test
 ```
 
 La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del

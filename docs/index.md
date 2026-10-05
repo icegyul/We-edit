@@ -16,6 +16,8 @@ OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and m
 | [timeline-behavior.md](timeline-behavior.md) | Editing, trimming, snapping, links and history |
 | [effects.md](effects.md) | Effects, transitions, audio effects and graphics |
 | [assistants.md](assistants.md) | Editing with AI assistants (Model Context Protocol) |
+| [silence.md](silence.md) | Cutting silences, filler words and repeated takes |
+| [color-nodes.md](color-nodes.md) | The node-based color system: correctors, mixers, qualifier, windows and keys |
 | [performance.md](performance.md) | Heavy-load benchmark results and what they mean for smaller computers |
 | [plugin-api-spec.md](plugin-api-spec.md) | OpenFX and WebAssembly extension design |
 

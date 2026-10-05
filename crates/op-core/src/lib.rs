@@ -9,6 +9,7 @@
 pub mod captions;
 pub mod catalog;
 pub mod color;
+pub mod colorgraph;
 pub mod history;
 pub mod ids;
 pub mod media;

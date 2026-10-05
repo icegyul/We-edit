@@ -407,6 +407,16 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                                     ui.label(t("Audio Waveforms"));
                                     ui.checkbox(&mut c.waveforms, "");
                                     ui.end_row();
+                                    ui.label(t("Effect Previews"));
+                                    egui::ComboBox::from_id_salt("pref-previews")
+                                        .selected_text(t(c.previews.label()))
+                                        .width(170.0)
+                                        .show_ui(ui, |ui| {
+                                            for m in op_application::performance::PreviewMode::ALL {
+                                                ui.selectable_value(&mut c.previews, m, t(m.label()));
+                                            }
+                                        });
+                                    ui.end_row();
                                     ui.label(t("Prepare Effects in Background"));
                                     ui.checkbox(&mut c.warm_up, "").on_hover_text(t(
                                         "Compiles every effect while the program is idle after it starts, so the first use of an effect does not pause playback.",

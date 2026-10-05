@@ -20,6 +20,20 @@ pub const NEON: u32 = 8;
 pub const CREATOR: u32 = 9;
 pub const FADE: u32 = 10;
 pub const UNDERLINE: u32 = 11;
+pub const SLIDE_UP: u32 = 12;
+pub const SLIDE_IN: u32 = 13;
+pub const ZOOM_IN: u32 = 14;
+pub const DROP_IN: u32 = 15;
+pub const ELASTIC: u32 = 16;
+pub const RAINBOW: u32 = 17;
+pub const WAVE: u32 = 18;
+pub const SHAKE: u32 = 19;
+pub const GLITCH: u32 = 20;
+pub const LETTER: u32 = 21;
+pub const SPOTLIGHT: u32 = 22;
+pub const HOP: u32 = 23;
+pub const HIGHLIGHTER: u32 = 24;
+pub const GLOW_PULSE: u32 = 25;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CaptionStyle {
@@ -60,6 +74,20 @@ struct Look {
     pill: bool,
     underline: Option<f32>,
     glow: f32,
+    /// Horizontal offset in pixels.
+    dx: f32,
+    /// Letters ride a wave of this height in pixels, with this phase.
+    wave: f32,
+    wave_phase: f32,
+    /// Letters jitter by up to this many pixels; `seed` changes the jitter.
+    shake: f32,
+    seed: f32,
+    /// Only this fraction of the letters is drawn.
+    reveal: Option<f32>,
+    /// Colors run through the rainbow starting at this phase.
+    rainbow: Option<f32>,
+    /// A highlighter stroke behind this fraction of the word.
+    marker: Option<f32>,
 }
 
 fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
@@ -69,6 +97,55 @@ fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
         a.b + (b.b - a.b) * t,
         a.a + (b.a - a.a) * t,
     )
+}
+
+fn ease_out_cubic(x: f32) -> f32 {
+    1.0 - (1.0 - x.clamp(0.0, 1.0)).powi(3)
+}
+
+fn ease_out_bounce(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    let (n, d) = (7.5625, 2.75);
+    if x < 1.0 / d {
+        n * x * x
+    } else if x < 2.0 / d {
+        let x = x - 1.5 / d;
+        n * x * x + 0.75
+    } else if x < 2.5 / d {
+        let x = x - 2.25 / d;
+        n * x * x + 0.9375
+    } else {
+        let x = x - 2.625 / d;
+        n * x * x + 0.984375
+    }
+}
+
+fn ease_out_elastic(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    if x <= 0.0 || x >= 1.0 {
+        return x;
+    }
+    2f32.powf(-10.0 * x) * ((x * 10.0 - 0.75) * std::f32::consts::TAU / 3.0).sin() + 1.0
+}
+
+fn hsv(h: f32, s: f32, v: f32) -> Rgba {
+    let h = h.rem_euclid(1.0) * 6.0;
+    let c = v * s;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    Rgba::new(r + m, g + m, b + m, 1.0)
+}
+
+fn luminance(c: Rgba) -> f32 {
+    0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 }
 
 fn ease_out_back(x: f32) -> f32 {
@@ -95,7 +172,16 @@ fn looks(style: &CaptionStyle, words: &[TimedWord], t: f64) -> Vec<Look> {
         pill: false,
         underline: None,
         glow: 0.0,
+        dx: 0.0,
+        wave: 0.0,
+        wave_phase: 0.0,
+        shake: 0.0,
+        seed: 0.0,
+        reveal: None,
+        rainbow: None,
+        marker: None,
     };
+    let frame = (t * 30.0).floor() as f32;
     words
         .iter()
         .enumerate()
@@ -180,6 +266,109 @@ fn looks(style: &CaptionStyle, words: &[TimedWord], t: f64) -> Vec<Look> {
                     }
                 }
                 UNDERLINE if is_cur => l.underline = Some(progress.max(0.05)),
+                SLIDE_UP | SLIDE_IN | ZOOM_IN => {
+                    if future {
+                        l.alpha = 0.0;
+                    } else {
+                        let e = ease_out_cubic(age / 0.26);
+                        l.alpha = e;
+                        match style.style {
+                            SLIDE_UP => l.lift = style.size * 0.55 * k * (1.0 - e),
+                            SLIDE_IN => l.dx = style.size * 0.9 * k * (1.0 - e),
+                            _ => l.scale = 1.0 + k * 1.1 * (1.0 - e),
+                        }
+                    }
+                }
+                DROP_IN => {
+                    if future {
+                        l.alpha = 0.0;
+                    } else {
+                        let e = ease_out_bounce(age / 0.5);
+                        l.alpha = (age / 0.05).clamp(0.0, 1.0);
+                        l.lift = -style.size * 1.0 * k * (1.0 - e);
+                    }
+                }
+                ELASTIC => {
+                    if future {
+                        l.alpha = 0.0;
+                    } else {
+                        l.alpha = (age / 0.05).clamp(0.0, 1.0);
+                        l.scale = 1.0 - k * 0.7 * (1.0 - ease_out_elastic(age / 0.6));
+                    }
+                }
+                RAINBOW => {
+                    l.rainbow = Some(t as f32 * 0.5 + i as f32 * 0.08);
+                    if is_cur {
+                        l.scale = 1.0 + 0.07 * k;
+                    }
+                }
+                WAVE => {
+                    l.wave = style.size * 0.11 * k;
+                    l.wave_phase = t as f32 * 7.0 + i as f32 * 0.6;
+                    if is_cur {
+                        l.color = style.highlight;
+                    }
+                }
+                SHAKE => {
+                    if is_cur {
+                        l.shake = style.size * 0.05 * k;
+                        l.seed = frame;
+                        l.scale = 1.0 + 0.1 * k;
+                        l.color = style.highlight;
+                    }
+                }
+                GLITCH => {
+                    if is_cur {
+                        let on = (frame * 0.37).fract() < 0.55;
+                        l.shake = if on { style.size * 0.09 * k } else { 0.0 };
+                        l.seed = frame;
+                        l.color = if (frame as i32) % 2 == 0 {
+                            style.highlight
+                        } else {
+                            Rgba::WHITE
+                        };
+                    }
+                }
+                LETTER => {
+                    if future {
+                        l.alpha = 0.0;
+                    } else if is_cur {
+                        l.reveal = Some(progress.max(0.12));
+                    }
+                }
+                SPOTLIGHT => {
+                    if is_cur {
+                        l.color = style.highlight;
+                        l.scale = 1.0 + 0.12 * k;
+                    } else {
+                        l.alpha = 0.5;
+                    }
+                }
+                HOP => {
+                    if is_cur {
+                        l.lift = -style.size * 0.18 * k * (age * 9.0).sin().abs();
+                        l.color = style.highlight;
+                    }
+                }
+                HIGHLIGHTER => {
+                    if spoken {
+                        l.marker = Some(1.0);
+                    } else if is_cur {
+                        l.marker = Some(progress.max(0.05));
+                    }
+                    if l.marker.is_some() && luminance(style.highlight) > 0.6 {
+                        l.color = Rgba::new(0.05, 0.05, 0.05, 1.0);
+                    }
+                }
+                GLOW_PULSE => {
+                    l.color = mix(style.highlight, Rgba::WHITE, 0.3);
+                    l.glow = 0.4 + 0.3 * (t as f32 * 6.0 + i as f32 * 0.5).sin();
+                    if is_cur {
+                        l.color = mix(style.highlight, Rgba::WHITE, 0.85);
+                        l.glow = 1.0;
+                        l.scale = 1.0 + 0.05 * k;
+                    }
+                }
                 _ => {}
             }
             l.alpha = l.alpha.clamp(0.0, 1.0);
@@ -339,17 +528,18 @@ pub fn rasterize(style: &CaptionStyle, words: &[TimedWord], t: f64, fonts: &Font
     let block_h = (line_h * lines.len().max(1) as f32).max(text_h);
     // neon light has no outline: the glow is its edge
     let stroke_w = match style.stroke {
-        Some(_) if style.style == NEON => 0.0,
+        Some(_) if matches!(style.style, NEON | GLOW_PULSE) => 0.0,
         Some((_, w)) => w.max(0.0) * if style.style == CREATOR { 1.6 } else { 1.0 },
         None => 0.0,
     };
-    let glow_r = if style.style == NEON {
+    let glow_r = if matches!(style.style, NEON | GLOW_PULSE) {
         size * 0.35
     } else {
         0.0
     };
     // room for strokes, glows, boxes and words that grow while they pop
-    let pad = (stroke_w + glow_r + size * 0.6 + 4.0).ceil();
+    let room = if style.style >= SLIDE_UP { 1.25 } else { 0.6 };
+    let pad = (stroke_w + glow_r + size * room + 4.0).ceil();
     let w = ((block_w + pad * 2.0).ceil() as usize).clamp(1, 16384);
     let h = ((block_h + pad * 2.0).ceil() as usize).clamp(1, 16384);
     let mut canvas = Canvas {
@@ -400,9 +590,21 @@ pub fn rasterize(style: &CaptionStyle, words: &[TimedWord], t: f64, fonts: &Font
         }
         let s = l.scale;
         let wsize = size * s;
-        let cx = p.x + p.width / 2.0;
+        let cx = p.x + p.width / 2.0 + l.dx;
         let cy = p.cy + l.lift;
         let ww = p.width * s;
+        if let Some(f) = l.marker {
+            // a highlighter stroke across the lower two thirds of the letters
+            canvas.rounded(
+                cx - ww / 2.0 - size * 0.05,
+                cy - text_h * s * 0.4,
+                cx - ww / 2.0 - size * 0.05 + (ww + size * 0.1) * f,
+                cy + text_h * s * 0.46,
+                size * 0.08,
+                style.highlight,
+                0.95 * l.alpha,
+            );
+        }
         if l.pill {
             let bp = size * 0.2;
             canvas.rounded(
@@ -425,7 +627,11 @@ pub fn rasterize(style: &CaptionStyle, words: &[TimedWord], t: f64, fonts: &Font
             cy,
             style,
             l,
-            stroke_w * s,
+            if l.marker.is_some() {
+                0.0
+            } else {
+                stroke_w * s
+            },
             glow_r * s,
         );
         if let Some(f) = l.underline {
@@ -475,7 +681,7 @@ fn draw_word(
     let sc = font.as_scaled(PxScale::from(size));
     let baseline = cy + (sc.ascent() + sc.descent()) / 2.0;
     let (glyphs, width) = shape(font, fallback, text, size);
-    let margin = (stroke_w + glow_r + 2.0).ceil();
+    let margin = (stroke_w + glow_r + 2.0 + look.wave + look.shake * 1.5).ceil();
     let lx = (x0 - margin).floor();
     let ly = (baseline - sc.ascent() - margin).floor();
     let lw = (width + margin * 2.0 + 2.0).ceil().max(1.0) as usize;
@@ -483,8 +689,30 @@ fn draw_word(
         .ceil()
         .max(1.0) as usize;
     let mut cov = vec![0f32; lw * lh];
-    for (id, fb, gx) in &glyphs {
-        let g = id.with_scale_and_position(PxScale::from(size), point(x0 + gx, baseline));
+    let shown = match look.reveal {
+        Some(f) => ((glyphs.len() as f32 * f).ceil() as usize).clamp(1, glyphs.len().max(1)),
+        None => glyphs.len(),
+    };
+    for (n, (id, fb, gx)) in glyphs.iter().enumerate() {
+        if n >= shown {
+            break;
+        }
+        let mut jx = 0.0;
+        let mut jy = 0.0;
+        if look.wave > 0.0 {
+            jy += look.wave * (look.wave_phase + n as f32 * 0.8).sin();
+        }
+        if look.shake > 0.0 {
+            let h = |k: f32| {
+                let v = ((n as f32 * 12.9898 + look.seed * 78.233 + k * 37.719).sin() * 43758.547)
+                    .fract()
+                    .abs();
+                v * 2.0 - 1.0
+            };
+            jx = h(0.0) * look.shake;
+            jy += h(1.0) * look.shake;
+        }
+        let g = id.with_scale_and_position(PxScale::from(size), point(x0 + gx + jx, baseline + jy));
         let outline = if *fb {
             fallback.outline_glyph(g)
         } else {
@@ -532,8 +760,9 @@ fn draw_word(
                 }
             }
             if cov[i] > 0.0 {
-                let color = match split {
-                    Some(sx) if (cxp as f32 + 0.5) < sx => style.highlight,
+                let color = match (split, look.rainbow) {
+                    (Some(sx), _) if (cxp as f32 + 0.5) < sx => style.highlight,
+                    (_, Some(ph)) => hsv(ph + (cxp as f32 - x0) / (size * 8.0), 0.75, 1.0),
                     _ => look.color,
                 };
                 canvas.over(px, py, color, cov[i] * look.alpha);
@@ -598,7 +827,7 @@ mod tests {
     #[test]
     fn every_style_draws_something() {
         let fonts = Fonts::global();
-        for s in 0..12 {
+        for s in 0..26 {
             let img = rasterize(&style(s), &words(), 0.6, &fonts);
             assert!(ink(&img) > 200, "style {s}");
         }
@@ -618,9 +847,29 @@ mod tests {
     }
 
     #[test]
+    fn looping_styles_keep_moving() {
+        let fonts = Fonts::global();
+        for s in [RAINBOW, WAVE, SHAKE, GLITCH, HOP, GLOW_PULSE] {
+            let a = rasterize(&style(s), &words(), 0.62, &fonts);
+            let b = rasterize(&style(s), &words(), 0.69, &fonts);
+            assert!(a.rgba != b.rgba, "style {s} does not move");
+        }
+    }
+
+    #[test]
+    fn the_highlighter_paints_spoken_words() {
+        let fonts = Fonts::global();
+        let early = yellow(&rasterize(&style(HIGHLIGHTER), &words(), 0.1, &fonts));
+        let late = yellow(&rasterize(&style(HIGHLIGHTER), &words(), 1.9, &fonts));
+        assert!(late > early, "{early} -> {late}");
+    }
+
+    #[test]
     fn reveal_styles_grow_with_time() {
         let fonts = Fonts::global();
-        for s in [TYPEWRITER, BOUNCE] {
+        for s in [
+            TYPEWRITER, BOUNCE, SLIDE_UP, SLIDE_IN, ZOOM_IN, DROP_IN, ELASTIC, LETTER,
+        ] {
             let a = ink(&rasterize(&style(s), &words(), 0.3, &fonts));
             let b = ink(&rasterize(&style(s), &words(), 1.9, &fonts));
             assert!(b > a, "style {s}: {a} -> {b}");

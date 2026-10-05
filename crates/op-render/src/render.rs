@@ -159,6 +159,19 @@ impl Renderer {
     }
 
     /// Returns a texture from `render` to the pool once it has been displayed or read.
+    /// Forgets the decoded frames kept on the GPU. They are found by asset and frame number, so
+    /// a renderer used for projects that reuse asset ids (previews) must forget between them.
+    pub fn forget_media(&mut self) {
+        for old in std::mem::take(&mut self.uploads) {
+            for t in old.planes {
+                self.plane_pool
+                    .entry((t.width, t.height, t.format))
+                    .or_default()
+                    .push(t);
+            }
+        }
+    }
+
     pub fn recycle(&mut self, t: Tex) {
         self.pool.put(t);
     }
@@ -216,7 +229,7 @@ impl Renderer {
                     },
                 ],
             }),
-            Layout::Convert | Layout::Lumetri => {
+            Layout::Convert | Layout::Lumetri | Layout::Grade => {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: None,
                     layout: &bgl,
@@ -1167,6 +1180,60 @@ impl Renderer {
             wgpu::Extent3d {
                 width: 256,
                 height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+        if self.curve_cache.len() > 64 {
+            self.curve_cache.clear();
+        }
+        self.curve_cache.insert(key, tex.clone());
+        tex
+    }
+
+    /// 256x2 texture for the color node curves: row 0 master, R, G, B; row 1 hue against hue,
+    /// hue against saturation, luminance against saturation, saturation against saturation.
+    pub(crate) fn grade_curves(&mut self, c: &op_core::colorgraph::Curves) -> Tex {
+        let key = hash_of(&format!("grade{c:?}"));
+        if let Some(t) = self.curve_cache.get(&key) {
+            return t.clone();
+        }
+        let rows = [
+            [&c.master, &c.red, &c.green, &c.blue],
+            [&c.hue_vs_hue, &c.hue_vs_sat, &c.lum_vs_sat, &c.sat_vs_sat],
+        ];
+        let mut bytes = Vec::with_capacity(256 * 16);
+        for row in rows {
+            let tables = row.map(|p| crate::lut::curve_table(p));
+            for i in 0..256 {
+                for t in &tables {
+                    bytes.extend_from_slice(&crate::lut::f16_bits(t[i]).to_le_bytes());
+                }
+            }
+        }
+        let tex = Tex::new(
+            &self.gpu.device,
+            256,
+            2,
+            WORK,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            "grade curves",
+        );
+        self.gpu.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256 * 8),
+                rows_per_image: Some(2),
+            },
+            wgpu::Extent3d {
+                width: 256,
+                height: 2,
                 depth_or_array_layers: 1,
             },
         );

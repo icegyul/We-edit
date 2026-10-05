@@ -1141,7 +1141,12 @@ fn color_wheel(ui: &mut Ui, id: egui::Id, v: &mut [f64; 2]) -> bool {
 }
 
 /// A tone curve: drag points, double-click to add, right-click to remove.
-fn curve_editor(s: &mut State, ui: &mut Ui, id: egui::Id, pts: &mut Vec<[f32; 2]>) -> bool {
+pub(crate) fn curve_editor(
+    s: &mut State,
+    ui: &mut Ui,
+    id: egui::Id,
+    pts: &mut Vec<[f32; 2]>,
+) -> bool {
     let size = 140.0;
     let (r, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
     let p = ui.painter();

@@ -227,6 +227,7 @@ pub struct Transcriber {
     eot: u32,
     transcribe: u32,
     translate: u32,
+    prev: u32,
     no_timestamps: u32,
     no_speech: Option<u32>,
     ts_begin: u32,
@@ -283,6 +284,7 @@ impl Transcriber {
         let eot = id(m::EOT_TOKEN)?;
         let transcribe = id(m::TRANSCRIBE_TOKEN)?;
         let translate = id(m::TRANSLATE_TOKEN)?;
+        let prev = id("<|startofprev|>")?;
         let no_timestamps = id(m::NO_TIMESTAMPS_TOKEN)?;
         let no_speech = m::NO_SPEECH_TOKENS.iter().find_map(|t| tok.id(t));
         let mut suppress = vec![false; config.vocab_size];
@@ -303,6 +305,7 @@ impl Transcriber {
             eot,
             transcribe,
             translate,
+            prev,
             no_timestamps,
             no_speech,
             ts_begin: no_timestamps + 1,
@@ -317,6 +320,7 @@ impl Transcriber {
         pcm: &[f32],
         language: Option<&str>,
         task: Task,
+        prompt: Option<&str>,
         progress: &mut dyn FnMut(f32),
         cancel: &AtomicBool,
     ) -> Result<(String, Vec<Segment>)> {
@@ -339,7 +343,17 @@ impl Transcriber {
             Task::Transcribe => self.transcribe,
             Task::Translate => self.translate,
         };
-        let prompt = [self.sot, lang_token, task_token];
+        // text written before the speech steers the decoder towards its style: a prompt with
+        // "um" and "uh" makes it keep the hesitations it would otherwise tidy away
+        let mut prompt_tokens: Vec<u32> = Vec::new();
+        if let Some(text) = prompt.filter(|t| !t.trim().is_empty()) {
+            let mut body = self.tok.encode(&format!(" {}", text.trim()));
+            body.truncate(120);
+            prompt_tokens.push(self.prev);
+            prompt_tokens.extend(body);
+        }
+        prompt_tokens.extend([self.sot, lang_token, task_token]);
+        let prompt = prompt_tokens.as_slice();
         let secs_per_frame = m::HOP_LENGTH as f64 / m::SAMPLE_RATE as f64;
         let frames_per_chunk = CHUNK / m::HOP_LENGTH;
         let mut segments = Vec::new();
@@ -365,7 +379,7 @@ impl Transcriber {
             let window = self.window(&mel, seek, size)?;
             let offset = seek as f64 * secs_per_frame;
             let window_secs = size as f64 * secs_per_frame;
-            let dr = self.decode_with_fallback(&window, &prompt, window_secs)?;
+            let dr = self.decode_with_fallback(&window, prompt, window_secs)?;
             if dr.no_speech_prob > m::NO_SPEECH_THRESHOLD && dr.avg_logprob < m::LOGPROB_THRESHOLD {
                 seek += size;
                 continue;

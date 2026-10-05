@@ -147,6 +147,19 @@ pub(crate) fn clip_menu(ui: &mut Ui, s: &mut State) {
     ui.separator();
     item_if(ui, s, "Speed/Duration...", "cmd.clip.speed", has);
     item_if(ui, s, "Audio Gain...", "cmd.clip.audiooptions.gain", has);
+    item_if(
+        ui,
+        s,
+        "Remove Silence...",
+        "op.clip.removesilence",
+        s.ed.active.is_some(),
+    );
+    item(
+        ui,
+        s,
+        "Remove Silence from Files...",
+        "op.clip.silencebatch",
+    );
     ui.separator();
     item(ui, s, "Insert", "cmd.clip.insert");
     item(ui, s, "Overwrite", "cmd.clip.overlay");

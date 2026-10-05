@@ -37,6 +37,7 @@ fn transcribes_the_sequence_into_animated_captions() {
         model: ModelSize::Tiny,
         language: None,
         task: Task::Transcribe,
+        verbatim: false,
         captions: CaptionOptions {
             style: 2,
             max_words: 3,

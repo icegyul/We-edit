@@ -1997,6 +1997,7 @@ fn context_menu(s: &mut State, ui: &mut Ui, h: Option<Hit>) {
             ui.separator();
             run(s, ui, "Speed/Duration...", "cmd.clip.speed");
             run(s, ui, "Audio Gain...", "cmd.clip.audiooptions.gain");
+            run(s, ui, "Remove Silence...", "op.clip.removesilence");
             run(s, ui, "Add Frame Hold", "op.clip.framehold");
             run(s, ui, "Scale to Frame Size", "op.clip.scaletoframe");
             run(s, ui, "Nest...", "op.clip.nest");

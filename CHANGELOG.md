@@ -2,6 +2,31 @@
 
 OpenPremier follows semantic versioning. User-visible changes are grouped by release.
 
+## 0.9.0 - 2026-10-04
+
+### Added
+
+- Remove Silence (Clip menu and the timeline's clip menu): finds silences, filler words, repeated words and phrases and repeated takes in the audio, shows them shaded over the waveform to review one by one, and cuts, speeds up or marks them in one undo step. Five ways to tell sound from silence (Loudness, Relative to Loudest, Adaptive Noise Floor, Speech Band and a neural Voice Detector, with a Voices Only filter), shortest silence and sound, air kept around the words, and five presets (Gentle, Podcast, Tutorial, Jump Cuts, Noisy Room). With Find Words to Cut the audio is transcribed on this computer and fillers (English, Spanish, Portuguese, French, German, Italian, crutch phrases and your own list), repeated words and phrases, repeated takes (the last one stays) and dead air between words are found. Cuts land on frame boundaries across every track, with a short audio crossfade at each join. See docs/silence.md.
+- Color Nodes: a node-based color system. The effect (Effects > Color Correction) and the panel in the Color workspace edit a graph of correctors, parallel mixers and layer mixers between a Source and an Output. Each corrector has primaries (lift, gamma, gain and offset wheels, contrast and pivot, saturation, hue, temperature, tint, shadows, highlights, color boost), custom curves (master, red, green, blue, hue vs hue, hue vs saturation, luminance vs saturation, saturation vs saturation), a qualifier by hue, saturation and luminance, windows (rectangle, ellipse, linear, polygon), a key with gain, offset, blur and invert, a key input (also inverted, to grade what is outside), a 3D LUT, blur and sharpen. The viewer can show a node's matte or dim what it does not select. See docs/color-nodes.md.
+- Icon view in the Effects panel: the panel stays a list of names, as usual; a button next to the search box switches to cards with a picture of every effect and transition, rendered by the real renderer and animated while the pointer is over it or always (Preferences > Performance > Effect Previews; the profiles choose a default).
+- Clip > Remove Silence from Files...: removes silences, filler words, repeats and retakes from many files at once with the same settings, writing the results to a folder; also several files on the command line (`--out-dir`, `--suffix`).
+- The Remove Silence dialog has a separate section for filler words, repeated words and retakes, apart from the silence methods.
+- Fourteen new effects. Noise & Grain: Film Stock Grain (8 mm, 16 mm, 35 mm, 65 mm and pushed high-ISO stocks), Sensor Noise (luminance and color noise, more in the shadows), Salt & Pepper Noise, TV Static, Fractal Noise (octaves, evolution, six blend modes) and Dust & Scratches (specks, hairs and scratches that change over time). A new Cinema category: Film Emulation (warm negative, cool stock, bleach bypass, cross process, two-strip Technicolor, silver noir, day for night, faded matte, teal and orange, seventies), Bleach Bypass, Cinematic Split Tone, Gate Weave, Pro-Mist Diffusion, Anamorphic Streaks, Chromatic Aberration and Super 8 Film.
+- Fourteen new caption styles with new animations: Slide Up, Slide In, Zoom In, Drop In (falls and bounces), Elastic, Rainbow, Wave, Shake, Glitch, Letter by Letter, Spotlight, Hop, Highlighter and Glow Pulse (26 styles in all), each driven by the time of every word and scaled by Animation Strength.
+- Ctrl+Y redoes, as well as Ctrl+Shift+Z.
+- The `op-silence` crate: the detection in pure Rust, with the neural detector [Earshot](https://github.com/pykeio/earshot) (MIT or Apache-2.0, 40 KB).
+- Assistants: `detect_silence` and `remove_silence` tools (30 tools in all).
+- Command line: `OpenPremier --remove-silence input output [options]` cuts a file's silences and writes the result without opening a window.
+
+### Changed
+
+- The Color workspace layout changed (it holds the Color Nodes panel); saved layouts of older versions are replaced by the new factory layout.
+
+### Fixed
+
+- Remove Silence no longer asks to analyze again after changing settings: the neural voice detector is measured with every analysis, so choosing it or Voices Only later keeps the analysis; and once analyzed, Apply stays available.
+- Remove Silence no longer asks to analyze again when nothing it needs changed: turning off the word search, or changing silence settings, keeps the analysis; only a different scope, a missing neural curve or a different speech model or language needs a new one.
+
 ## 0.8.1 - 2026-10-04
 
 ### Added

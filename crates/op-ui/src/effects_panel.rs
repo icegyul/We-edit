@@ -1,7 +1,11 @@
 //! The Effects panel: every implemented effect and transition by category, with search. Items are
 //! dragged onto clips, cuts or Effect Controls; double-click applies to the selection.
 
+use std::collections::{HashMap, VecDeque};
+
 use egui::{RichText, Sense, Ui, vec2};
+use op_application::effect_preview::{self, FRAMES};
+use op_application::performance::PreviewMode;
 use op_core::catalog::{self, EffectDef, EffectKind};
 use op_core::presets::{self, PresetDef};
 
@@ -10,9 +14,23 @@ use crate::i18n::{t, tn};
 use crate::icons::{self, Icon};
 use crate::theme;
 
+/// Pictures kept at most (each is a short run of small textures).
+const CACHE: usize = 90;
+/// Previews rendered per frame.
+const PER_FRAME: usize = 2;
+/// Frames per second of an animated preview.
+const FPS: f64 = 12.0;
+
 #[derive(Default)]
 pub struct EffectsView {
     search: String,
+    /// Icon view (cards with pictures); the list of names is the default.
+    grid: Option<bool>,
+    cache: HashMap<&'static str, Vec<egui::TextureHandle>>,
+    order: VecDeque<&'static str>,
+    /// Previews cards asked for this frame and do not have yet.
+    wanted: Vec<&'static EffectDef>,
+    animating: bool,
 }
 
 const GROUPS: [(EffectKind, &str); 4] = [
@@ -27,14 +45,34 @@ fn is_default(s: &State, d: &EffectDef) -> bool {
 }
 
 pub fn show(s: &mut State, ui: &mut Ui) {
+    let mode = s.ed.prefs.performance().previews;
+    let grid = mode != PreviewMode::Off && s.fx.grid.unwrap_or(false);
+    s.fx.wanted.clear();
+    s.fx.animating = false;
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.add_space(6.0);
         ui.add(
             egui::TextEdit::singleline(&mut s.fx.search)
                 .hint_text(t("Search"))
-                .desired_width(ui.available_width() - 8.0),
+                .desired_width(ui.available_width() - 36.0),
         );
+        if mode != PreviewMode::Off
+            && icons::button(
+                ui,
+                if grid { Icon::List } else { Icon::Grid },
+                20.0,
+                false,
+                if grid {
+                    t("Show a list")
+                } else {
+                    t("Show pictures")
+                },
+            )
+            .clicked()
+        {
+            s.fx.grid = Some(!grid);
+        }
     });
     ui.add_space(4.0);
     let q = s.fx.search.trim().to_lowercase();
@@ -89,14 +127,149 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                                 ui.label(RichText::new(tn(cat)).color(theme::TEXT));
                             })
                             .body(|ui| {
-                                for d in defs.iter().filter(|d| d.category == cat) {
-                                    entry(s, ui, d);
+                                if grid {
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                                        for d in defs.iter().filter(|d| d.category == cat) {
+                                            card(s, ui, d, mode);
+                                        }
+                                    });
+                                } else {
+                                    for d in defs.iter().filter(|d| d.category == cat) {
+                                        entry(s, ui, d);
+                                    }
                                 }
                             });
                         }
                     });
             }
         });
+    render_wanted(s, ui.ctx());
+}
+
+/// Renders the previews cards asked for (a couple per frame, so scrolling stays smooth).
+fn render_wanted(s: &mut State, ctx: &egui::Context) {
+    let wanted: Vec<&'static EffectDef> = std::mem::take(&mut s.fx.wanted);
+    let mut made = 0;
+    for d in wanted {
+        if made >= PER_FRAME {
+            break;
+        }
+        if s.fx.cache.contains_key(d.id) {
+            continue;
+        }
+        made += 1;
+        let frames = effect_preview::render(&mut s.renderer, d)
+            .map(|p| {
+                p.frames
+                    .iter()
+                    .enumerate()
+                    .map(|(i, rgba)| {
+                        ctx.load_texture(
+                            format!("fx-preview-{}-{i}", d.id),
+                            egui::ColorImage::from_rgba_unmultiplied(
+                                [p.width as usize, p.height as usize],
+                                rgba,
+                            ),
+                            egui::TextureOptions::LINEAR,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        s.fx.cache.insert(d.id, frames);
+        s.fx.order.push_back(d.id);
+        while s.fx.order.len() > CACHE {
+            if let Some(old) = s.fx.order.pop_front() {
+                s.fx.cache.remove(old);
+            }
+        }
+    }
+    if made > 0 || s.fx.animating {
+        ctx.request_repaint_after(std::time::Duration::from_millis(if made > 0 {
+            1
+        } else {
+            (1000.0 / FPS) as u64
+        }));
+    }
+}
+
+/// One effect as a card: its picture over its name. The picture moves while the pointer is on it
+/// (or always, at the highest performance setting).
+fn card(s: &mut State, ui: &mut Ui, d: &'static EffectDef, mode: PreviewMode) {
+    const W: f32 = 104.0;
+    let pic = vec2(W, W * 9.0 / 16.0);
+    let (r, resp) = ui.allocate_exact_size(vec2(W, pic.y + 30.0), Sense::click_and_drag());
+    if !ui.is_rect_visible(r) {
+        return;
+    }
+    let painter = ui.painter();
+    if resp.hovered() {
+        painter.rect_filled(r.expand(2.0), 4.0, theme::RAISED);
+    }
+    let image = egui::Rect::from_min_size(r.min, pic);
+    painter.rect_filled(image, 3.0, theme::PANEL_DARK);
+    if effect_preview::has_preview(d.kind) {
+        match s.fx.cache.get(d.id) {
+            Some(frames) if !frames.is_empty() => {
+                let moving =
+                    mode == PreviewMode::Always || (mode == PreviewMode::Hover && resp.hovered());
+                let i = if moving {
+                    s.fx.animating = true;
+                    ((ui.input(|i| i.time) * FPS) as usize) % FRAMES
+                } else {
+                    FRAMES / 2
+                };
+                painter.image(
+                    frames[i.min(frames.len() - 1)].id(),
+                    image,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+            }
+            Some(_) => {}
+            None => {
+                s.fx.wanted.push(d);
+                ui.ctx().request_repaint();
+            }
+        }
+    } else {
+        icons::draw(
+            painter,
+            egui::Rect::from_center_size(image.center(), vec2(22.0, 22.0)),
+            Icon::Music,
+            theme::TEXT_DIM,
+        );
+    }
+    painter.rect_stroke(
+        image,
+        3.0,
+        egui::Stroke::new(
+            1.0,
+            if resp.hovered() {
+                theme::ACCENT
+            } else {
+                theme::LINE
+            },
+        ),
+        egui::StrokeKind::Inside,
+    );
+    let mut name = tn(d.name);
+    if is_default(s, d) {
+        name = format!("{name} \u{2605}");
+    }
+    let galley = painter.layout(name, egui::FontId::proportional(11.0), theme::TEXT, W);
+    let pos = egui::pos2(
+        r.min.x + (W - galley.size().x.min(W)) / 2.0,
+        r.min.y + pic.y + 2.0,
+    );
+    painter
+        .with_clip_rect(egui::Rect::from_min_size(
+            r.min + vec2(0.0, pic.y),
+            vec2(W, 30.0),
+        ))
+        .galley(pos, galley, theme::TEXT);
+    finish(s, resp, d);
 }
 
 /// Animation presets, by category; they are applied like video effects.
@@ -223,6 +396,11 @@ fn entry(s: &mut State, ui: &mut Ui, d: &'static EffectDef) {
             theme::TEXT
         },
     );
+    finish(s, resp, d);
+}
+
+/// Dragging, double-click and the context menu of an effect (list row or card).
+fn finish(s: &mut State, resp: egui::Response, d: &'static EffectDef) {
     if resp.drag_started() {
         s.drag = Some(Drag::Effect(d.id));
     }

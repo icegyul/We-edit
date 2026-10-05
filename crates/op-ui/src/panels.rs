@@ -785,7 +785,7 @@ pub fn info(s: &mut State, ui: &mut Ui) {
 
 // ---------------------------------------------------------------------------------- lumetri
 
-fn selected_video_clip(s: &State) -> Option<(SequenceId, ClipId)> {
+pub(crate) fn selected_video_clip(s: &State) -> Option<(SequenceId, ClipId)> {
     let sid = s.ed.active?;
     let seq = s.ed.project.sequence(sid)?;
     let ph = s.ed.playhead();

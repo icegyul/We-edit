@@ -172,6 +172,32 @@ pub fn list() -> Json {
             &["params"]
         ),
         tool(
+            "detect_silence",
+            "Finds silences (and, with `words`, filler words, repeated words and takes) in the sequence's audio WITHOUT changing anything: returns each stretch with its time, kind and text. Use it to preview what remove_silence would do.",
+            silence_schema(),
+            &[]
+        ),
+        tool(
+            "remove_silence",
+            "Cuts silences (and, with `words`, fillers, repeated words and repeated takes) out of the sequence in one undo step: removes and closes the gaps, leaves gaps, speeds the silences up, or only adds markers. Linked video and every track stay in sync.",
+            {
+                let mut p = silence_schema();
+                if let Some(o) = p.as_object_mut() {
+                    o.insert("action".into(), json!({"type": "string", "enum": ["remove", "leave_gap", "speed_up", "markers"], "description": "What to do with each stretch (default remove)"}));
+                    o.insert(
+                        "speed_percent".into(),
+                        num("Speed for speed_up, percent (default 400)"),
+                    );
+                    o.insert(
+                        "crossfade_ms".into(),
+                        num("Audio crossfade at each join, milliseconds (default 12)"),
+                    );
+                }
+                p
+            },
+            &[]
+        ),
+        tool(
             "add_marker",
             "Adds a sequence marker.",
             json!({"at": num("Seconds"), "name": s("Marker name")}),
@@ -455,6 +481,187 @@ fn one_step(ed: &mut Editor, name: &str, f: impl FnOnce(&mut Editor) -> R) -> R 
     result
 }
 
+/// The parameters `detect_silence` and `remove_silence` take.
+fn silence_schema() -> Json {
+    json!({
+        "scope": {"type": "string", "enum": ["selection", "sequence", "in_out"], "description": "selection (selected clips), sequence (default) or in_out (between the In and Out points)"},
+        "method": {"type": "string", "enum": ["loudness", "relative", "adaptive", "speech", "neural"], "description": "How sound is told from silence: loudness (fixed dB), relative (dB under the loudest part), adaptive (dB over the recording's own noise floor, default), speech (voice band), neural (voice detector, ignores music and noise)"},
+        "threshold_db": {"type": "number", "description": "loudness: silence below this dBFS (default -40)"},
+        "below_peak_db": {"type": "number", "description": "relative: silence this many dB under the loudest part (default 30)"},
+        "margin_db": {"type": "number", "description": "adaptive: sound is this many dB over the noise floor (default 9)"},
+        "sensitivity": {"type": "number", "description": "speech and neural: 0 to 1, higher keeps more (default 0.5)"},
+        "voice_only": {"type": "boolean", "description": "Only voices count as sound (music and noise are silence)"},
+        "min_silence": {"type": "number", "description": "Shortest silence to cut, seconds (default 0.4)"},
+        "min_sound": {"type": "number", "description": "Shortest sound to keep, seconds (default 0.08)"},
+        "pad_before": {"type": "number", "description": "Seconds of air kept after a word, before the cut (default 0.08)"},
+        "pad_after": {"type": "number", "description": "Seconds of air kept before the next word, after the cut (default 0.12)"},
+        "preset": {"type": "string", "enum": ["gentle", "podcast", "tutorial", "jump_cuts", "noisy_room"], "description": "Start from a preset; the other fields override it"},
+        "words": {"type": "object", "description": "Also cut by what was said (transcribes on this computer; downloads the speech model once). Fields: language (code like es), model (tiny, base, small), fillers (default true), aggressive_fillers, custom (comma-separated words or phrases), repeated_words (default true), repeated_phrases (default true), retakes (keep the last of a repeated sentence), gap (cut dead air between words of at least this many seconds), retake_similarity (0 to 1)"}
+    })
+}
+
+fn bool_arg(a: &Json, k: &str) -> Option<bool> {
+    a.get(k).and_then(Json::as_bool)
+}
+
+/// The silence settings an assistant asked for.
+pub fn silence_settings(a: &Json) -> Result<op_application::silence::SilenceSettings, String> {
+    use op_application::silence::{Action, Scope, SilenceSettings};
+    use op_silence::{Method, presets};
+    let mut s = SilenceSettings {
+        scope: match str_arg(a, "scope").unwrap_or("sequence") {
+            "selection" => Scope::Selection,
+            "in_out" => Scope::InOut,
+            "sequence" => Scope::Sequence,
+            other => return Err(format!("scope {other}: use selection, sequence or in_out")),
+        },
+        ..Default::default()
+    };
+    if let Some(name) = str_arg(a, "preset") {
+        let wanted = name.replace('_', " ");
+        let preset = presets::all()
+            .into_iter()
+            .find(|p| p.name.eq_ignore_ascii_case(&wanted))
+            .ok_or_else(|| format!("no preset {name}"))?;
+        s.sound = preset.params;
+        s.words = preset.text.clone();
+        s.by_words = preset.words;
+    }
+    let num = |k: &str| f64_arg(a, k);
+    match str_arg(a, "method") {
+        None => {}
+        Some("loudness") => {
+            s.sound.method = Method::Loudness {
+                threshold_db: num("threshold_db").unwrap_or(-40.0) as f32,
+            }
+        }
+        Some("relative") => {
+            s.sound.method = Method::Relative {
+                below_peak_db: num("below_peak_db").unwrap_or(30.0) as f32,
+            }
+        }
+        Some("adaptive") => {
+            s.sound.method = Method::Adaptive {
+                margin_db: num("margin_db").unwrap_or(9.0) as f32,
+            }
+        }
+        Some("speech") => {
+            s.sound.method = Method::Speech {
+                sensitivity: num("sensitivity").unwrap_or(0.5) as f32,
+            }
+        }
+        Some("neural") => {
+            s.sound.method = Method::Neural {
+                sensitivity: num("sensitivity").unwrap_or(0.5) as f32,
+            }
+        }
+        Some(other) => {
+            return Err(format!(
+                "method {other}: use loudness, relative, adaptive, speech or neural"
+            ));
+        }
+    }
+    if let Some(v) = num("min_silence") {
+        s.sound.min_silence = v.max(0.02);
+    }
+    if let Some(v) = num("min_sound") {
+        s.sound.min_sound = v.max(0.0);
+    }
+    if let Some(v) = num("pad_before") {
+        s.sound.pad_before = v.max(0.0);
+    }
+    if let Some(v) = num("pad_after") {
+        s.sound.pad_after = v.max(0.0);
+    }
+    if let Some(v) = bool_arg(a, "voice_only") {
+        s.sound.voice_only = v;
+    }
+    if let Some(w) = a.get("words").filter(|w| w.is_object()) {
+        s.by_words = true;
+        if let Some(l) = str_arg(w, "language") {
+            s.language = Some(l.to_string());
+        }
+        match str_arg(w, "model") {
+            Some("tiny") => s.model = ModelSize::Tiny,
+            Some("small") => s.model = ModelSize::Small,
+            Some("base") | None => {}
+            Some(other) => return Err(format!("model {other}: use tiny, base or small")),
+        }
+        if let Some(v) = bool_arg(w, "fillers") {
+            s.words.fillers = v;
+        }
+        if let Some(v) = bool_arg(w, "aggressive_fillers") {
+            s.words.aggressive_fillers = v;
+        }
+        if let Some(v) = str_arg(w, "custom") {
+            s.words.custom = v.to_string();
+        }
+        if let Some(v) = bool_arg(w, "repeated_words") {
+            s.words.repeated_words = v;
+        }
+        if let Some(v) = bool_arg(w, "repeated_phrases") {
+            s.words.repeated_phrases = v;
+        }
+        if let Some(v) = bool_arg(w, "retakes") {
+            s.words.retakes = v;
+        }
+        if let Some(v) = f64_arg(w, "gap") {
+            s.words.gap = v.max(0.0);
+        }
+        if let Some(v) = f64_arg(w, "retake_similarity") {
+            s.words.retake_similarity = v.clamp(0.3, 1.0);
+        }
+    }
+    s.action = match str_arg(a, "action").unwrap_or("remove") {
+        "remove" => Action::Remove,
+        "leave_gap" => Action::LeaveGap,
+        "speed_up" => Action::SpeedUp(num("speed_percent").unwrap_or(400.0)),
+        "markers" => Action::Markers,
+        other => {
+            return Err(format!(
+                "action {other}: use remove, leave_gap, speed_up or markers"
+            ));
+        }
+    };
+    if let Some(v) = num("crossfade_ms") {
+        s.smooth_ms = v.clamp(0.0, 100.0);
+    }
+    Ok(s)
+}
+
+/// Analyzes the audio and returns the finished detection (blocks until it is done).
+fn analyze_blocking(
+    ed: &mut Editor,
+    s: &op_application::silence::SilenceSettings,
+) -> Result<std::sync::Arc<op_application::silence::Detection>, String> {
+    ed.silence_result = None;
+    ed.analyze_silence(s)?;
+    wait(ed, 3600, |e| e.silencing.is_some());
+    ed.silence_result
+        .clone()
+        .ok_or_else(|| status_error(ed, "the audio could not be analyzed"))
+}
+
+/// detect_silence and remove_silence.
+fn silence_tool(ed: &mut Editor, name: &str, a: &Json, live: bool) -> R {
+    active(ed)?;
+    let s = silence_settings(a)?;
+    if live && s.by_words {
+        return Err("transcribing would freeze the open window: use Clip > Remove Silence there, or run the tool with OpenPremier closed".into());
+    }
+    let d = analyze_blocking(ed, &s)?;
+    let cuts = d.cuts(&s);
+    if name == "detect_silence" {
+        return text(op_application::silence::describe(&cuts));
+    }
+    let ranges: Vec<op_silence::Range> = cuts.iter().map(|c| c.range).collect();
+    let n = ed.apply_cuts(d.origin, &ranges, s.action, s.smooth_ms);
+    let mut out = op_application::silence::describe(&cuts);
+    out["applied"] = json!(n);
+    out["sequence_duration"] = json!(ed.active_seq().map(|q| q.duration().seconds()));
+    text(out)
+}
+
 /// Runs a tool on the open program's editor: exports and transcriptions start and show their
 /// progress in the window instead of holding it until they finish.
 pub fn call_live(ed: &mut Editor, name: &str, a: &Json) -> R {
@@ -468,6 +675,7 @@ fn live(ed: &mut Editor, name: &str, a: &Json) -> R {
                 .into(),
         ),
         "export" => crate::render::export_in_background(ed, a),
+        "detect_silence" | "remove_silence" => silence_tool(ed, name, a, true),
         "transcribe_captions" => {
             let options = transcribe_options(a);
             ed.status = None;
@@ -503,6 +711,7 @@ fn transcribe_options(a: &Json) -> TranscribeOptions {
         } else {
             Task::Transcribe
         },
+        verbatim: false,
         captions,
     }
 }
@@ -1106,6 +1315,7 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
             });
             text(json!({"ok": true}))
         }
+        "detect_silence" | "remove_silence" => silence_tool(ed, name, a, false),
         "set_playhead" => {
             ed.set_playhead(SeqTime::from_seconds(
                 f64_arg(a, "at").ok_or("at is required")?.max(0.0),

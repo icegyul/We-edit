@@ -78,6 +78,7 @@ pub(crate) struct State {
     next_paste: u64,
     /// Settings of the last caption dialog (style, words per caption, model, language).
     pub caption_options: op_application::captions::CaptionOptions,
+    pub silence_settings: op_application::silence::SilenceSettings,
     pub caption_model: op_application::captions::ModelSize,
     pub caption_translate: bool,
     pub caption_language: usize,
@@ -93,6 +94,7 @@ pub(crate) struct State {
     pub tl: timeline::TimelineView,
     pub proj: project_panel::ProjectView,
     pub fx: effects_panel::EffectsView,
+    pub nodes: crate::color_nodes::NodesView,
     pub ec: effect_controls::EcView,
     /// Captions panel: style edits go to every caption (else to the selected ones).
     pub captions_all: bool,
@@ -217,6 +219,7 @@ impl App {
             pastes: Vec::new(),
             next_paste: 1,
             caption_options: Default::default(),
+            silence_settings: Default::default(),
             caption_model: op_application::captions::ModelSize::Base,
             caption_language: crate::dialogs::default_caption_language(),
             caption_translate: false,
@@ -230,6 +233,7 @@ impl App {
             tl: timeline::TimelineView::default(),
             proj: project_panel::ProjectView::default(),
             fx: effects_panel::EffectsView::default(),
+            nodes: Default::default(),
             ec: effect_controls::EcView::default(),
             captions_all: true,
             assistants: None,
@@ -485,6 +489,19 @@ impl State {
                     self.ed.error(t("Open a sequence first"));
                 } else {
                     let d = Dialog::captions(self);
+                    self.dialogs.push(d);
+                }
+            }
+            "op.clip.silencebatch" => {
+                let d = Dialog::silence_batch(self);
+                self.dialogs.push(d);
+            }
+            "op.clip.removesilence" => {
+                if self.ed.active.is_none() {
+                    self.ed.error(t("Open a sequence first"));
+                } else if self.ed.silencing.is_some() {
+                    self.ed.error(t("An analysis is already running"));
+                } else if let Some(d) = Dialog::silence(self) {
                     self.dialogs.push(d);
                 }
             }
@@ -979,6 +996,7 @@ impl State {
             Panel::Markers => panels::markers(self, ui),
             Panel::Info => panels::info(self, ui),
             Panel::Lumetri => panels::lumetri(self, ui),
+            Panel::ColorNodes => crate::color_nodes::show(self, ui),
             Panel::Scopes => panels::scopes(self, ui),
             Panel::Graphics => panels::graphics(self, ui),
             Panel::Captions => crate::captions_panel::captions(self, ui),

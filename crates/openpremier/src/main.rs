@@ -12,6 +12,9 @@ Usage: openpremier [options] [project or media files...]
 Options:
   --portable     keep settings, caches and autosaves next to the program
   --self-test    check FFmpeg and the GPU renderer without opening a window
+  --remove-silence <in> <out>
+                 cut silences (and fillers, repeats) out of a file; see
+                 --remove-silence --help for the options
   --mcp          serve AI assistants (Model Context Protocol over standard input and
                  output): edits the open OpenPremier window when it allows assistants,
                  else a project of its own (the first project file given, if any)
@@ -40,6 +43,33 @@ fn init_logging(dirs: &op_application::Dirs) {
         op_application::recovery::emergency_save();
         prev(info);
     }));
+}
+
+/// Prints a line where the user can read it. The program is a window application on Windows:
+/// when its output is redirected (a pipe, a file) that is used; otherwise it joins the console it
+/// was started from.
+fn console(text: &str) {
+    #[cfg(windows)]
+    {
+        use std::io::Write;
+        unsafe extern "system" {
+            fn AttachConsole(process: u32) -> i32;
+            fn GetStdHandle(which: u32) -> isize;
+        }
+        // SAFETY: plain queries of this process's handles; AttachConsole joins the parent's console
+        unsafe {
+            let out = GetStdHandle(-11i32 as u32);
+            if out == 0 || out == -1 {
+                if AttachConsole(u32::MAX) != 0
+                    && let Ok(mut con) = std::fs::OpenOptions::new().write(true).open("CONOUT$")
+                {
+                    let _ = writeln!(con, "{text}");
+                }
+                return;
+            }
+        }
+    }
+    println!("{text}");
 }
 
 fn exe_dir() -> Option<PathBuf> {
@@ -184,6 +214,23 @@ fn main() {
         .filter(|a| !a.starts_with("--"))
         .map(PathBuf::from)
         .collect();
+    if let Some(at) = args.iter().position(|a| a == "--remove-silence") {
+        let rest = &args[at + 1..];
+        let prefs = op_application::Preferences::load(&dirs);
+        let result = if rest.iter().any(|a| a == "--help" || a == "-h") {
+            Ok(op_mcp::cli::USAGE.to_string())
+        } else {
+            op_mcp::cli::remove_silence(rest, &dirs, &prefs)
+        };
+        match result {
+            Ok(text) => console(&text),
+            Err(e) => {
+                console(&format!("error: {e}"));
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if args.iter().any(|a| a == "--mcp") {
         serve_assistants(dirs, open.first());
         return;

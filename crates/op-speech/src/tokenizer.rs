@@ -12,6 +12,10 @@ pub struct Tokenizer {
     ids: HashMap<String, u32>,
     /// Inverse of GPT-2's bytes-to-characters table.
     byte_of: HashMap<char, u8>,
+    /// GPT-2's table from bytes to characters.
+    char_of: Vec<char>,
+    /// Merge ranks of the BPE vocabulary: (left, right) -> position (lower merges first).
+    ranks: HashMap<(String, String), usize>,
 }
 
 /// GPT-2's table from bytes to the printable characters used in the vocabulary.
@@ -64,7 +68,26 @@ impl Tokenizer {
                 "tokenizer.json has no vocabulary".into(),
             ));
         }
-        Ok(Self::from_ids(ids))
+        let mut tok = Self::from_ids(ids);
+        if let Some(merges) = json.pointer("/model/merges").and_then(|v| v.as_array()) {
+            for (rank, m) in merges.iter().enumerate() {
+                // "a b" in older files, ["a", "b"] in newer ones
+                let pair = match m {
+                    serde_json::Value::String(s) => s
+                        .split_once(' ')
+                        .map(|(a, b)| (a.to_string(), b.to_string())),
+                    serde_json::Value::Array(a) if a.len() == 2 => Some((
+                        a[0].as_str().unwrap_or("").to_string(),
+                        a[1].as_str().unwrap_or("").to_string(),
+                    )),
+                    _ => None,
+                };
+                if let Some(p) = pair {
+                    tok.ranks.insert(p, rank);
+                }
+            }
+        }
+        Ok(tok)
     }
 
     pub fn from_ids(ids: HashMap<String, u32>) -> Tokenizer {
@@ -73,12 +96,63 @@ impl Tokenizer {
         for (t, id) in &ids {
             by_id[*id as usize] = Some(t.clone());
         }
-        let byte_of = bytes_to_chars().into_iter().map(|(b, c)| (c, b)).collect();
+        let table = bytes_to_chars();
+        let byte_of = table.iter().map(|(b, c)| (*c, *b)).collect();
+        let mut char_of = vec!['?'; 256];
+        for (b, c) in &table {
+            char_of[*b as usize] = *c;
+        }
         Tokenizer {
             by_id,
             ids,
             byte_of,
+            char_of,
+            ranks: HashMap::new(),
         }
+    }
+
+    /// Token ids of `text` (byte-level BPE, words split at spaces). Used for the short prompts
+    /// that steer the decoder; tokens the vocabulary lacks are skipped.
+    pub fn encode(&self, text: &str) -> Vec<u32> {
+        let mut out = Vec::new();
+        let mut word = String::new();
+        let flush = |word: &mut String, out: &mut Vec<u32>| {
+            if word.is_empty() {
+                return;
+            }
+            // the word's bytes, spelled with the vocabulary's characters
+            let mut parts: Vec<String> = word
+                .bytes()
+                .map(|b| self.char_of[b as usize].to_string())
+                .collect();
+            // merge the best-ranked pair until none is left
+            loop {
+                let best = (0..parts.len().saturating_sub(1))
+                    .filter_map(|i| {
+                        self.ranks
+                            .get(&(parts[i].clone(), parts[i + 1].clone()))
+                            .map(|r| (*r, i))
+                    })
+                    .min();
+                let Some((_, i)) = best else { break };
+                let merged = format!("{}{}", parts[i], parts[i + 1]);
+                parts.splice(i..=i + 1, [merged]);
+            }
+            for p in parts {
+                if let Some(id) = self.ids.get(&p) {
+                    out.push(*id);
+                }
+            }
+            word.clear();
+        };
+        for c in text.chars() {
+            if c == ' ' {
+                flush(&mut word, &mut out);
+            }
+            word.push(c);
+        }
+        flush(&mut word, &mut out);
+        out
     }
 
     pub fn id(&self, token: &str) -> Option<u32> {
@@ -131,5 +205,26 @@ mod tests {
         let tok = Tokenizer::from_ids(ids);
         assert_eq!(tok.decode(&[0, 1, 2], 100), " canción");
         assert_eq!(tok.id("<|endoftext|>"), Some(2));
+    }
+
+    #[test]
+    fn text_is_merged_by_rank() {
+        let mut ids = HashMap::new();
+        for (i, t) in ["h", "i", "hi", "Ġ", "Ġh", "Ġhi", "t", "Ġt"]
+            .iter()
+            .enumerate()
+        {
+            ids.insert(t.to_string(), i as u32);
+        }
+        let mut tok = Tokenizer::from_ids(ids);
+        for (rank, (a, b)) in [("Ġ", "h"), ("Ġh", "i"), ("h", "i"), ("Ġ", "t")]
+            .iter()
+            .enumerate()
+        {
+            tok.ranks.insert((a.to_string(), b.to_string()), rank);
+        }
+        // "hi hi" is "hi" then " hi", and the letters nothing merges stay apart
+        assert_eq!(tok.encode("hi hi"), vec![2, 5]);
+        assert_eq!(tok.encode("hi t"), vec![2, 7]);
     }
 }

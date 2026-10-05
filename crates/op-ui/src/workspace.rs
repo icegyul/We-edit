@@ -19,13 +19,14 @@ pub enum Panel {
     Markers,
     Info,
     Lumetri,
+    ColorNodes,
     Scopes,
     Graphics,
     Captions,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 16] = [
+    pub const ALL: [Panel; 17] = [
         Panel::Project,
         Panel::Source,
         Panel::Program,
@@ -39,6 +40,7 @@ impl Panel {
         Panel::Markers,
         Panel::Info,
         Panel::Lumetri,
+        Panel::ColorNodes,
         Panel::Scopes,
         Panel::Graphics,
         Panel::Captions,
@@ -59,6 +61,7 @@ impl Panel {
             Panel::Markers => "Markers",
             Panel::Info => "Info",
             Panel::Lumetri => "Lumetri Color",
+            Panel::ColorNodes => "Color Nodes",
             Panel::Scopes => "Lumetri Scopes",
             Panel::Graphics => "Essential Graphics",
             Panel::Captions => "Captions",
@@ -153,8 +156,11 @@ impl Workspace {
                 t.split_right(timeline, 0.955, vec![Meters]);
             }
             Workspace::Color => {
-                let [left, _lumetri] =
-                    t.split_right(NodeIndex::root(), 0.76, vec![Lumetri, EffectControls]);
+                let [left, _lumetri] = t.split_right(
+                    NodeIndex::root(),
+                    0.45,
+                    vec![ColorNodes, Lumetri, EffectControls],
+                );
                 let [bottom, top] = t.split_above(left, 0.52, vec![Program]);
                 t.split_left(top, 0.45, vec![Scopes, Source]);
                 let [timeline, _project] =
@@ -200,7 +206,7 @@ impl Workspace {
 
 /// Saved layouts carry this version in their file name; a new factory layout replaces layouts
 /// saved by older versions.
-pub const LAYOUT_VERSION: u32 = 3;
+pub const LAYOUT_VERSION: u32 = 4;
 
 /// Layout JSON as saved: rectangles that were never laid out are NaN, which JSON writes as
 /// null; they are restored as zero (egui_dock recomputes them on the next frame).

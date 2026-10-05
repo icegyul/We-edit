@@ -111,6 +111,7 @@ impl Renderer {
                 P::new().f(fx.choice("channel") as f32).f(fx.f32("blend")),
             ),
             "op.video.lumetri" => self.lumetri(fx, img, s),
+            "op.video.color_nodes" => self.color_graph(&fx.text("graph"), img, s),
             "op.video.tint" => self.single(
                 "fs_tint",
                 img,
@@ -544,6 +545,192 @@ impl Renderer {
                         .f(frame % 997.0),
                 )
             }
+            "op.video.stock_grain" => {
+                // size, clumping and strength of each stock
+                const STOCKS: [(f32, f32, f32); 5] = [
+                    (2.6, 0.75, 1.5),
+                    (1.9, 0.55, 1.25),
+                    (1.3, 0.4, 1.0),
+                    (0.8, 0.2, 0.7),
+                    (1.7, 0.85, 1.9),
+                ];
+                let (size, clump, strength) = STOCKS[(fx.choice("stock") as usize).min(4)];
+                let frame = if fx.bool("animated") {
+                    (clip_time * 24.0).floor()
+                } else {
+                    0.0
+                };
+                self.single(
+                    "fs_stock_grain",
+                    img,
+                    P::new()
+                        .f(fx.f32("amount") / 100.0 * strength)
+                        .f((size * s).max(0.5))
+                        .f((clump + fx.f32("roughness") / 100.0 - 0.4).clamp(0.0, 1.0))
+                        .f(fx.f32("color") / 100.0)
+                        .f(fx.f32("shadows").max(0.0) / 100.0)
+                        .f((-fx.f32("shadows")).max(0.0) / 100.0)
+                        .f(frame % 997.0),
+                )
+            }
+            "op.video.sensor_noise" => {
+                let frame = if fx.bool("animated") {
+                    (clip_time * 24.0).floor()
+                } else {
+                    0.0
+                };
+                self.single(
+                    "fs_sensor_noise",
+                    img,
+                    P::new()
+                        .f(fx.f32("luma") / 100.0)
+                        .f(fx.f32("chroma") / 100.0)
+                        .f(fx.f32("blotch") * s)
+                        .f(fx.f32("shadows") / 100.0)
+                        .f(frame % 997.0),
+                )
+            }
+            "op.video.salt_pepper" => {
+                let frame = if fx.bool("animated") {
+                    (clip_time * 24.0).floor()
+                } else {
+                    0.0
+                };
+                self.single(
+                    "fs_salt_pepper",
+                    img,
+                    P::new()
+                        .f(fx.f32("amount") / 100.0)
+                        .f((fx.f32("size") * s).max(1.0))
+                        .b(fx.bool("color"))
+                        .f(frame % 997.0),
+                )
+            }
+            "op.video.tv_static" => {
+                let frame = if fx.bool("animated") {
+                    (clip_time * 30.0).floor()
+                } else {
+                    0.0
+                };
+                self.single(
+                    "fs_tv_static",
+                    img,
+                    P::new()
+                        .f(fx.f32("amount") / 100.0)
+                        .f((fx.f32("size") * s).max(1.0))
+                        .f(fx.f32("scan_lines") / 100.0)
+                        .f(fx.f32("bands") / 100.0)
+                        .f(frame % 997.0),
+                )
+            }
+            "op.video.fractal_noise" => self.single(
+                "fs_fractal_noise",
+                img,
+                P::new()
+                    .f(fx.f32("size") * s)
+                    .f(fx.f32("octaves"))
+                    .f(fx.f32("evolution") / 20.0)
+                    .f(fx.f32("opacity") / 100.0)
+                    .f(fx.f32("brightness") / 100.0)
+                    .f(fx.f32("contrast") / 100.0)
+                    .f(fx.choice("blend") as f32)
+                    .b(fx.bool("colored"))
+                    .f(fx.f32("offset_x") * s)
+                    .f(fx.f32("offset_y") * s)
+                    .f(fx.f32("seed")),
+            ),
+            "op.video.film_dust" => self.single(
+                "fs_film_dust",
+                img,
+                P::new()
+                    .f(fx.f32("dust") / 100.0)
+                    .f(fx.f32("hairs") / 100.0)
+                    .f(fx.f32("scratches") / 100.0)
+                    .f(fx.f32("size") / 100.0)
+                    .f(fx.f32("seed"))
+                    .f(fx.f32("rate"))
+                    .f(fx.choice("kind") as f32)
+                    .time(clip_time),
+            ),
+            "op.video.film_emulation" => self.single(
+                "fs_film_emulation",
+                img,
+                P::new()
+                    .f(fx.choice("look") as f32)
+                    .f(fx.f32("amount") / 100.0),
+            ),
+            "op.video.bleach_bypass" => self.single(
+                "fs_bleach_bypass",
+                img,
+                P::new()
+                    .f(fx.f32("amount") / 100.0)
+                    .f(fx.f32("contrast"))
+                    .f(fx.f32("color") / 100.0),
+            ),
+            "op.video.split_tone" => self.single(
+                "fs_split_tone",
+                img,
+                P::new()
+                    .f(fx.f32("amount") / 100.0)
+                    .f(fx.f32("shadow_hue"))
+                    .f(fx.f32("highlight_hue"))
+                    .f(fx.f32("shadow_strength") / 100.0)
+                    .f(fx.f32("highlight_strength") / 100.0)
+                    .f(fx.f32("balance") / 100.0)
+                    .f(fx.f32("saturation") / 100.0),
+            ),
+            "op.video.gate_weave" => self.single(
+                "fs_gate_weave",
+                img,
+                P::new()
+                    .f(fx.f32("weave") * s)
+                    .f(fx.f32("rotation"))
+                    .f(fx.f32("rate"))
+                    .f(fx.f32("flicker") / 100.0)
+                    .f(fx.f32("seed"))
+                    .time(clip_time),
+            ),
+            "op.video.pro_mist" => self.single(
+                "fs_promist",
+                img,
+                P::new()
+                    .f(fx.f32("amount") / 100.0)
+                    .f(fx.f32("radius") * s)
+                    .f(fx.f32("threshold") / 100.0)
+                    .f(fx.f32("warmth") / 100.0),
+            ),
+            "op.video.anamorphic_streaks" => self.single(
+                "fs_anamorphic",
+                img,
+                P::new()
+                    .f(fx.f32("threshold") / 100.0)
+                    .f(fx.f32("length") * s)
+                    .f(fx.f32("intensity") / 100.0)
+                    .rgb(fx.color("tint")),
+            ),
+            "op.video.chromatic_aberration" => self.single(
+                "fs_chromatic",
+                img,
+                P::new()
+                    .f(fx.f32("amount") * s)
+                    .f(fx.choice("mode") as f32)
+                    .f(fx.f32("angle")),
+            ),
+            "op.video.super_8" => self.single(
+                "fs_super8",
+                img,
+                P::new()
+                    .f(fx.f32("grain") / 100.0)
+                    .f(fx.f32("weave") * s)
+                    .f(fx.f32("flicker") / 100.0)
+                    .f(fx.f32("warmth") / 100.0)
+                    .f(fx.f32("fade") / 100.0)
+                    .f(fx.f32("leak") / 100.0)
+                    .f(fx.f32("vignette") / 100.0)
+                    .f(fx.f32("saturation") / 100.0)
+                    .f(0.0)
+                    .time(clip_time),
+            ),
             "op.video.vignette" => self.single(
                 "fs_vignette",
                 img,

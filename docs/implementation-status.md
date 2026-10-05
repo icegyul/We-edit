@@ -1,7 +1,7 @@
 # Implementation status
 
 **Snapshot:** 2026-10-02<br>
-**Application version:** 0.8.0 technical alpha<br>
+**Application version:** 0.9.0 technical alpha<br>
 **Primary language/UI:** Rust 2024 / egui 0.36<br>
 **Compatibility validation:** in progress; full parity has not been established
 
@@ -16,7 +16,7 @@ flow:
 | Check | Result |
 |---|---|
 | `cargo xtask lint` | rustfmt and Clippy passed with warnings denied |
-| `cargo xtask test` | 173 tests passed on Windows; the same suite runs on Linux (software Vulkan) and macOS (Metal) in CI with the GPU tests required |
+| `cargo xtask test` | 187 tests passed on Windows; the same suite runs on Linux (software Vulkan) and macOS (Metal) in CI with the GPU tests required |
 | Windows release package | final-layout `--self-test` passed |
 | Linux AppImage | WSL `--self-test` passed; startup passed in Ubuntu 22.04 and Fedora 42 containers |
 
@@ -35,7 +35,8 @@ known compositor pixel. It is a startup/integration check, not a performance or 
 | Captions | Local speech recognition (Whisper Tiny/Base/Small through candle, CPU, downloaded on request) with language detection over the three most voiced 30-second stretches, transcription or English translation, a cached text decoder and silence skipping; words timed within each timed span; captions as graphics clips with a Caption component, 12 animated styles, SRT/WebVTT import and export; Captions panel with the caption list and style controls for all or selected captions | Word times are proportional within Whisper's timed spans, not aligned to the audio; splitting and merging captions in the panel; transcription runs on the CPU |
 | Audio | Sample-accurate floating-point mixer, meters, device output, EQ/dynamics/delay/reverb foundations; tremolo, auto-pan, phaser, bitcrusher, distortion, noise gate, pitch shifter and telephone/radio voices with unit tests | VST3 hosting, exhaustive routing, 5.1/adaptive parity, and DSP oracle tests remain pending |
 | Performance | Five profiles (animations, redraw rate, preview resolution, frame cache, read-ahead, late-frame wait, thumbnails and waveforms) plus custom settings, with a hardware check (processor, memory, graphics card type) that recommends one, offered at first start; software-only rendering and adapter fallback down to WARP/llvmpipe; core shaders at start, effect shaders in idle frames or on first use | Zero-copy decoder/GPU interop and a render cache for heavy sections remain on the roadmap |
-| Assistants | MCP server (`--mcp`) with 28 tools on a headless editor or, when allowed, the open window through a local key-protected port; each tool call is one undo step; rendered frames returned as PNG | No keyframe, Lumetri-preset or audio-mix tools yet; long tools in the open window report that they started, not when they end |
+| Silence | `op-silence`: loudness, relative, adaptive-floor, speech-band (FFT features) and neural (Earshot) detection with minimum silence and sound lengths and padding; transcript cuts (fillers in 6 languages, repeated words and phrases, repeated takes, word gaps) snapped to the quietest moment; dialog with waveform preview and per-cut review; ripple cuts across all tracks on frame boundaries with audio crossfades, speed-up and markers as one undo step; assistant tools and a command line | Word times are Whisper's approximate ones; Whisper often drops fillers and writes repeated words once; one microphone cannot be cut separately in a multitrack mix yet |
+| Assistants | MCP server (`--mcp`) with 30 tools on a headless editor or, when allowed, the open window through a local key-protected port; each tool call is one undo step; rendered frames returned as PNG | No keyframe, Lumetri-preset or audio-mix tools yet; long tools in the open window report that they started, not when they end |
 | UI | Sixteen dockable panels, saved workspace layouts, monitors, timeline, effect controls, color picker, centered dialogs, in-app log viewer, English/Spanish catalogs | Multi-monitor, accessibility, IME, HiDPI edge cases, and automated interaction coverage remain incomplete |
 | Reliability | Panels, dialogs, decoders, thumbnails, audio mixing and exports run behind panic boundaries; background recovery file, emergency save and crash reports; program log with runtime level and file switch | Recovery covers the project state, not unfinished exports; no automated crash-injection suite yet |
 | Packaging | Portable Windows ZIP, Linux AppImage, macOS disk images (arm64 and x86_64, built in CI), checksums, licenses, final-layout self-test | The macOS app is signed ad hoc and not notarized |

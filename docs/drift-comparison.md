@@ -91,3 +91,4 @@ roadmap).
 | Text animators, stickers | Next |
 | Beat and scene detection, templates, ducking, loudness | Next |
 | Segmentation, matting, depth, face effects | Later (optional local models) |
+| Silence and filler-word cutting (auto-editor, unsilence, tightcut, Recut) | Done in 0.9 (five detectors, transcript cuts, preview, batch; Drift adds VAD and forced alignment, which are next) |

@@ -6,6 +6,7 @@
 //! project and the user sees every edit as it happens (and can undo it). Otherwise they act on a
 //! project of their own, saved with `save_project`.
 
+pub mod cli;
 pub mod live;
 pub mod render;
 pub mod tools;

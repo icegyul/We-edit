@@ -7,6 +7,7 @@
 //! already converted on the GPU.
 
 pub mod captions;
+mod colorgraph;
 mod effects;
 pub mod gpu;
 pub mod lut;
