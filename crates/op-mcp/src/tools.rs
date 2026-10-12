@@ -258,6 +258,18 @@ pub fn list() -> Json {
             &["sound_id"]
         ),
         tool(
+            "list_motion_templates",
+            "Lists the motion templates (animated titles and graphics): id, name, what it looks like, how many text lines it takes and its default text. Use add_motion_template to put one on the timeline.",
+            json!({}),
+            &[]
+        ),
+        tool(
+            "add_motion_template",
+            "Puts an animated template (pop-up title, name tag, highlight box, subscribe pop-up, flash, shake text, slide title, marker text, speech bubble, title band) on the timeline at `at` seconds (default: the playhead) as a group of graphics clips on free video tracks. Every value stays editable (get_timeline detail shows the keyframes).",
+            json!({"template": s("Id from list_motion_templates"), "text": s("Main text (title, name, label); default text of the template when omitted"), "sub": s("Second line, for templates with two lines"), "color": s("Accent color as #RRGGBB"), "seconds": num("Length in seconds (default: the template's)"), "at": num("Seconds on the timeline (default: the playhead)")}),
+            &["template"]
+        ),
+        tool(
             "make_shorts",
             "Makes a vertical 1080x1920 sequence (for Shorts, Reels, TikTok) from the active horizontal one and opens it; the original stays as it is. The horizontal sequence is nested whole: layout=fill crops it to fill the frame (focus picks the stretch that stays, 0 left to 1 right), layout=blur keeps the whole picture in the middle over a blurred enlarged copy. Afterwards transcribe_sentences works on the new sequence, and captions made there get the vertical layout.",
             json!({"layout": s("fill or blur (default fill)"), "focus": num("fill only: where to look, 0 left, 0.5 middle, 1 right (default 0.5)")}),
@@ -1193,6 +1205,41 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 return Err(format!("the sound could not be added {why}"));
             }
             text(json!({"added": id}))
+        }
+        "list_motion_templates" => {
+            let list: Vec<Json> = op_application::motion_templates::TEMPLATES
+                .iter()
+                .map(|t| json!({"id": t.id, "name": t.name, "note": t.note, "text_lines": t.lines, "default_text": t.default_text, "default_sub": t.default_sub, "default_seconds": t.seconds}))
+                .collect();
+            text(json!({"templates": list}))
+        }
+        "add_motion_template" => {
+            use op_application::motion_templates::{TemplateOptions, find as find_template};
+            let id = str_arg(a, "template").ok_or("template is required")?;
+            let t = find_template(id).ok_or_else(|| format!("template {id} is unknown: use list_motion_templates"))?;
+            active(ed)?;
+            let accent = match str_arg(a, "color") {
+                Some(c) => {
+                    let h = c.trim_start_matches('#');
+                    let v = u32::from_str_radix(h, 16).map_err(|_| "color must look like #RRGGBB".to_string())?;
+                    if h.len() != 6 {
+                        return Err("color must look like #RRGGBB".into());
+                    }
+                    [((v >> 16) & 255) as f32 / 255.0, ((v >> 8) & 255) as f32 / 255.0, (v & 255) as f32 / 255.0]
+                }
+                None => t.accent,
+            };
+            let o = TemplateOptions {
+                text: str_arg(a, "text").unwrap_or(t.default_text).to_string(),
+                sub: str_arg(a, "sub").unwrap_or(t.default_sub).to_string(),
+                accent,
+                seconds: f64_arg(a, "seconds").unwrap_or(t.seconds),
+            };
+            if let Some(at) = f64_arg(a, "at") {
+                ed.set_playhead(SeqTime::from_seconds(at.max(0.0)));
+            }
+            let clips = ed.add_motion_template(id, &o)?;
+            text(json!({"clips": clips, "clip_ids": ed.selection.clips.iter().map(|c| c.0).collect::<Vec<_>>()}))
         }
         "make_shorts" => {
             let layout = match str_arg(a, "layout").unwrap_or("fill") {

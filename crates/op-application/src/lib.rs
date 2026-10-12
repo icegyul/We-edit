@@ -16,6 +16,7 @@ pub mod export;
 pub mod keymap;
 pub mod logging;
 pub mod media;
+pub mod motion_templates;
 pub mod merge;
 pub mod performance;
 pub mod prefs;

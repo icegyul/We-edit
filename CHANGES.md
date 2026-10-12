@@ -17,6 +17,7 @@ We edit는 **OpenPremier 0.9.0**(커밋 `cda185d`)을 바탕으로 합니다. �
 - **쇼츠(세로) 시퀀스** (`shorts.rs`): 시퀀스 메뉴 > 쇼츠(세로) 시퀀스 만들기. 가로 시퀀스를 1080x1920 새 시퀀스에 중첩해 '화면 꽉 채우기(보여줄 위치 선택)' 또는 '블러 배경'으로 맞춥니다. 원본은 그대로 둡니다. AI 도구 `make_shorts`.
 - **내보내기 형식 추가** (`op-media/src/encode.rs`, 내보내기 프리셋): Apple ProRes 422 Proxy/LT/422/422 HQ/4444/4444 XQ(.mov), Sony XDCAM HD422 50 Mbps 호환 MXF(.mxf), YouTube 1440p·720p·쇼츠(1080x1920) 프리셋. 모든 코덱을 실제로 내보내 다시 열어 확인하는 테스트(`export_formats.rs`)가 있습니다. XDCAM은 Sony 인증이 아닌 '호환 규격'입니다.
 - **효과음·배경음 라이브러리** (`sound_library.rs`, `sounds_panel.rs`, `data/sounds.json`, `tools/build_sound_catalog.py`): 저작권 걱정 없는(CC0) 효과음·배경음 806개 목록. 파일은 설치하지 않고, 듣거나 추가할 때 GitHub에서(커밋 고정 주소) 한 번만 내려받습니다. 창 > 효과음·배경음, AI 도구 `search_sounds`·`add_sound`.
+- **모션 템플릿 10종** (`motion_templates.rs`, `templates_panel.rs`): 팝업 제목, 하단 이름표, 강조 박스, 구독·좋아요 알림, 화면 번쩍, 충격 흔들림 글자, 슬라이드 제목, 형광펜 글자, 말풍선 팝, 제목 띠. 텍스트·도형 그래픽 클립에 키프레임을 입혀 한 묶음으로 타임라인에 넣으며, 효과 컨트롤에서 모두 고칠 수 있습니다. AI 도구 `list_motion_templates`·`add_motion_template`.
 - **Whisper 모델 선택·다운로드** (`whisper_models.rs`, 환경 설정).
 - **자막 디자인 12종** (`caption_designs.rs`): 예능·말자막·뉴스·쇼츠·먹방·네온·손글씨 등. 문장 편집 패널(새 자막)과 자막 패널(기존 자막)에서 고르며, 글꼴(OFL, google/fonts)은 처음 쓸 때 한 번 내려받습니다.
 - 새 AI 도구(MCP): `sync_by_audio`, `synchronize_clips`, `transcribe_sentences`, `get_sentences`, `delete_sentences`,

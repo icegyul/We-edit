@@ -110,6 +110,8 @@ pub(crate) struct State {
     pub comfy: crate::comfy_panel::ComfyView,
     /// The Sounds panel: tab, search and category.
     pub sounds: crate::sounds_panel::SoundsView,
+    /// The Motion Templates panel: chosen template and its texts.
+    pub templates: crate::templates_panel::TemplatesView,
     pub scopes: panels::ScopesView,
     pub meters: panels::MeterState,
     pub graphics: panels::GraphicsView,
@@ -252,6 +254,7 @@ impl App {
             sentences: Default::default(),
             comfy: Default::default(),
             sounds: Default::default(),
+            templates: Default::default(),
             scopes: panels::ScopesView::default(),
             meters: panels::MeterState::default(),
             graphics: panels::GraphicsView::default(),
@@ -1033,6 +1036,7 @@ impl State {
             Panel::Sentences => crate::sentences_panel::show(self, ui),
             Panel::Comfy => crate::comfy_panel::show(self, ui),
             Panel::Sounds => crate::sounds_panel::show(self, ui),
+            Panel::Templates => crate::templates_panel::show(self, ui),
         }));
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);
