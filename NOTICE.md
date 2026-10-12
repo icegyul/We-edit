@@ -24,6 +24,9 @@ affiliated with Adobe.
 | Workflow files adapted from joenorton/comfyui-mcp-server | Apache-2.0 | Z-Image / MiniMax H3 workflows |
 | Krea 2 Turbo (Comfy-Org/Krea-2) workflow wiring | see the model card | Krea 2 workflow (models downloaded by the user) |
 | Korean caption fonts from google/fonts: Black Han Sans, Do Hyeon, Jua, Nanum Gothic, Nanum Myeongjo, IBM Plex Sans KR, Gothic A1, Bagel Fat One, Gugi, Gaegu, Sunflower, Dongle | SIL OFL 1.1 | caption designs; each font file is downloaded on first use of a design (commit-pinned URL), not shipped |
+| Sound effects of Kenney (kenney.nl), found through the index Mcamento8/open-game-sfx-index | CC0 1.0 | sound library, downloaded on demand (commit-pinned) |
+| RezaParsian/free-sfx-bgm-pack (sounds synthesized from code) | CC0 1.0 | sound library, downloaded on demand |
+| AERIS MUSIC tracks (farmmer938-lgtm/aeris-cc0-music) | CC0 1.0 | sound library, downloaded on demand |
 
 Model files are never part of this repository; they are downloaded by the user from their
 original sources and keep their own licenses.

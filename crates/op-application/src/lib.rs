@@ -26,6 +26,7 @@ pub mod sentences;
 pub mod whisper_models;
 pub mod session;
 pub mod shorts;
+pub mod sound_library;
 pub mod silence;
 
 pub use editor::{APP_NAME, Editor, LoadedProject, Placement, Status, Transport};

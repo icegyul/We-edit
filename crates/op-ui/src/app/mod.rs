@@ -108,6 +108,8 @@ pub(crate) struct State {
     pub sentences: crate::sentences_panel::SentencesView,
     /// The ComfyUI panel: what to make and ComfyUI's last answer.
     pub comfy: crate::comfy_panel::ComfyView,
+    /// The Sounds panel: tab, search and category.
+    pub sounds: crate::sounds_panel::SoundsView,
     pub scopes: panels::ScopesView,
     pub meters: panels::MeterState,
     pub graphics: panels::GraphicsView,
@@ -249,6 +251,7 @@ impl App {
             accounts: Default::default(),
             sentences: Default::default(),
             comfy: Default::default(),
+            sounds: Default::default(),
             scopes: panels::ScopesView::default(),
             meters: panels::MeterState::default(),
             graphics: panels::GraphicsView::default(),
@@ -1029,6 +1032,7 @@ impl State {
             Panel::Ai => crate::ai_panel::show(self, ui),
             Panel::Sentences => crate::sentences_panel::show(self, ui),
             Panel::Comfy => crate::comfy_panel::show(self, ui),
+            Panel::Sounds => crate::sounds_panel::show(self, ui),
         }));
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);

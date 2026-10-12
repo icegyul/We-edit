@@ -5,6 +5,7 @@ mod ai_accounts;
 mod ai_panel;
 mod app;
 mod captions_panel;
+mod sounds_panel;
 mod color;
 mod comfy_panel;
 mod color_nodes;

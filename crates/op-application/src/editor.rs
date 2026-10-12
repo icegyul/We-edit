@@ -104,6 +104,8 @@ pub struct Editor {
     pub whisper_dl: Option<crate::whisper_models::Download>,
     /// The font of a caption design being downloaded.
     pub design_font: Option<crate::caption_designs::FontJob>,
+    /// The sound library: downloads and the preview.
+    pub sound: crate::sound_library::SoundState,
     /// Captions to make from the sentence transcript as soon as it is ready.
     pub captions_after: Option<crate::captions::CaptionOptions>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
@@ -194,6 +196,7 @@ impl Editor {
             comfy: Default::default(),
             whisper_dl: None,
             design_font: None,
+            sound: Default::default(),
             captions_after: None,
             last_import_report: None,
             autosave_at: Instant::now(),
@@ -1165,6 +1168,7 @@ impl Editor {
         self.poll_comfy();
         self.poll_whisper_download();
         self.poll_design_font();
+        self.poll_sound();
         if !self.background {
             self.autosave();
             self.keep_recovery();

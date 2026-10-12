@@ -26,10 +26,11 @@ pub enum Panel {
     Ai,
     Sentences,
     Comfy,
+    Sounds,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 20] = [
+    pub const ALL: [Panel; 21] = [
         Panel::Project,
         Panel::Source,
         Panel::Program,
@@ -50,6 +51,7 @@ impl Panel {
         Panel::Ai,
         Panel::Sentences,
         Panel::Comfy,
+        Panel::Sounds,
     ];
 
     pub fn title(self) -> &'static str {
@@ -74,6 +76,7 @@ impl Panel {
             Panel::Ai => "AI 편집 도우미",
             Panel::Sentences => "문장 편집",
             Panel::Comfy => "ComfyUI",
+            Panel::Sounds => "효과음·배경음",
         }
     }
 
@@ -150,7 +153,7 @@ impl Workspace {
                     vec![Source, EffectControls, AudioMixer, Graphics, Captions],
                 );
                 // the AI assistant beside the program monitor
-                t.split_right(program, 0.68, vec![Ai, Sentences, Comfy]);
+                t.split_right(program, 0.68, vec![Ai, Sentences, Comfy, Sounds]);
                 let [timeline, _project] =
                     t.split_left(bottom, 0.3, vec![Project, Effects, Markers, History, Info]);
                 let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
@@ -217,7 +220,7 @@ impl Workspace {
 
 /// Saved layouts carry this version in their file name; a new factory layout replaces layouts
 /// saved by older versions.
-pub const LAYOUT_VERSION: u32 = 7;
+pub const LAYOUT_VERSION: u32 = 8;
 
 /// Layout JSON as saved: rectangles that were never laid out are NaN, which JSON writes as
 /// null; they are restored as zero (egui_dock recomputes them on the next frame).

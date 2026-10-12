@@ -246,6 +246,18 @@ pub fn list() -> Json {
             &["clip_ids"]
         ),
         tool(
+            "search_sounds",
+            "Searches the sound library: sound effects (kind=sfx: whooshes, impacts, clicks, notification dings, typing, air horn ...) and background music (kind=bgm). All are public domain (CC0): safe to use in any video without credit. Returns id, name (Korean `ko` when there is one), category and seconds; use add_sound with the id. Words match the English name, the Korean name, tags and the category.",
+            json!({"query": s("Words to look for, e.g. whoosh, 휘익, upbeat, lofi; empty lists the category"), "kind": s("sfx (default) or bgm"), "category": s("Exact category name from an earlier result"), "limit": int("How many to return (default 20, at most 60)")}),
+            &[]
+        ),
+        tool(
+            "add_sound",
+            "Puts a sound from the sound library on the timeline at `at` seconds (default: the playhead), on the first audio track that is free there (a new track when all are taken). Downloads the sound the first time (a few seconds).",
+            json!({"sound_id": s("Id from search_sounds, like reza/whoosh_transition"), "at": num("Seconds on the timeline (default: the playhead)")}),
+            &["sound_id"]
+        ),
+        tool(
             "make_shorts",
             "Makes a vertical 1080x1920 sequence (for Shorts, Reels, TikTok) from the active horizontal one and opens it; the original stays as it is. The horizontal sequence is nested whole: layout=fill crops it to fill the frame (focus picks the stretch that stays, 0 left to 1 right), layout=blur keeps the whole picture in the middle over a blurred enlarged copy. Afterwards transcribe_sentences works on the new sequence, and captions made there get the vertical layout.",
             json!({"layout": s("fill or blur (default fill)"), "focus": num("fill only: where to look, 0 left, 0.5 middle, 1 right (default 0.5)")}),
@@ -1141,6 +1153,46 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 .filter(|s| s.error)
                 .map(|s| s.text.clone());
             text(json!({"imported": new, "error": errors}))
+        }
+        "search_sounds" => {
+            let cat = op_application::sound_library::catalog();
+            let kind = str_arg(a, "kind").unwrap_or("sfx");
+            if !matches!(kind, "sfx" | "bgm") {
+                return Err("kind must be sfx or bgm".into());
+            }
+            let limit = a.get("limit").and_then(Json::as_u64).unwrap_or(20).clamp(1, 60) as usize;
+            let query = str_arg(a, "query").unwrap_or("");
+            let category = str_arg(a, "category").unwrap_or("");
+            let found: Vec<&op_application::sound_library::Sound> = cat
+                .sounds
+                .iter()
+                .filter(|x| x.kind == kind && (category.is_empty() || x.cat == category) && x.matches(query))
+                .collect();
+            let shown: Vec<Json> = found
+                .iter()
+                .take(limit)
+                .map(|x| json!({"id": x.id, "name": x.name, "ko": x.ko, "category": x.cat, "seconds": x.sec}))
+                .collect();
+            let mut categories: Vec<&str> = cat.sounds.iter().filter(|x| x.kind == kind).map(|x| x.cat.as_str()).collect();
+            categories.sort_unstable();
+            categories.dedup();
+            text(json!({"total": found.len(), "shown": shown, "categories": categories}))
+        }
+        "add_sound" => {
+            let id = str_arg(a, "sound_id").ok_or("sound_id is required")?;
+            active(ed)?;
+            if let Some(t) = f64_arg(a, "at") {
+                ed.set_playhead(SeqTime::from_seconds(t.max(0.0)));
+            }
+            let count = |e: &Editor| e.active_seq().map_or(0, |s| s.audio.iter().map(|t| t.clips.len()).sum::<usize>());
+            let before = count(ed);
+            ed.sound_request(id, op_application::sound_library::SoundAction::Add)?;
+            wait(ed, 120, |e| e.sound.fetching().is_some());
+            if count(ed) <= before {
+                let why = ed.status.as_ref().filter(|s| s.error).map(|s| s.text.clone()).unwrap_or_default();
+                return Err(format!("the sound could not be added {why}"));
+            }
+            text(json!({"added": id}))
         }
         "make_shorts" => {
             let layout = match str_arg(a, "layout").unwrap_or("fill") {
