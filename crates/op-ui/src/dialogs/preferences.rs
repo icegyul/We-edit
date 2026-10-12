@@ -19,6 +19,10 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
     let mut new_custom: Option<op_application::performance::CustomSettings> = None;
     let mut show_log = false;
     let mut open_logs = false;
+    // (model id, 1 download, 2 cancel)
+    let mut whisper_action: Option<(&'static str, u8)> = None;
+    // 0 nothing, 1 sign in, 2 install Codex
+    let mut account_action: Option<(crate::ai_accounts::Provider, u8)> = None;
     window(ctx, t("Preferences"))
         .open(&mut open)
         .resizable(false)
@@ -545,10 +549,10 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                     ui.vertical(|ui| {
                         let exe = std::env::current_exe()
                             .map(|p| p.display().to_string())
-                            .unwrap_or_else(|_| "OpenPremier".into());
+                            .unwrap_or_else(|_| "We edit".into());
                         for (name, cmd) in [
-                            ("Claude Code", format!("claude mcp add openpremier -- \"{exe}\" --mcp")),
-                            ("Codex", format!("codex mcp add openpremier -- \"{exe}\" --mcp")),
+                            ("Claude Code", format!("claude mcp add we-edit -- \"{exe}\" --mcp")),
+                            ("Codex", format!("codex mcp add we-edit -- \"{exe}\" --mcp")),
                         ] {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new(name).size(11.5).color(theme::TEXT_DIM));
@@ -568,6 +572,115 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                             )
                             .wrap(),
                         );
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(
+                        RichText::new(t("Speech Recognition (Whisper)"))
+                            .strong()
+                            .family(crate::fonts::strong())
+                            .color(theme::TEXT_BRIGHT),
+                    );
+                    ui.end_row();
+                    let downloading = s.ed.whisper_dl.as_ref().map(|d| (d.id, d.progress()));
+                    if downloading.is_some() {
+                        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+                    }
+                    for m in op_application::whisper_models::MODELS {
+                        let ready = op_application::whisper_models::installed(m.id);
+                        let title = format!("{} ({:.1} GB)", m.label, m.megabytes as f32 / 1000.0);
+                        if ui.radio(p.whisper_model == m.id, title).clicked() {
+                            p.whisper_model = m.id.to_string();
+                        }
+                        ui.horizontal_wrapped(|ui| {
+                            match downloading {
+                                Some((id, (done, total))) if id == m.id => {
+                                    let f = (done as f32 / total.max(1) as f32).min(1.0);
+                                    ui.add(egui::ProgressBar::new(f).desired_width(110.0).text(format!("{:.0}%", f * 100.0)));
+                                    if ui.small_button(t("Cancel")).clicked() {
+                                        whisper_action = Some((m.id, 2));
+                                    }
+                                }
+                                _ if ready => {
+                                    ui.label(
+                                        RichText::new(format!("\u{2713} {}", t("Installed")))
+                                            .color(egui::Color32::from_rgb(0x2e, 0x9d, 0x4f)),
+                                    );
+                                }
+                                _ => {
+                                    if ui
+                                        .add_enabled(downloading.is_none(), egui::Button::new(t("Download")))
+                                        .clicked()
+                                    {
+                                        whisper_action = Some((m.id, 1));
+                                    }
+                                }
+                            }
+                            ui.label(RichText::new(t(m.note)).size(11.0).color(theme::TEXT_DIM));
+                        });
+                        ui.end_row();
+                    }
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(
+                        RichText::new(t("AI Accounts"))
+                            .strong()
+                            .family(crate::fonts::strong())
+                            .color(theme::TEXT_BRIGHT),
+                    );
+                    ui.end_row();
+                    s.accounts.poll(ui.ctx());
+                    for (name, which) in [
+                        ("Claude", crate::ai_accounts::Provider::Claude),
+                        ("ChatGPT (Codex)", crate::ai_accounts::Provider::ChatGpt),
+                    ] {
+                        use crate::ai_accounts::{Login, Provider};
+                        ui.label(name);
+                        ui.horizontal_wrapped(|ui| {
+                            let state = match which {
+                                Provider::Claude => s.accounts.claude.clone(),
+                                Provider::ChatGpt => s.accounts.chatgpt.clone(),
+                            };
+                            match state {
+                                Login::SignedIn(who) => {
+                                    ui.label(
+                                        RichText::new(format!("\u{25CF} {} - {}", t("Signed in"), who))
+                                            .color(egui::Color32::from_rgb(0x2e, 0x9d, 0x4f)),
+                                    );
+                                    if ui.button(t("Sign Out")).clicked() {
+                                        s.accounts.sign_out(which, ui.ctx());
+                                    }
+                                }
+                                Login::SignedOut => {
+                                    ui.label(RichText::new(t("Not signed in")).color(theme::WARN));
+                                    if ui.button(t("Sign In")).clicked() {
+                                        account_action = Some((which, 1));
+                                    }
+                                }
+                                Login::Missing => {
+                                    ui.label(RichText::new(t("Not installed")).color(theme::WARN));
+                                    if which == Provider::ChatGpt && ui.button(t("Install")).clicked() {
+                                        account_action = Some((which, 2));
+                                    }
+                                }
+                                Login::Checking | Login::Unknown => {
+                                    ui.label(RichText::new(t("Checking...")).color(theme::TEXT_DIM));
+                                }
+                            }
+                        });
+                        ui.end_row();
+                    }
+                    ui.label(t("AI of the Assistant Panel"));
+                    ui.horizontal(|ui| {
+                        for (label, value) in [("Claude", "claude"), ("ChatGPT", "chatgpt")] {
+                            if ui.selectable_label(p.ai_provider == value, label).clicked() {
+                                p.ai_provider = value.to_string();
+                            }
+                        }
+                        if ui.button(t("Refresh")).clicked() {
+                            s.accounts.refresh(ui.ctx());
+                        }
                     });
                     ui.end_row();
                     ui.label("");
@@ -624,6 +737,21 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
             );
                         });
         });
+    if let Some((id, what)) = whisper_action {
+        if what == 1 {
+            if let Err(e) = s.ed.whisper_download(id) {
+                s.ed.error(e);
+            }
+        } else if let Some(d) = &s.ed.whisper_dl {
+            d.cancel();
+        }
+    }
+    if let Some((which, what)) = account_action {
+        let result = if what == 2 { s.accounts.install_codex() } else { s.accounts.sign_in(which) };
+        if let Err(e) = result {
+            s.ed.error(e);
+        }
+    }
     if show_log && !s.dialogs.iter().any(|d| matches!(d, Dialog::Log { .. })) {
         s.dialogs.push(Dialog::log());
     }

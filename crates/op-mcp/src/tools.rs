@@ -59,7 +59,7 @@ pub fn list() -> Json {
         ),
         tool(
             "open_project",
-            "Opens an OpenPremier project (.opproj), or imports a Premiere Pro (.prproj), OTIO, FCP XML or EDL file.",
+            "Opens a We edit project (.opproj), or imports a Premiere Pro (.prproj), OTIO, FCP XML or EDL file.",
             json!({"path": s("Path of the project file")}),
             &["path"]
         ),
@@ -196,6 +196,78 @@ pub fn list() -> Json {
                 p
             },
             &[]
+        ),
+        tool(
+            "set_keyframes",
+            "Animates one parameter of an effect on a clip with keyframes (zoom, position, opacity, volume over time...). Times are sequence seconds inside the clip. The parameter keeps its keyframes until you pass clear=true, which stops the animation and keeps the value of the first keyframe given (or the current value).",
+            json!({"clip_id": int("Clip id"), "effect": s("Effect id, or its index in the clip's effect list (Motion is 0)"), "param": s("Parameter key from get_timeline with detail, like scale or position"), "keyframes": json!({"type": "array", "description": "[{\"at\": seconds, \"value\": number | [x, y] | ...}]", "items": {"type": "object"}}), "interpolation": s("linear (default), hold, bezier or auto_bezier"), "clear": json!({"type": "boolean", "description": "Remove all keyframes of the parameter"})}),
+            &["clip_id", "effect", "param"]
+        ),
+        tool(
+            "set_track",
+            "Changes a track: lock, mute, solo, eye (video visible), sync lock or name.",
+            json!({"track": s("Track like V1 or A2"), "locked": json!({"type": "boolean"}), "muted": json!({"type": "boolean"}), "solo": json!({"type": "boolean"}), "visible": json!({"type": "boolean", "description": "Video track output on or off"}), "sync_lock": json!({"type": "boolean"}), "name": s("New track name")}),
+            &["track"]
+        ),
+        tool(
+            "add_tracks",
+            "Adds video or audio tracks on top of the existing ones (or at `index`, counted from 0).",
+            json!({"kind": s("video or audio"), "count": int("How many (default 1)"), "index": int("Position among the tracks of that kind; default: on top")}),
+            &["kind"]
+        ),
+        tool(
+            "delete_track",
+            "Deletes a track and its clips (a sequence keeps at least one track of each kind).",
+            json!({"track": s("Track like V3 or A2")}),
+            &["track"]
+        ),
+        tool(
+            "comfy_status",
+            "ComfyUI (the image and video generator): is it running, the running generation, and the latest result with its media_id (ready for add_clip).",
+            json!({}),
+            &[]
+        ),
+        tool(
+            "comfy_start",
+            "Starts ComfyUI if it is not running (it needs a minute or two to load its models). With the program open this returns at once: poll comfy_status until running is true.",
+            json!({}),
+            &[]
+        ),
+        tool(
+            "comfy_generate",
+            "Makes an image (Z-Image Turbo or Krea 2 Turbo) or a video with sound (MiniMax H3) from a description and imports it into the project. Needs ComfyUI running. With the program open it only starts: poll comfy_status until job is null and last_result has a media_id, then use add_clip. Videos take minutes. Describe the scene in English for the best result.",
+            json!({"kind": s("image (Z-Image Turbo), krea2 (Krea 2 Turbo, another image model) or video (MiniMax H3); default image"), "prompt": s("What to generate"), "width": int("Image width in pixels (default 1920)"), "height": int("Image height in pixels (default 1080)"), "seconds": num("Video length in seconds, 2 to 10 (default 5)"), "vertical": json!({"type": "boolean", "description": "Video 9:16 instead of 16:9"}), "seed": int("Fixed seed; omit for a random one"), "add_to_timeline": json!({"type": "boolean", "description": "Only when the program is closed: also put the result on the timeline"})}),
+            &["prompt"]
+        ),
+        tool(
+            "synchronize_clips",
+            "Lines up clips that are already on the timeline (Clip > Synchronize): the clip on the lowest track stays and the others move so that their starts, their ends or their sound match it. Linked video and audio move together. One undo step. With mode=audio the sound of the chosen channel decides; clips whose sound does not match are left where they are and reported.",
+            json!({"clip_ids": ids("Two or more clips on different tracks"), "mode": s("start, end or audio (default audio)"), "channel": s("For audio: 1, 2 or mixdown (default 1)")}),
+            &["clip_ids"]
+        ),
+        tool(
+            "sync_by_audio",
+            "Lines up two to six recordings of the same scene by their sound (several cameras, or a camera and a separate microphone). Returns for each media the second of the sequence where it must start (`timeline_start`, use it as `at` of add_clip on its own track) so that their sound matches. The first media is the reference. A low confidence means the sound did not match: do not use that result.",
+            json!({"media_ids": ids("Media ids from get_project, the reference first"), "max_seconds": num("How much of each recording's beginning to compare (default 600)")}),
+            &["media_ids"]
+        ),
+        tool(
+            "transcribe_sentences",
+            "Writes down what the active sequence says, sentence by sentence, with times (Whisper large-v3 on the graphics card, much more exact than transcribe_captions). With the program open it only starts: call get_sentences until its state is ready. Sentence times are sequence seconds and match the timeline. Needed before delete_sentences.",
+            json!({"language": s("Spoken language like ko or en; empty to detect")}),
+            &[]
+        ),
+        tool(
+            "get_sentences",
+            "The sentences of the latest transcript: id, start-end in sequence seconds and the words, or the progress of a running transcription. A transcript is stale (and delete_sentences refuses it) once the sequence was edited by anything else.",
+            json!({}),
+            &[]
+        ),
+        tool(
+            "delete_sentences",
+            "Cuts whole sentences out of the sequence by their ids (every track, gaps closed, audio crossfaded, one undo step). The other sentences keep their ids and move up with the timeline, so several rounds of deleting work without transcribing again.",
+            json!({"sentence_ids": ids("Sentence ids from get_sentences")}),
+            &["sentence_ids"]
         ),
         tool(
             "add_marker",
@@ -642,12 +714,240 @@ fn analyze_blocking(
         .ok_or_else(|| status_error(ed, "the audio could not be analyzed"))
 }
 
+/// The latest sentence transcript as a compact table (or its progress).
+fn sentences_text(ed: &Editor) -> R {
+    if let Some(job) = &ed.sentencing {
+        let p = job.progress();
+        return Ok(vec![Content::Text(format!(
+            "state: running ({:?}, {:.0}%)
+call get_sentences again in a few seconds",
+            p.stage,
+            p.fraction * 100.0
+        ))]);
+    }
+    let Some(t) = &ed.transcript else {
+        return Ok(vec![Content::Text("state: none
+call transcribe_sentences first".into())]);
+    };
+    let state = if ed.transcript_is_current() {
+        "ready"
+    } else {
+        "stale: the sequence was edited after this transcript, transcribe again"
+    };
+    let mut out = format!("state: {state}
+language: {}  sentences: {}
+id	start-end (sequence seconds)	text
+", t.language, t.sentences.len());
+    for s in &t.sentences {
+        out.push_str(&format!("{}	{:.2}-{:.2}	{}
+", s.id, s.start, s.end, s.text));
+    }
+    Ok(vec![Content::Text(out)])
+}
+
+/// set_keyframes: animate one parameter of an effect on a clip.
+fn set_keyframes(ed: &mut Editor, a: &Json) -> R {
+    let sid = active(ed)?;
+    let clip = ClipId(a.get("clip_id").and_then(Json::as_u64).ok_or("clip_id is required")?);
+    let which = match a.get("effect") {
+        Some(Json::Number(n)) => n.to_string(),
+        Some(Json::String(s)) => s.clone(),
+        _ => return Err("effect is required".into()),
+    };
+    let key = str_arg(a, "param").ok_or("param is required")?.to_string();
+    let clear = a.get("clear").and_then(Json::as_bool).unwrap_or(false);
+    let interp = match str_arg(a, "interpolation").unwrap_or("linear") {
+        "linear" => Interp::Linear,
+        "hold" => Interp::Hold,
+        "bezier" => Interp::Bezier,
+        "auto_bezier" => Interp::AutoBezier,
+        other => return Err(format!("interpolation {other} is unknown: use linear, hold, bezier or auto_bezier")),
+    };
+    let frames: Vec<(f64, Json)> = a
+        .get("keyframes")
+        .and_then(Json::as_array)
+        .map(|v| {
+            v.iter()
+                .filter_map(|k| Some((k.get("at")?.as_f64()?, k.get("value")?.clone())))
+                .collect()
+        })
+        .unwrap_or_default();
+    if frames.is_empty() && !clear {
+        return Err("keyframes (each with at and value) or clear=true is required".into());
+    }
+    let mut err = None;
+    ed.edit("Keyframes", |p| {
+        let fail = |e: String, err: &mut Option<String>| {
+            *err = Some(e);
+            EditError::Nothing
+        };
+        let c = p
+            .sequence_mut(sid)
+            .and_then(|s| s.clip_mut(clip))
+            .ok_or(EditError::NotFound("clip".into()))?;
+        // sequence time -> time inside the source, before the effect is borrowed
+        let (start, end) = (c.start.seconds(), c.end().seconds());
+        let mut times = Vec::new();
+        for (at, v) in &frames {
+            if *at < start - 1e-6 || *at > end + 1e-6 {
+                return Err(fail(format!("keyframe time {at} is outside the clip ({start:.2}-{end:.2})"), &mut err));
+            }
+            times.push((c.to_source(SeqTime::from_seconds(*at)), v));
+        }
+        let comp = find_effect(c, &which).map_err(|e| fail(e, &mut err))?;
+        let def = comp
+            .def()
+            .ok_or_else(|| fail(format!("{} is not a known effect", comp.effect), &mut err))?;
+        let spec = def.params.iter().find(|p| p.key == key).ok_or_else(|| {
+            let keys: Vec<&str> = def.params.iter().map(|p| p.key).collect();
+            fail(format!("{} has no parameter {key}; it has {keys:?}", def.name), &mut err)
+        })?;
+        let values: Vec<(SrcTime, Value)> = times
+            .iter()
+            .map(|(t, v)| to_value(&spec.kind, v).map(|v| (*t, v)))
+            .collect::<Result<_, _>>()
+            .map_err(|e| fail(format!("{key}: {e}"), &mut err))?;
+        let spec_key = spec.key;
+        if comp.param_mut(&key).is_none() {
+            let default = values.first().map(|v| v.1.clone()).unwrap_or(Value::Float(0.0));
+            comp.params.push(Param::new(spec_key, default));
+        }
+        let param = comp
+            .param_mut(&key)
+            .ok_or_else(|| fail("the parameter is missing".into(), &mut err))?;
+        if clear {
+            if let Some((_, v)) = values.first() {
+                param.value = v.clone();
+            } else if let Some(first) = param.keys.first().map(|k| k.time) {
+                param.value = param.value_at(first);
+            }
+            param.animated = false;
+            param.keys.clear();
+        } else {
+            if !param.animated {
+                param.animated = true;
+                param.keys.clear();
+            }
+            for (t, v) in values {
+                param.set_at(t, v, interp);
+            }
+        }
+        Ok(())
+    });
+    match err {
+        Some(e) => Err(e),
+        None => text(json!({"ok": true})),
+    }
+}
+
+/// The latest ComfyUI state for assistants.
+fn comfy_status(ed: &Editor) -> R {
+    let up = op_application::comfy::probe();
+    let job = ed.comfy.job.as_ref().map(|j| {
+        let p = j.progress();
+        json!({"state": p.note, "seconds_running": p.started.elapsed().as_secs()})
+    });
+    let last = ed.comfy.last.as_ref().map(|(p, item)| json!({"path": p, "media_id": item.map(|i| i.0)}));
+    text(json!({
+        "running": up.is_some(),
+        "starting": up.is_none() && ed.comfy.child.is_some(),
+        "job": job,
+        "last_result": last,
+        "last_error": ed.comfy.last_error,
+    }))
+}
+
+fn comfy_request(a: &Json) -> Result<op_application::comfy::Request, String> {
+    use op_application::comfy::{Kind, Request};
+    let kind = match str_arg(a, "kind").unwrap_or("image") {
+        "image" => Kind::Image,
+        "krea2" => Kind::Krea2,
+        "video" => Kind::Video,
+        other => return Err(format!("kind {other} is unknown: use image, krea2 or video")),
+    };
+    let seed = a.get("seed").and_then(Json::as_u64).unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(1)
+    });
+    Ok(Request {
+        kind,
+        prompt: str_arg(a, "prompt").ok_or("prompt is required")?.to_string(),
+        width: a.get("width").and_then(Json::as_u64).unwrap_or(1920) as u32,
+        height: a.get("height").and_then(Json::as_u64).unwrap_or(1080) as u32,
+        seconds: f64_arg(a, "seconds").unwrap_or(5.0),
+        vertical: a.get("vertical").and_then(Json::as_bool).unwrap_or(false),
+        seed,
+    })
+}
+
+/// sync_by_audio: where each recording must start so that their sound lines up.
+fn sync_by_audio(ed: &mut Editor, a: &Json) -> R {
+    let ids: Vec<ItemId> = a
+        .get("media_ids")
+        .and_then(Json::as_array)
+        .map(|v| v.iter().filter_map(Json::as_u64).map(ItemId).collect())
+        .unwrap_or_default();
+    if !(2..=6).contains(&ids.len()) {
+        return Err("media_ids needs two to six media ids".into());
+    }
+    let seconds = f64_arg(a, "max_seconds").unwrap_or(600.0).clamp(10.0, 3600.0);
+    let mut media = Vec::new();
+    for id in &ids {
+        let item = ed.project.item(*id).ok_or(format!("no media {}", id.0))?;
+        match &item.kind {
+            ItemKind::Media { asset, .. } => media.push((*id, item.name.clone(), *asset)),
+            _ => return Err(format!("{} is not a media file", id.0)),
+        }
+    }
+    // the sound is decoded in the background: ask for every file, then wait for all of them
+    for (_, _, asset) in &media {
+        ed.media.conformed(*asset, 0);
+    }
+    wait(ed, 900, |e| e.media.conforming() > 0);
+    let mut sound = Vec::new();
+    for (_, name, asset) in &media {
+        let audio = ed.media.conformed(*asset, 0).ok_or_else(|| {
+            let why = ed.media.audio_error(*asset, 0).unwrap_or_default();
+            format!("{name} has no usable sound {why}")
+        })?;
+        sound.push(op_application::audio_sync::mono(&audio, 0.0, seconds, op_application::audio_sync::Channel::MixDown));
+    }
+    let mut lags = vec![(0.0, f64::INFINITY)];
+    for (s, (_, name, _)) in sound[1..].iter().zip(&media[1..]) {
+        let l = op_application::audio_sync::lag(&sound[0], s)
+            .ok_or_else(|| format!("{name} is too short to match (under a second of sound)"))?;
+        lags.push((l.seconds, l.confidence));
+    }
+    let earliest = lags.iter().map(|l| l.0).fold(f64::INFINITY, f64::min);
+    let round = |v: f64| (v * 1000.0).round() / 1000.0;
+    let files: Vec<Json> = media
+        .iter()
+        .zip(&lags)
+        .map(|((id, name, _), (lag, confidence))| {
+            let mut f = json!({
+                "media_id": id.0,
+                "name": name,
+                "timeline_start": round(lag - earliest),
+                "offset_from_first": round(*lag),
+                "confidence": if confidence.is_finite() { json!(confidence.round()) } else { json!("reference") },
+            });
+            if *confidence < 8.0 {
+                f["warning"] = json!("low confidence: the sound did not match, do not trust this offset");
+            }
+            f
+        })
+        .collect();
+    text(json!({"files": files, "note": "put each media at its timeline_start (add_clip at=...), each on its own track"}))
+}
+
 /// detect_silence and remove_silence.
 fn silence_tool(ed: &mut Editor, name: &str, a: &Json, live: bool) -> R {
     active(ed)?;
     let s = silence_settings(a)?;
     if live && s.by_words {
-        return Err("transcribing would freeze the open window: use Clip > Remove Silence there, or run the tool with OpenPremier closed".into());
+        return Err("transcribing would freeze the open window: use Clip > Remove Silence there, or run the tool with We edit closed".into());
     }
     let d = analyze_blocking(ed, &s)?;
     let cuts = d.cuts(&s);
@@ -675,6 +975,19 @@ fn live(ed: &mut Editor, name: &str, a: &Json) -> R {
                 .into(),
         ),
         "export" => crate::render::export_in_background(ed, a),
+        "comfy_start" => {
+            ed.comfy_start(&ed.prefs.comfy_dir.clone())?;
+            text(json!({"starting": true, "note": "ComfyUI needs a minute or two: poll comfy_status until running is true"}))
+        }
+        "comfy_generate" => {
+            let req = comfy_request(a)?;
+            ed.comfy_generate(req)?;
+            text(json!({"started": true, "note": "poll comfy_status until job is null and last_result has a media_id, then add_clip it"}))
+        }
+        "transcribe_sentences" => {
+            ed.transcribe_sentences(str_arg(a, "language").unwrap_or(""))?;
+            text(json!({"started": true, "note": "this takes a while: call get_sentences until its state is ready"}))
+        }
         "detect_silence" | "remove_silence" => silence_tool(ed, name, a, true),
         "transcribe_captions" => {
             let options = transcribe_options(a);
@@ -823,6 +1136,139 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 .map(|s| s.text.clone());
             text(json!({"imported": new, "error": errors}))
         }
+        "sync_by_audio" => sync_by_audio(ed, a),
+        "comfy_status" => comfy_status(ed),
+        "comfy_start" => {
+            ed.comfy_start(&ed.prefs.comfy_dir.clone())?;
+            // without a window nothing else runs meanwhile: wait for the models to load
+            let start = Instant::now();
+            while op_application::comfy::probe().is_none() && start.elapsed() < Duration::from_secs(300) {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            comfy_status(ed)
+        }
+        "comfy_generate" => {
+            let req = comfy_request(a)?;
+            ed.comfy_generate(req)?;
+            wait(ed, 3 * 3600 + 60, |e| e.comfy.job.is_some());
+            if let Some(e) = ed.comfy.last_error.clone() {
+                return Err(e);
+            }
+            // the file is imported in the next moments
+            wait(ed, 120, |e| matches!(&e.comfy.last, Some((_, None))));
+            let (path, item) = ed.comfy.last.clone().ok_or("nothing was generated")?;
+            let media = item.ok_or("the file was made but could not be imported")?;
+            if a.get("add_to_timeline").and_then(Json::as_bool).unwrap_or(false) {
+                call(ed, "add_clip", &json!({"media_id": media.0}))?;
+            }
+            text(json!({"path": path, "media_id": media.0}))
+        }
+        "synchronize_clips" => {
+            use op_application::audio_sync::Channel;
+            use op_application::clipsync::SyncMode;
+            let mode = match str_arg(a, "mode").unwrap_or("audio") {
+                "start" => SyncMode::ClipStart,
+                "end" => SyncMode::ClipEnd,
+                "audio" => SyncMode::Audio(match str_arg(a, "channel").unwrap_or("1") {
+                    "2" => Channel::Two,
+                    "mixdown" => Channel::MixDown,
+                    _ => Channel::One,
+                }),
+                other => return Err(format!("mode {other} is unknown: use start, end or audio")),
+            };
+            let report = ed.synchronize_clips(&ids_arg(a, "clip_ids"), mode)?;
+            text(json!({"moved": report.moved, "left_in_place": report.skipped}))
+        }
+        "set_keyframes" => set_keyframes(ed, a),
+        "set_track" => {
+            let sid = active(ed)?;
+            let r = parse_track(str_arg(a, "track").ok_or("track is required")?)?;
+            let flag = |k: &str| a.get(k).and_then(Json::as_bool);
+            let (locked, muted, solo, visible, sync) =
+                (flag("locked"), flag("muted"), flag("solo"), flag("visible"), flag("sync_lock"));
+            let new_name = str_arg(a, "name").map(str::to_string);
+            let mut err = None;
+            ed.edit("Track Settings", |p| {
+                let t = p
+                    .sequence_mut(sid)
+                    .and_then(|s| s.track_mut(r))
+                    .ok_or_else(|| {
+                        err = Some(format!("there is no track {}", track_name(r)));
+                        EditError::Nothing
+                    })?;
+                if let Some(v) = locked {
+                    t.locked = v;
+                }
+                if let Some(v) = muted {
+                    t.muted = v;
+                }
+                if let Some(v) = solo {
+                    t.solo = v;
+                }
+                if let Some(v) = visible {
+                    t.enabled = v;
+                }
+                if let Some(v) = sync {
+                    t.sync_lock = v;
+                }
+                if let Some(n) = new_name {
+                    t.name = n;
+                }
+                Ok(())
+            });
+            match err {
+                Some(e) => Err(e),
+                None => text(json!({"ok": true})),
+            }
+        }
+        "add_tracks" => {
+            let sid = active(ed)?;
+            let kind = match str_arg(a, "kind").unwrap_or("") {
+                "video" => TrackKind::Video,
+                "audio" => TrackKind::Audio,
+                _ => return Err("kind must be video or audio".into()),
+            };
+            let count = a.get("count").and_then(Json::as_u64).unwrap_or(1).clamp(1, 16) as usize;
+            let existing = ed.project.sequence(sid).map(|s| s.tracks(kind).len()).unwrap_or(0);
+            let index = a.get("index").and_then(Json::as_u64).map(|i| i as usize).unwrap_or(existing);
+            ed.edit("Add Tracks", |p| {
+                op_timeline::add_tracks(p, sid, kind, count, index, Default::default())
+            });
+            let now = ed.project.sequence(sid).map(|s| s.tracks(kind).len()).unwrap_or(0);
+            text(json!({"added": now.saturating_sub(existing), "tracks_of_that_kind": now}))
+        }
+        "delete_track" => {
+            let sid = active(ed)?;
+            let r = parse_track(str_arg(a, "track").ok_or("track is required")?)?;
+            let before = ed.history.labels().1;
+            ed.edit("Delete Track", |p| op_timeline::delete_track(p, sid, r));
+            if ed.history.labels().1 == before {
+                return Err("that track cannot be deleted (locked, missing, or the last of its kind)".into());
+            }
+            text(json!({"ok": true}))
+        }
+        "transcribe_sentences" => {
+            ed.status = None;
+            ed.transcribe_sentences(str_arg(a, "language").unwrap_or(""))?;
+            wait(ed, 7200, |e| e.sentencing.is_some());
+            if ed.transcript.is_none() {
+                return Err(status_error(ed, "the speech could not be transcribed"));
+            }
+            sentences_text(ed)
+        }
+        "get_sentences" => sentences_text(ed),
+        "delete_sentences" => {
+            let ids: Vec<usize> = a
+                .get("sentence_ids")
+                .and_then(Json::as_array)
+                .map(|v| v.iter().filter_map(Json::as_u64).map(|i| i as usize).collect())
+                .unwrap_or_default();
+            if ids.is_empty() {
+                return Err("sentence_ids is required".into());
+            }
+            let n = ed.delete_sentences(&ids)?;
+            text(json!({"deleted": n, "sequence_duration": ed.active_seq().map(|q| q.duration().seconds())}))
+        }
         "create_sequence" => {
             let name = str_arg(a, "name").unwrap_or("Sequence").to_string();
             let sid = if let Some(m) = a.get("media_id").and_then(Json::as_u64) {
@@ -895,6 +1341,26 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                                         .map(|p| (p.key.clone(), value_json(&p.value)))
                                         .collect::<serde_json::Map<_, _>>()
                                         .into();
+                                    // animated parameters: their keyframes, in sequence seconds
+                                    let animated: serde_json::Map<String, Json> = x
+                                        .params
+                                        .iter()
+                                        .filter(|p| p.is_animated())
+                                        .map(|p| {
+                                            let keys: Vec<Json> = p
+                                                .keys
+                                                .iter()
+                                                .map(|k| {
+                                                    let at = c.to_sequence(k.time).seconds();
+                                                    json!({"at": (at * 1000.0).round() / 1000.0, "value": value_json(&k.value)})
+                                                })
+                                                .collect();
+                                            (p.key.clone(), Json::from(keys))
+                                        })
+                                        .collect();
+                                    if !animated.is_empty() {
+                                        e["keyframes"] = animated.into();
+                                    }
                                 }
                                 e
                             })

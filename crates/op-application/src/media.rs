@@ -384,6 +384,15 @@ impl MediaService {
         }
     }
 
+    /// The conformed sound of one stream once it is ready (the first call starts decoding it).
+    pub fn conformed(&self, asset: AssetId, stream: usize) -> Option<Arc<ConformedAudio>> {
+        let a = self.asset(asset)?;
+        match self.audio_entry(&a, stream)? {
+            AudioEntry::Ready(c, _) => Some(c),
+            _ => None,
+        }
+    }
+
     pub fn peaks(&self, asset: AssetId, stream: usize) -> Option<Arc<Peaks>> {
         let a = self.asset(asset)?;
         match self.audio_entry(&a, stream)? {

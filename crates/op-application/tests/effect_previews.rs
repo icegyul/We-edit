@@ -8,7 +8,7 @@ use op_render::{Gpu, Renderer};
 fn every_video_effect_and_transition_has_a_preview() {
     let gpu = match Gpu::headless() {
         Ok(g) => g,
-        Err(e) if std::env::var("OPENPREMIER_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
+        Err(e) if std::env::var("WEEDIT_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
             panic!("no GPU adapter: {e}")
         }
         Err(e) => {

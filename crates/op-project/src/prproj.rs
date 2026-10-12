@@ -1575,11 +1575,11 @@ mod tests {
         assert_eq!(rate_from_ticks(8475667200), Rate::FPS_29_97);
     }
 
-    /// Runs against locally available Premiere projects when OPENPREMIER_PRPROJ_DIR is set.
+    /// Runs against locally available Premiere projects when WEEDIT_PRPROJ_DIR is set.
     /// These files are never committed (docs/legal/clean-room.md).
     #[test]
     fn local_corpus_imports_without_errors() {
-        let Some(dir) = std::env::var_os("OPENPREMIER_PRPROJ_DIR") else {
+        let Some(dir) = std::env::var_os("WEEDIT_PRPROJ_DIR") else {
             return;
         };
         let mut n = 0;

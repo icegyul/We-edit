@@ -1,6 +1,6 @@
 //! End-to-end export on every platform: a camera-like clip with sound and effects is exported
 //! in each delivery format (hardware encoders first where they apply), and every file is read
-//! back. CI sets OPENPREMIER_REQUIRE_GPU so a missing adapter fails instead of skipping.
+//! back. CI sets WEEDIT_REQUIRE_GPU so a missing adapter fails instead of skipping.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -14,7 +14,7 @@ use op_timeline::{EditOptions, Patch, SourceClip, overwrite};
 fn gpu() -> Option<Arc<Gpu>> {
     match Gpu::headless() {
         Ok(g) => Some(g),
-        Err(e) if std::env::var("OPENPREMIER_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
+        Err(e) if std::env::var("WEEDIT_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
             panic!("no GPU adapter: {e}")
         }
         Err(e) => {

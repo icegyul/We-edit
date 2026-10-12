@@ -15,6 +15,8 @@ use op_project::prproj::ImportReport;
 use op_timeline::Attributes;
 
 use crate::app::State;
+use op_application::audio_sync::Channel as SyncChannel;
+use op_application::clipsync::SyncMode;
 use crate::i18n::{self, t, tf, tn};
 use crate::{keys, theme, widgets};
 
@@ -124,6 +126,11 @@ pub enum Dialog {
         db: f64,
         adjust: f64,
         peak_target: f64,
+    },
+    /// Clip > Synchronize: 0 clip start, 1 clip end, 2 audio; the audio channel (0 one, 1 two, 2 mix down).
+    SyncClips {
+        mode: u8,
+        channel: u8,
     },
     PasteAttributes(Attributes),
     RemoveAttributes(Attributes),
@@ -517,7 +524,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
         Dialog::Recover(path) => {
             let p = path.clone();
             let (choice, esc) = modal(ctx, "recover", t("Recover your work?"), 420.0, |ui| {
-                ui.label(t("OpenPremier did not close normally last time. An autosaved copy of your project is available."));
+                ui.label(t("We edit did not close normally last time. An autosaved copy of your project is available."));
                 ui.label(
                     RichText::new(p.display().to_string())
                         .color(theme::TEXT_DIM)
@@ -858,6 +865,62 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             }
             !(ok || cancel || esc)
         }
+        Dialog::SyncClips { mode, channel } => {
+            const CHANNELS: [&str; 3] = ["Channel 1", "Channel 2", "Mix Down"];
+            let ((ok, cancel), esc) = modal(ctx, "syncclips", t("Synchronize Clips"), 380.0, |ui| {
+                ui.radio_value(mode, 0u8, t("Clip Start"));
+                ui.radio_value(mode, 1u8, t("Clip End"));
+                // not available yet: shown like in other editors, but switched off
+                ui.horizontal(|ui| {
+                    ui.add_enabled(false, egui::RadioButton::new(false, t("Timecode")));
+                    ui.add_enabled(false, egui::Label::new("00:00:00:00"));
+                });
+                ui.horizontal(|ui| {
+                    ui.add_space(22.0);
+                    ui.add_enabled(false, egui::Checkbox::new(&mut false, t("Ignore Hours")));
+                });
+                ui.add_enabled(false, egui::RadioButton::new(false, t("Clip Marker")));
+                ui.horizontal(|ui| {
+                    ui.radio_value(mode, 2u8, t("Audio Track Channel"));
+                    ui.add_enabled_ui(*mode == 2, |ui| {
+                        egui::ComboBox::from_id_salt("sync-channel")
+                            .selected_text(t(CHANNELS[(*channel as usize).min(2)]))
+                            .show_ui(ui, |ui| {
+                                for (i, name) in CHANNELS.iter().enumerate() {
+                                    ui.selectable_value(channel, i as u8, t(name));
+                                }
+                            });
+                    });
+                });
+                ui.add_space(8.0);
+                buttons(ui, t("OK"))
+            });
+            if ok {
+                let clips: Vec<ClipId> = s.ed.selection.clips.iter().copied().collect();
+                let how = match *mode {
+                    0 => SyncMode::ClipStart,
+                    1 => SyncMode::ClipEnd,
+                    _ => SyncMode::Audio(match *channel {
+                        0 => SyncChannel::One,
+                        1 => SyncChannel::Two,
+                        _ => SyncChannel::MixDown,
+                    }),
+                };
+                match s.ed.synchronize_clips(&clips, how) {
+                    Ok(r) if r.skipped.is_empty() => {
+                        s.ed.info(tf("{} clips synchronized", &[&r.moved.to_string()]));
+                    }
+                    Ok(r) => {
+                        s.ed.error(tf(
+                            "{} clips synchronized. Left in place: {}",
+                            &[&r.moved.to_string(), &r.skipped.join(", ")],
+                        ));
+                    }
+                    Err(e) => s.ed.error(e),
+                }
+            }
+            !(ok || cancel || esc)
+        }
         Dialog::PasteAttributes(a) => attributes_dialog(s, ctx, a, true),
         Dialog::RemoveAttributes(a) => attributes_dialog(s, ctx, a, false),
         Dialog::Nest(name) => {
@@ -924,7 +987,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                 440.0,
                 |ui| {
                     ui.label(t(
-                        "OpenPremier checked this computer to choose how it should run:",
+                        "We edit checked this computer to choose how it should run:",
                     ));
                     ui.add_space(4.0);
                     egui::Frame::new()
@@ -1293,16 +1356,29 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
         } => paste_dialog(s, ctx, *id, folder, name, always),
         Dialog::About => {
             let mut open = true;
-            window(ctx, t("About OpenPremier")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+            window(ctx, t("About We edit")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.set_width(380.0);
-                ui.label(RichText::new(format!("OpenPremier {}", env!("CARGO_PKG_VERSION"))).size(18.0).color(theme::TEXT_BRIGHT));
+                ui.horizontal(|ui| {
+                    let logo = ui.ctx().data_mut(|d| d.get_temp::<egui::TextureHandle>(egui::Id::new("we-edit-logo")));
+                    let logo = logo.or_else(|| {
+                        let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../../../assets/icons/we-edit-128.png")).ok()?;
+                        let image = egui::ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba);
+                        let tex = ui.ctx().load_texture("we-edit-logo", image, egui::TextureOptions::LINEAR);
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("we-edit-logo"), tex.clone()));
+                        Some(tex)
+                    });
+                    if let Some(tex) = logo {
+                        ui.image((tex.id(), egui::vec2(56.0, 56.0)));
+                    }
+                    ui.label(RichText::new(format!("{} {}", op_application::APP_NAME, env!("CARGO_PKG_VERSION"))).size(20.0).color(theme::TEXT_BRIGHT));
+                });
                 ui.label(t("A free and open source video editor for Windows and Linux."));
                 ui.add_space(8.0);
                 ui.label(RichText::new(t("License: GNU General Public License, version 3 or later.")).size(11.5));
                 ui.label(RichText::new(format!("FFmpeg {}", op_media::ffmpeg_version())).size(11.5).color(theme::TEXT_DIM));
                 ui.label(RichText::new(s.gpu.description()).size(11.5).color(theme::TEXT_DIM));
                 ui.add_space(8.0);
-                ui.label(RichText::new(t("Adobe and Premiere Pro are trademarks of Adobe Inc. OpenPremier is an independent project and is not affiliated with Adobe.")).size(10.5).color(theme::TEXT_DIM));
+                ui.label(RichText::new(t("Adobe and Premiere Pro are trademarks of Adobe Inc. We edit is an independent project and is not affiliated with Adobe.")).size(10.5).color(theme::TEXT_DIM));
             });
             open
         }

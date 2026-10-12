@@ -116,7 +116,7 @@ impl ModelSize {
                 self.id()
             );
             let resp = ureq::get(&url)
-                .header("User-Agent", "OpenPremier")
+                .header("User-Agent", "We edit")
                 .call()
                 .map_err(|e| SpeechError::Download(format!("{f}: {e}")))?;
             let part = dir.join(format!("{f}.part"));

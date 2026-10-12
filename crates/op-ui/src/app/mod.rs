@@ -100,6 +100,14 @@ pub(crate) struct State {
     pub captions_all: bool,
     /// Listening for AI assistants (Preferences > AI Assistants).
     pub assistants: Option<op_mcp::live::Server>,
+    /// The AI assistant panel's conversation.
+    pub ai: crate::ai_panel::AiChat,
+    /// Whether Claude and ChatGPT are signed in (Preferences > AI Accounts).
+    pub accounts: crate::ai_accounts::Accounts,
+    /// The Sentences panel: ticked sentences and the language.
+    pub sentences: crate::sentences_panel::SentencesView,
+    /// The ComfyUI panel: what to make and ComfyUI's last answer.
+    pub comfy: crate::comfy_panel::ComfyView,
     pub scopes: panels::ScopesView,
     pub meters: panels::MeterState,
     pub graphics: panels::GraphicsView,
@@ -237,6 +245,10 @@ impl App {
             ec: effect_controls::EcView::default(),
             captions_all: true,
             assistants: None,
+            ai: Default::default(),
+            accounts: Default::default(),
+            sentences: Default::default(),
+            comfy: Default::default(),
             scopes: panels::ScopesView::default(),
             meters: panels::MeterState::default(),
             graphics: panels::GraphicsView::default(),
@@ -422,7 +434,7 @@ impl App {
                 item(ui, s, "Show Log...", "op.help.log");
                 item(ui, s, "Open Log Folder", "op.help.logfolder");
                 ui.separator();
-                item(ui, s, "About OpenPremier", "op.help.about");
+                item(ui, s, "About We edit", "op.help.about");
             });
             // workspace tabs on the right, like the header of professional editors
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -495,6 +507,13 @@ impl State {
             "op.clip.silencebatch" => {
                 let d = Dialog::silence_batch(self);
                 self.dialogs.push(d);
+            }
+            "op.clip.synchronize" => {
+                if self.ed.selection.clips.len() < 2 {
+                    self.ed.error(t("Select two or more clips to synchronize"));
+                } else {
+                    self.dialogs.push(Dialog::SyncClips { mode: 2, channel: 0 });
+                }
             }
             "op.clip.removesilence" => {
                 if self.ed.active.is_none() {
@@ -1000,6 +1019,9 @@ impl State {
             Panel::Scopes => panels::scopes(self, ui),
             Panel::Graphics => panels::graphics(self, ui),
             Panel::Captions => crate::captions_panel::captions(self, ui),
+            Panel::Ai => crate::ai_panel::show(self, ui),
+            Panel::Sentences => crate::sentences_panel::show(self, ui),
+            Panel::Comfy => crate::comfy_panel::show(self, ui),
         }));
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);

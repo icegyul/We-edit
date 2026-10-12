@@ -11,7 +11,7 @@ fn gpu() -> Option<Arc<Gpu>> {
     match Gpu::headless() {
         Ok(g) => Some(g),
         // CI sets this where a software adapter is installed, so effects are really tested
-        Err(e) if std::env::var("OPENPREMIER_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
+        Err(e) if std::env::var("WEEDIT_REQUIRE_GPU").is_ok_and(|v| v == "1") => {
             panic!("no GPU adapter: {e}")
         }
         Err(e) => {

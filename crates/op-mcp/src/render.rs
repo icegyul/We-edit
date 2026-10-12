@@ -51,7 +51,7 @@ pub fn frame_png(
         }
         px[3] = 255;
     }
-    let dir = std::env::temp_dir().join(format!("openpremier-mcp-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("we-edit-mcp-{}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join("frame.png");
     let v = VideoSettings {

@@ -23,7 +23,7 @@ pub(super) fn link_media_dialog(s: &mut State, ctx: &egui::Context, form: &mut L
     let total = form.missing.len();
     let (_, esc) = modal(ctx, "link-media", t("Link Media"), 620.0, |ui| {
         ui.label(tf(
-            "{} media files could not be found where the project expects them. Locate them, or let OpenPremier search this computer.",
+            "{} media files could not be found where the project expects them. Locate them, or let We edit search this computer.",
             &[&total],
         ));
         ui.add_space(6.0);

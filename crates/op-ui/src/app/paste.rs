@@ -96,7 +96,7 @@ impl State {
             .filter(|p| p.is_dir())
             .or_else(dirs::home_dir)
             .unwrap_or_default()
-            .join("OpenPremier")
+            .join("We edit")
     }
 
     /// Saves and imports pasted images whose folder is known and whose data is ready.

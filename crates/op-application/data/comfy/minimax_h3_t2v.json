@@ -1,0 +1,199 @@
+{
+  "92": {
+    "inputs": {
+      "filename_prefix": "video/MiniMax_H3",
+      "format": "mp4",
+      "format.codec": "h264",
+      "format.codec.encoding": "auto",
+      "codec": "auto",
+      "video": ["140:130", 0]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {"title": "비디오 저장"}
+  },
+  "115": {
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 1,
+      "multiple": 32
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {"title": "해상도 선택기"}
+  },
+  "140:119": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {"title": "VAE 로드"}
+  },
+  "140:120": {
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {"title": "VAE 로드"}
+  },
+  "140:121": {
+    "inputs": {
+      "samples": ["140:125", 0],
+      "vae": ["140:120", 0]
+    },
+    "class_type": "VAEDecodeAudio",
+    "_meta": {"title": "오디오 VAE 디코드"}
+  },
+  "140:122": {
+    "inputs": {
+      "samples": ["140:125", 0],
+      "vae": ["140:119", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {"title": "VAE 디코드"}
+  },
+  "140:123": {
+    "inputs": {
+      "sampler_name": "res_multistep"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {"title": "KSampler (선택)"}
+  },
+  "140:124": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": ["140:136", 0],
+      "denoise": 1,
+      "model": ["140:135", 0]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {"title": "기본 스케줄러"}
+  },
+  "140:125": {
+    "inputs": {
+      "noise": ["140:129", 0],
+      "guider": ["140:126", 0],
+      "sampler": ["140:123", 0],
+      "sigmas": ["140:124", 0],
+      "latent_image": ["140:131", 1]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {"title": "고급 사용자 정의 샘플러"}
+  },
+  "140:126": {
+    "inputs": {
+      "model": ["140:135", 0],
+      "conditioning": ["140:131", 0]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {"title": "기본 가이드"}
+  },
+  "140:127": {
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {"title": "확산 모델 로드"}
+  },
+  "140:128": {
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {"title": "CLIP 로드"}
+  },
+  "140:129": {
+    "inputs": {
+      "noise_seed": "PARAM_INT_SEED"
+    },
+    "class_type": "RandomNoise",
+    "_meta": {"title": "무작위 노이즈"}
+  },
+  "140:130": {
+    "inputs": {
+      "fps": 24,
+      "bit_depth": 8,
+      "color_space": "sRGB",
+      "images": ["140:122", 0],
+      "audio": ["140:121", 0]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {"title": "비디오 생성"}
+  },
+  "140:131": {
+    "inputs": {
+      "prompt": "PARAM_PROMPT",
+      "width": ["115", 0],
+      "height": ["115", 1],
+      "length": ["140:132", 1],
+      "clip": ["140:128", 0],
+      "vae": ["140:119", 0]
+    },
+    "class_type": "MiniMaxH3ImageToVideo",
+    "_meta": {"title": "MiniMax H3 이미지 → 비디오"}
+  },
+  "140:132": {
+    "inputs": {
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17",
+      "values.a": ["140:133", 0]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {"title": "수학식"}
+  },
+  "140:133": {
+    "inputs": {
+      "value": 5
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {"title": "Float (duration)"}
+  },
+  "140:134": {
+    "inputs": {
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1,
+      "model": ["140:127", 0]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {"title": "LoRA 로드 (모델 전용)"}
+  },
+  "140:135": {
+    "inputs": {
+      "switch": ["140:139", 0],
+      "on_false": ["140:127", 0],
+      "on_true": ["140:134", 0]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {"title": "If/Else Switch (Model)"}
+  },
+  "140:136": {
+    "inputs": {
+      "switch": ["140:139", 0],
+      "on_false": ["140:137", 0],
+      "on_true": ["140:138", 0]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {"title": "If/Else Switch (Steps)"}
+  },
+  "140:137": {
+    "inputs": {
+      "value": 20
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {"title": "정수"}
+  },
+  "140:138": {
+    "inputs": {
+      "value": 8
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {"title": "정수"}
+  },
+  "140:139": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {"title": "Boolean (Enable Lightning LoRA)"}
+  }
+}

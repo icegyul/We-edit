@@ -1994,6 +1994,9 @@ fn context_menu(s: &mut State, ui: &mut Ui, h: Option<Hit>) {
             run(s, ui, "Link / Unlink", "cmd.clip.linkaudioandvideo");
             run(s, ui, "Group", "cmd.clip.group");
             run(s, ui, "Ungroup", "cmd.clip.ungroup");
+            if s.ed.selection.clips.len() >= 2 {
+                run(s, ui, "Synchronize...", "op.clip.synchronize");
+            }
             ui.separator();
             run(s, ui, "Speed/Duration...", "cmd.clip.speed");
             run(s, ui, "Audio Gain...", "cmd.clip.audiooptions.gain");

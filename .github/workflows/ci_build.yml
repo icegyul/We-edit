@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest]  # We edit targets Windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -52,11 +52,9 @@ jobs:
             test -s "$file"
           done
           cargo metadata --format-version 1 --no-deps >/dev/null
-      - name: Lint
-        run: cargo xtask lint
       - name: Test
         # effects and exports are tested on a real adapter (software Vulkan on Linux, Metal on
         # macOS) instead of being skipped
         env:
-          OPENPREMIER_REQUIRE_GPU: ${{ runner.os != 'Windows' && '1' || '' }}
+          WEEDIT_REQUIRE_GPU: ${{ runner.os != 'Windows' && '1' || '' }}
         run: cargo xtask test

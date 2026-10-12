@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::tools;
 
 pub const USAGE: &str = "\
-Usage: openpremier --remove-silence <input> <output> [options]
+Usage: We edit --remove-silence <input> <output> [options]
        openpremier --remove-silence <input>... --out-dir <folder> [options]
 
   --out-dir <folder>     process every input file (video or audio) into this folder

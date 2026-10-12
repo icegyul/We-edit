@@ -86,7 +86,7 @@ impl Gpu {
 
     pub fn from_adapter(adapter: &wgpu::Adapter) -> Result<Arc<Gpu>, GpuError> {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("OpenPremier renderer"),
+            label: Some("We edit renderer"),
             required_features: optional_features(adapter),
             required_limits: limits(adapter),
             ..Default::default()

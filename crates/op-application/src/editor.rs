@@ -17,8 +17,8 @@ use crate::media::{self, MediaService};
 use crate::prefs::{Dirs, Preferences};
 use crate::session::*;
 
-pub const APP_NAME: &str = "OpenPremier";
-pub const GENERATOR: &str = concat!("OpenPremier ", env!("CARGO_PKG_VERSION"));
+pub const APP_NAME: &str = "We edit";
+pub const GENERATOR: &str = concat!("We edit ", env!("CARGO_PKG_VERSION"));
 
 #[derive(Clone, Debug)]
 pub struct Status {
@@ -95,6 +95,15 @@ pub struct Editor {
     /// Audio being analyzed for silences, and the latest analysis.
     pub silencing: Option<crate::silence::SilenceJob>,
     pub silence_result: Option<Arc<crate::silence::Detection>>,
+    /// The sequence's speech being transcribed into sentences, and the latest transcript.
+    pub sentencing: Option<crate::sentences::SentenceJob>,
+    pub transcript: Option<Arc<crate::sentences::Transcript>>,
+    /// ComfyUI (image and video generation) and the generations of this program.
+    pub comfy: crate::comfy::State,
+    /// A Whisper model being downloaded (Preferences > Speech Recognition).
+    pub whisper_dl: Option<crate::whisper_models::Download>,
+    /// Captions to make from the sentence transcript as soon as it is ready.
+    pub captions_after: Option<crate::captions::CaptionOptions>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
     autosave_at: Instant,
     autosaving: Arc<AtomicBool>,
@@ -178,6 +187,11 @@ impl Editor {
             background: false,
             silencing: None,
             silence_result: None,
+            sentencing: None,
+            transcript: None,
+            comfy: Default::default(),
+            whisper_dl: None,
+            captions_after: None,
             last_import_report: None,
             autosave_at: Instant::now(),
             autosaving: Arc::new(AtomicBool::new(false)),
@@ -1144,6 +1158,9 @@ impl Editor {
         self.poll_proxies();
         self.poll_captions();
         self.poll_silence();
+        self.poll_sentences();
+        self.poll_comfy();
+        self.poll_whisper_download();
         if !self.background {
             self.autosave();
             self.keep_recovery();

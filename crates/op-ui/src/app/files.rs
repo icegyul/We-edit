@@ -21,7 +21,7 @@ impl State {
             Then::Open(None) => {
                 let mut d = rfd::FileDialog::new()
                     .add_filter(t("All Projects"), &["opproj", "prproj", "xml", "otio"])
-                    .add_filter("OpenPremier", &[op_project::native::EXTENSION])
+                    .add_filter("We edit", &[op_project::native::EXTENSION])
                     .add_filter("Adobe Premiere Pro", &["prproj"])
                     .add_filter("Final Cut Pro XML", &["xml"])
                     .add_filter("OpenTimelineIO", &["otio"]);
@@ -182,7 +182,7 @@ impl State {
     pub fn save_as(&mut self) -> bool {
         let name = format!("{}.{}", self.ed.project.name, op_project::native::EXTENSION);
         let mut d = rfd::FileDialog::new()
-            .add_filter("OpenPremier", &[op_project::native::EXTENSION])
+            .add_filter("We edit", &[op_project::native::EXTENSION])
             .set_file_name(name);
         if let Some(dir) = self.ed.path.as_ref().and_then(|p| p.parent()) {
             d = d.set_directory(dir);
@@ -207,7 +207,7 @@ impl State {
             op_project::native::EXTENSION
         );
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("OpenPremier", &[op_project::native::EXTENSION])
+            .add_filter("We edit", &[op_project::native::EXTENSION])
             .set_file_name(name)
             .save_file()
         {

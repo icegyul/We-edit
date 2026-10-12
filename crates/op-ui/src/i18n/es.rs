@@ -60,7 +60,7 @@ pub static ES: &[(&str, &str)] = &[
     ("New Ellipse", "Nueva elipse"),
     ("Reset to Saved Layout", "Restablecer al diseño guardado"),
     ("Keyboard Shortcuts...", "Métodos abreviados de teclado..."),
-    ("About OpenPremier", "Acerca de OpenPremier"),
+    ("About We edit", "Acerca de We edit"),
     ("Project...", "Proyecto..."),
     ("Sequence...", "Secuencia..."),
     ("Bin", "Bandeja"),
@@ -170,8 +170,8 @@ pub static ES: &[(&str, &str)] = &[
     ("Don't Save", "No guardar"),
     ("Recover your work?", "¿Recuperar su trabajo?"),
     (
-        "OpenPremier did not close normally last time. An autosaved copy of your project is available.",
-        "OpenPremier no se cerró correctamente la última vez. Hay disponible una copia guardada automáticamente de su proyecto.",
+        "We edit did not close normally last time. An autosaved copy of your project is available.",
+        "We edit no se cerró correctamente la última vez. Hay disponible una copia guardada automáticamente de su proyecto.",
     ),
     ("Ignore", "Ignorar"),
     ("Open Autosave", "Abrir guardado automático"),
@@ -239,8 +239,8 @@ pub static ES: &[(&str, &str)] = &[
         "Licencia: GNU General Public License, versión 3 o posterior.",
     ),
     (
-        "Adobe and Premiere Pro are trademarks of Adobe Inc. OpenPremier is an independent project and is not affiliated with Adobe.",
-        "Adobe y Premiere Pro son marcas comerciales de Adobe Inc. OpenPremier es un proyecto independiente y no está afiliado a Adobe.",
+        "Adobe and Premiere Pro are trademarks of Adobe Inc. We edit is an independent project and is not affiliated with Adobe.",
+        "Adobe y Premiere Pro son marcas comerciales de Adobe Inc. We edit es un proyecto independiente y no está afiliado a Adobe.",
     ),
     ("Custom", "Personalizado"),
     ("Frame Size", "Tamaño de fotograma"),
@@ -1330,8 +1330,8 @@ pub static ES: &[(&str, &str)] = &[
         "Error al exportar: no se puede escribir {}",
     ),
     (
-        "Windows may be blocking this folder (Controlled folder access). Allow OpenPremier in Windows Security or choose another folder.",
-        "Es posible que Windows esté bloqueando esta carpeta (acceso controlado a carpetas). Permita OpenPremier en Seguridad de Windows o elija otra carpeta.",
+        "Windows may be blocking this folder (Controlled folder access). Allow We edit in Windows Security or choose another folder.",
+        "Es posible que Windows esté bloqueando esta carpeta (acceso controlado a carpetas). Permita We edit en Seguridad de Windows o elija otra carpeta.",
     ),
     ("Transitions", "Transiciones"),
     (
@@ -1784,8 +1784,8 @@ pub static ES: &[(&str, &str)] = &[
     ("of memory", "de memoria"),
     ("Performance Setup", "Configuración de rendimiento"),
     (
-        "OpenPremier checked this computer to choose how it should run:",
-        "OpenPremier revisó este equipo para elegir cómo debe funcionar:",
+        "We edit checked this computer to choose how it should run:",
+        "We edit revisó este equipo para elegir cómo debe funcionar:",
     ),
     ("Recommended profile: {}", "Perfil recomendado: {}"),
     (
@@ -1801,8 +1801,8 @@ pub static ES: &[(&str, &str)] = &[
     ("Link Media", "Vincular medios"),
     ("Link Media...", "Vincular medios..."),
     (
-        "{} media files could not be found where the project expects them. Locate them, or let OpenPremier search this computer.",
-        "No se encontraron {} archivos de medios donde el proyecto los espera. Indique dónde están o deje que OpenPremier los busque en este equipo.",
+        "{} media files could not be found where the project expects them. Locate them, or let We edit search this computer.",
+        "No se encontraron {} archivos de medios donde el proyecto los espera. Indique dónde están o deje que We edit los busque en este equipo.",
     ),
     ("Found: {}", "Encontrado: {}"),
     ("Missing: {}", "Falta: {}"),

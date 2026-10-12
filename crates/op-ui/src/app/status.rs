@@ -144,7 +144,7 @@ impl State {
                 if e.starts_with("cannot write ") && cfg!(windows) {
                     details.push_str("\n\n");
                     details.push_str(t(
-                        "Windows may be blocking this folder (Controlled folder access). Allow OpenPremier in Windows Security or choose another folder.",
+                        "Windows may be blocking this folder (Controlled folder access). Allow We edit in Windows Security or choose another folder.",
                     ));
                 }
                 ui.label(

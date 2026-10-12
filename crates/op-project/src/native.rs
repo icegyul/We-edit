@@ -75,7 +75,7 @@ pub fn from_str(text: &str, base: Option<&Path>) -> Result<Loaded, ProjectError>
     let head: serde_json::Value =
         serde_json::from_str(text).map_err(|e| ProjectError::Format(e.to_string()))?;
     if head.get("format").and_then(|f| f.as_str()) != Some(FORMAT) {
-        return Err(ProjectError::Format("not an OpenPremier project".into()));
+        return Err(ProjectError::Format("not a We edit project".into()));
     }
     let version = head.get("version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
     if version == 0 || version > FORMAT_VERSION {

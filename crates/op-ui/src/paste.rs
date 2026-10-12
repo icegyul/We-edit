@@ -194,7 +194,7 @@ pub fn sniff(b: &[u8]) -> Option<&'static str> {
 /// Downloads an image (runs on a background thread).
 pub fn download(url: &str) -> Result<Payload, String> {
     let resp = ureq::get(url)
-        .header("User-Agent", "OpenPremier")
+        .header("User-Agent", "We edit")
         .call()
         .map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();

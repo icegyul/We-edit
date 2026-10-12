@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "\
-OpenPremier - a free and open source video editor
+We edit - a video editor
 
-Usage: openpremier [options] [project or media files...]
+Usage: We edit [options] [project or media files...]
 
 Options:
   --portable     keep settings, caches and autosaves next to the program
@@ -16,17 +16,17 @@ Options:
                  cut silences (and fillers, repeats) out of a file; see
                  --remove-silence --help for the options
   --mcp          serve AI assistants (Model Context Protocol over standard input and
-                 output): edits the open OpenPremier window when it allows assistants,
+                 output): edits the open We edit window when it allows assistants,
                  else a project of its own (the first project file given, if any)
   --version      print the version
   --help         print this help
 ";
 
-/// Starts the program log with the user's preferences (`OPENPREMIER_LOG` overrides the level)
+/// Starts the program log with the user's preferences (`WEEDIT_LOG` overrides the level)
 /// and makes every failure leave a crash report and a recovery copy of the open project.
 fn init_logging(dirs: &op_application::Dirs) {
     let prefs = op_application::Preferences::load(dirs);
-    let level = std::env::var("OPENPREMIER_LOG").unwrap_or(prefs.log_level.clone());
+    let level = std::env::var("WEEDIT_LOG").unwrap_or(prefs.log_level.clone());
     op_application::logging::init(&dirs.logs(), prefs.logging_enabled, &level);
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -82,7 +82,7 @@ fn exe_dir() -> Option<PathBuf> {
 fn self_test() -> Result<(), String> {
     use op_core::*;
     op_media::init();
-    println!("OpenPremier {}", env!("CARGO_PKG_VERSION"));
+    println!("We edit {}", env!("CARGO_PKG_VERSION"));
     println!("FFmpeg {}", op_media::ffmpeg_version());
     for enc in ["libx264", "aac", "prores_ks", "png"] {
         println!(
@@ -173,7 +173,7 @@ fn main() {
         return;
     }
     if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("OpenPremier {}", env!("CARGO_PKG_VERSION"));
+        println!("We edit {}", env!("CARGO_PKG_VERSION"));
         return;
     }
     if args.iter().any(|a| a == "--self-test") {
@@ -196,7 +196,7 @@ fn main() {
     };
     init_logging(&dirs);
     log::info!(
-        "OpenPremier {} starting ({} {}), settings in {}{}",
+        "We edit {} starting ({} {}), settings in {}{}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
@@ -242,9 +242,9 @@ fn main() {
         backend,
     }) {
         log::error!("{e}");
-        eprintln!("OpenPremier could not start: {e}");
+        eprintln!("We edit could not start: {e}");
         std::process::exit(1);
     }
-    log::info!("OpenPremier closed normally");
+    log::info!("We edit closed normally");
     log::logger().flush();
 }

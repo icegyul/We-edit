@@ -6,20 +6,23 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 mod es;
+mod ko;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Lang {
     En,
     Es,
+    Ko,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 2] = [Lang::En, Lang::Es];
+    pub const ALL: [Lang; 3] = [Lang::En, Lang::Es, Lang::Ko];
 
     pub fn code(self) -> &'static str {
         match self {
             Lang::En => "en",
             Lang::Es => "es",
+            Lang::Ko => "ko",
         }
     }
 
@@ -27,6 +30,7 @@ impl Lang {
         match self {
             Lang::En => "English",
             Lang::Es => "Español",
+            Lang::Ko => "한국어",
         }
     }
 
@@ -40,6 +44,7 @@ impl Lang {
         {
             "en" => Some(Lang::En),
             "es" => Some(Lang::Es),
+            "ko" => Some(Lang::Ko),
             _ => None,
         }
     }
@@ -47,9 +52,13 @@ impl Lang {
 
 static LANG: AtomicU8 = AtomicU8::new(0);
 
-fn table() -> &'static HashMap<&'static str, &'static str> {
-    static T: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    T.get_or_init(|| es::ES.iter().copied().collect())
+fn table(lang: Lang) -> &'static HashMap<&'static str, &'static str> {
+    static ES: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    static KO: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    match lang {
+        Lang::Ko => KO.get_or_init(|| ko::KO.iter().copied().collect()),
+        _ => ES.get_or_init(|| es::ES.iter().copied().collect()),
+    }
 }
 
 pub fn set(lang: Lang) {
@@ -57,10 +66,10 @@ pub fn set(lang: Lang) {
 }
 
 pub fn current() -> Lang {
-    if LANG.load(Ordering::Relaxed) == 1 {
-        Lang::Es
-    } else {
-        Lang::En
+    match LANG.load(Ordering::Relaxed) {
+        1 => Lang::Es,
+        2 => Lang::Ko,
+        _ => Lang::En,
     }
 }
 
@@ -73,22 +82,17 @@ pub fn system() -> Lang {
 
 /// Translates a UI string.
 pub fn t(s: &'static str) -> &'static str {
-    if current() == Lang::Es {
-        table().get(s).copied().unwrap_or(s)
-    } else {
-        s
+    match current() {
+        Lang::En => s,
+        l => table(l).get(s).copied().unwrap_or(s),
     }
 }
 
 /// Translates a string that is not a literal (catalog names).
 pub fn tn(s: &str) -> String {
-    if current() == Lang::Es {
-        table()
-            .get(s)
-            .map(|x| x.to_string())
-            .unwrap_or_else(|| s.to_string())
-    } else {
-        s.to_string()
+    match current() {
+        Lang::En => s.to_string(),
+        l => table(l).get(s).map(|x| x.to_string()).unwrap_or_else(|| s.to_string()),
     }
 }
 
@@ -123,6 +127,24 @@ mod tests {
                 "placeholders differ: {en}"
             );
             assert!(!es.is_empty());
+        }
+    }
+
+    #[test]
+    fn korean_catalog_is_consistent() {
+        let mut seen = std::collections::HashSet::new();
+        for (en, ko) in ko::KO {
+            assert!(seen.insert(*en), "duplicate key {en}");
+            assert_eq!(
+                en.matches("{}").count(),
+                ko.matches("{}").count(),
+                "placeholders differ: {en}"
+            );
+            assert!(!ko.is_empty());
+        }
+        // every Spanish key has a Korean text too
+        for (en, _) in es::ES {
+            assert!(seen.contains(en), "not in Korean: {en}");
         }
     }
 

@@ -106,6 +106,18 @@ fn faces(choice: &str) -> Option<(FontData, Option<FontData>)> {
     }
 }
 
+/// A font with Hangul, for Korean text in panels.
+fn korean_fallback() -> Option<FontData> {
+    if cfg!(windows) {
+        let dir = PathBuf::from(std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into()))
+            .join("Fonts");
+        return read(dir.join("malgun.ttf"));
+    }
+    op_render::text::Fonts::global()
+        .face_data("Noto Sans CJK KR", false)
+        .and_then(|(d, i)| checked(d, i))
+}
+
 /// A short name for a preference value, for the Preferences combo.
 pub fn label(choice: &str) -> String {
     if let Some(name) = choice.strip_prefix("family:") {
@@ -148,6 +160,16 @@ pub fn install(ctx: &egui::Context, choice: &str) -> bool {
             strong_list.insert(0, "ui-strong".into());
         }
         log::info!("interface font: {choice}");
+    }
+    // egui's and Inter's glyphs have no Hangul: Malgun Gothic (Windows) stands behind them
+    if let Some(ko) = korean_fallback() {
+        defs.font_data.insert("ko".into(), Arc::new(ko));
+        for family in [FontFamily::Proportional, FontFamily::Monospace] {
+            if let Some(list) = defs.families.get_mut(&family) {
+                list.push("ko".into());
+            }
+        }
+        strong_list.push("ko".into());
     }
     defs.families.insert(strong(), strong_list);
     ctx.set_fonts(defs);

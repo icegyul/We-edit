@@ -1,7 +1,12 @@
 //! Application services (docs/architecture.md 3): the editor state and its commands, the media
 //! service, playback, export, autosave and preferences. The UI is a thin layer over `Editor`.
 
+pub mod audio_sync;
 pub mod autosave;
+pub mod clipsync;
+pub mod comfy;
+pub mod comfy_packs;
+pub mod download;
 pub mod captions;
 pub mod commands;
 pub mod editor;
@@ -16,6 +21,8 @@ pub mod prefs;
 pub mod proxies;
 pub mod recovery;
 pub mod relink;
+pub mod sentences;
+pub mod whisper_models;
 pub mod session;
 pub mod silence;
 

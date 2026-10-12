@@ -157,13 +157,13 @@ impl Remote {
 impl Target for Remote {
     fn call(&mut self, name: &str, args: &Json) -> Result<Vec<Content>, String> {
         let msg = json!({"key": self.key, "name": name, "arguments": args});
-        writeln!(self.stream, "{msg}").map_err(|_| "OpenPremier was closed".to_string())?;
+        writeln!(self.stream, "{msg}").map_err(|_| "We edit was closed".to_string())?;
         let mut line = String::new();
         self.reader
             .read_line(&mut line)
-            .map_err(|_| "OpenPremier was closed".to_string())?;
+            .map_err(|_| "We edit was closed".to_string())?;
         let reply: Json =
-            serde_json::from_str(&line).map_err(|_| "OpenPremier was closed".to_string())?;
+            serde_json::from_str(&line).map_err(|_| "We edit was closed".to_string())?;
         if reply["ok"].as_bool() == Some(true) {
             Ok(reply["content"]
                 .as_array()
@@ -178,6 +178,6 @@ impl Target for Remote {
     }
 
     fn describe(&self) -> String {
-        "OpenPremier is open: edits happen in the user's open project, which they see live.".into()
+        "We edit is open: edits happen in the user's open project, which they see live.".into()
     }
 }

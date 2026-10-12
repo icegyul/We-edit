@@ -51,6 +51,9 @@ pub(crate) fn panel_icon(p: Panel) -> Icon {
         Panel::Scopes => Icon::Grid,
         Panel::Graphics => Icon::Type,
         Panel::Captions => Icon::List,
+        Panel::Ai => Icon::Fx,
+        Panel::Sentences => Icon::List,
+        Panel::Comfy => Icon::Film,
     }
 }
 

@@ -144,6 +144,7 @@ pub(crate) fn clip_menu(ui: &mut Ui, s: &mut State) {
     let has = !s.ed.selection.clips.is_empty();
     item(ui, s, "Rename...", "op.clip.rename");
     item(ui, s, "Make Subclip", "cmd.clip.makesubclip");
+    item_if(ui, s, "Synchronize...", "op.clip.synchronize", s.ed.selection.clips.len() >= 2);
     ui.separator();
     item_if(ui, s, "Speed/Duration...", "cmd.clip.speed", has);
     item_if(ui, s, "Audio Gain...", "cmd.clip.audiooptions.gain", has);

@@ -30,8 +30,16 @@ pub struct Preferences {
     /// Custom key bindings: (context, command) -> keys; an empty string unbinds.
     pub shortcuts: Vec<(String, String, String)>,
     pub ui_scale: f32,
-    /// AI assistants (`OpenPremier --mcp`) may edit the open project.
+    /// AI assistants (`We edit --mcp`) may edit the open project.
     pub assistant_control: bool,
+    /// The AI of the assistant panel: "claude" or "chatgpt".
+    pub ai_provider: String,
+    /// The ComfyUI folder (the one with python_embeded); empty looks in the usual places.
+    pub comfy_dir: String,
+    /// The Whisper model of the sentence editor and automatic captions (an id of `whisper_models`).
+    pub whisper_model: String,
+    /// The port of the ComfyUI this program starts (the usual 8188 may belong to another program).
+    pub comfy_port: u16,
     /// Interface typeface: "inter" (included), "system", "classic" (egui's), "family:<name>"
     /// (an installed font) or "file:<path>" (a font file).
     pub ui_font: String,
@@ -91,6 +99,10 @@ impl Default for Preferences {
             ui_scale: 1.0,
             ui_font: "inter".into(),
             assistant_control: false,
+            ai_provider: "claude".into(),
+            comfy_dir: String::new(),
+            whisper_model: "large-v3".into(),
+            comfy_port: 8288,
             audio_scrubbing: true,
             hardware_encoding: true,
             last_export_dir: None,
@@ -122,7 +134,15 @@ pub struct Dirs {
 
 impl Dirs {
     pub fn system() -> Dirs {
-        let base = |d: Option<PathBuf>| d.unwrap_or_else(std::env::temp_dir).join("OpenPremier");
+        // the folder of the program this one grew from is moved once, so nothing is lost
+        let base = |d: Option<PathBuf>| {
+            let root = d.unwrap_or_else(std::env::temp_dir);
+            let (old, new) = (root.join("OpenPremier"), root.join("We edit"));
+            if old.is_dir() && !new.exists() {
+                let _ = std::fs::rename(&old, &new);
+            }
+            new
+        };
         Dirs {
             config: base(dirs::config_dir()),
             cache: base(dirs::cache_dir()),

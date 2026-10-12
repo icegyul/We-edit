@@ -1,179 +1,77 @@
 <p align="center">
-  <img src="assets/icons/openpremier-512.png" width="200" alt="Logo de OpenPremier">
+  <img src="assets/icons/we-edit-512.png" width="160" alt="We edit">
 </p>
 
-<h1 align="center">OpenPremier</h1>
+<h1 align="center">We edit</h1>
 
 <p align="center">
-  Editor de vídeo no lineal, libre y de código abierto, desarrollado principalmente en Rust.
+  <b>OpenPremier를 기반으로, 한국어 중심의 추가 기능을 넣어 다시 구성한 무료 영상 편집기 (Windows)</b>
 </p>
 
-<p align="center">
-  <a href="https://github.com/xXKuroiKenshiXx/OpenPremier/actions/workflows/ci_build.yml"><img src="https://github.com/xXKuroiKenshiXx/OpenPremier/actions/workflows/ci_build.yml/badge.svg" alt="Estado de compilación"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue.svg" alt="Licencia GPL-3.0-or-later"></a>
-  <a href="https://github.com/xXKuroiKenshiXx/OpenPremier/releases"><img src="https://img.shields.io/github/v/release/xXKuroiKenshiXx/OpenPremier?include_prereleases&label=versi%C3%B3n" alt="Última versión"></a>
-</p>
+## 소개
 
-OpenPremier busca ofrecer un entorno de edición profesional con una organización y un flujo de
-trabajo familiares para quienes vienen de otros editores no lineales. El proyecto es independiente,
-no contiene código ni recursos de Adobe y no está afiliado con Adobe Inc.
+**We edit**는 [OpenPremier](https://github.com/xXKuroiKenshiXx/OpenPremier)(Rust로 만든 오픈소스 비선형 영상 편집기,
+GPL-3.0)를 바탕으로 만들었습니다. Premiere Pro와 비슷한 패널 구성과 편집 방식은 그대로 두고,
+**한국어 사용자가 바로 쓸 수 있도록 기능을 더하고 설정을 새로 구성했습니다.**
 
-<p align="center">
-  <img src="assets/branding/Windows.png" width="70"  alt="Logowindows"> <img src="assets/branding/Linux.png" width="70" alt="Logolinux"> <img src="assets/branding/macOS.png" width="70" alt="Logomac">
-</p>
+원 프로젝트의 저작권은 OpenPremier 기여자들에게 있으며, 이 저장소는 원 프로젝트의 커밋 이력을 그대로 이어받았습니다.
+Adobe 및 Premiere Pro는 Adobe Inc.의 상표이며, We edit는 Adobe와 관계없는 독립 프로젝트입니다.
 
-## Estado actual
+## 더한 기능
 
-La versión `0.9.0` es una versión alfa funcional para Windows, Linux y macOS. La aplicación ya se puede
-compilar, abrir, probar y empaquetar, pero todavía no está lista para sustituir un editor comercial
-en todos los trabajos de producción.
-
-### Funciones disponibles
-
-- Timeline multipista con insert, overwrite, razor, ripple, roll, slip, slide, rate stretch,
-  snapping, nesting, marcadores, transiciones y keyframes.
-- Paneles acoplables para Proyecto, Source, Program, Timeline, Effect Controls, Effects, History,
-  Audio Mixer, Meters, Markers, Info, Lumetri, Scopes, Graphics, Subtítulos y Tools.
-- Lectura, decodificación y exportación multimedia mediante FFmpeg, con exportación que se puede
-  pausar, vista previa de los fotogramas renderizados y velocidad de fotogramas configurable.
-- Composición por GPU mediante `wgpu`, con Vulkan, Direct3D 12, Metal u OpenGL (se elige en
-  Preferencias).
-- Decodificación de vídeo por procesador o por la tarjeta gráfica, con modo automático.
-- Cinco perfiles de rendimiento, de Ultra rendimiento a Calidad máxima, elegidos automáticamente
-  según el procesador, la memoria y la tarjeta gráfica, o ajustados uno por uno; funciona incluso
-  en equipos sin tarjeta gráfica (modo Solo software).
-- Subtítulos animados automáticos al estilo TikTok: la voz de la secuencia se transcribe en el
-  propio equipo y cada palabra se ilumina, crece o aparece a medida que se dice, con 26 estilos
-  (karaoke, caja resaltada, pop, palabra a palabra, neón, creador...), en el idioma hablado o
-  traducidos al inglés. El panel Subtítulos cambia el estilo de todos a la vez y permite corregir
-  el texto. También importa y exporta SRT y WebVTT.
-- Quitar silencios (menú Clip): detecta y corta silencios, muletillas, palabras repetidas y tomas
-  repetidas con cinco métodos (volumen, relativo, ruido adaptable, banda de voz y detector de voz
-  por IA), con vista previa para revisar cada corte y también por línea de comandos
-  (`--remove-silence`). Ver [docs/silence.md](docs/silence.md).
-- Color por nodos (efecto Color Nodes y panel del espacio Color): un grafo de correctores en serie,
-  paralelo y por capas, con primarios, curvas, calificador por tono/saturación/luminancia,
-  ventanas, máscaras y LUT. Ver [docs/color-nodes.md](docs/color-nodes.md).
-- El panel Efectos muestra una imagen de cada efecto, animada al pasar el cursor o siempre
-  (según el perfil de rendimiento), y Clip › Quitar silencios de archivos corta muchos archivos
-  por lotes.
-- Vincular medios: si los archivos se movieron, se ubican a mano o se buscan solos en el equipo.
-- Asistentes de IA: Claude Code, Codex u otro cliente MCP pueden editar con OpenPremier
-  (`OpenPremier --mcp`), incluso en vivo sobre el proyecto abierto. Ver
-  [docs/assistants.md](docs/assistants.md).
-- Cualquier formato de imagen habitual (también SVG, AVIF, HEIC y JPEG XL); lo que se pega con
-  Ctrl+V sobre la línea de tiempo queda donde está el puntero.
-- Proxies como en Premiere Pro: copias ligeras de los clips para editar con fluidez material 4K o
-  de cámara, con un botón para alternar entre proxies y originales; la exportación usa siempre el
-  original.
-- Efectos de estilo (resplandor, fallo digital, temblor de cámara, grano, VHS, película antigua,
-  fugas de luz, semitono, duotono, pintura al óleo, boceto a lápiz, neón, destello de lente,
-  pantalla CRT...), transiciones de zoom, giro, destello, hexágonos, cristales rotos y tinta, y
-  ajustes preestablecidos de animación listos para arrastrar.
-- Efectos de audio para voces y música: cambio de tono, teléfono y radio, trémolo, phaser,
-  distorsión, reductor de bits y puerta de ruido, además de ecualización, dinámica y reverberación.
-- Mezclador de audio en punto flotante, medidores y salida a dispositivos.
-- Formato nativo `.opproj`, intercambio OTIO/FCP XML/EDL e importación parcial de `.prproj`; los
-  efectos y transiciones que no existen tal cual se sustituyen por el equivalente más cercano.
-- Interfaz en español e inglés e importación de mapas de teclado `.kys`.
-- Pegado de imágenes con Ctrl+V desde el navegador, otros programas o el explorador de archivos:
-  la imagen se guarda, se importa y queda lista en la línea de tiempo.
-- Recuperación automática del proyecto ante fallos y registro de actividad configurable desde
-  Preferencias.
-- Paquete ZIP portátil para Windows, AppImage para Linux e imagen de disco `.dmg` para macOS
-  (Apple silicon e Intel).
-
-### Trabajo pendiente
-
-- La importación `.prproj` es parcial y de sólo lectura.
-- Aún faltan OpenFX, scripting Wasm, VST3 y parte del catálogo de efectos.
-- Faltan pruebas más amplias de color, audio envolvente, múltiples monitores y distintos modelos de
-  GPU.
-- Todavía se deben completar las pruebas de compatibilidad y rendimiento para proyectos grandes.
-
-Lo que viene, en orden de prioridad, está en [docs/roadmap.md](docs/roadmap.md), y el detalle
-técnico en [docs/implementation-status.md](docs/implementation-status.md).
-
-## Descargar
-
-Los instaladores y paquetes publicados estarán disponibles en
-[GitHub Releases](https://github.com/xXKuroiKenshiXx/OpenPremier/releases).
-
-Cada versión incluye:
-
-- `OpenPremier-<versión>-windows-x64.zip`
-- `OpenPremier-<versión>-x86_64.AppImage`
-- `OpenPremier-<versión>-macos-arm64.dmg` (Apple silicon) y `OpenPremier-<versión>-macos-x86_64.dmg` (Intel)
-- `SHA256SUMS.txt`
-
-## Compilar desde el código fuente
-
-Se necesita Git y Rust `1.98.1` o posterior. El comando `xtask` descarga y configura las
-dependencias nativas necesarias:
-
-```text
-cargo xtask build --release
-cargo xtask test
-cargo xtask lint
-```
-
-Para generar los paquetes de distribución:
-
-```text
-cargo xtask dist
-```
-
-En Windows, la creación del AppImage utiliza la distribución WSL `OpenPremier-Build` y Podman.
-En macOS se usa el FFmpeg de Homebrew (`brew install ffmpeg dylibbundler pkg-config`).
-Los resultados se guardan en `dist/`.
-
-## Comprobar un paquete
-
-```text
-OpenPremier.exe --self-test
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenPremier-0.9.0-x86_64.AppImage --self-test
-```
-
-La prueba comprueba las bibliotecas de FFmpeg, los codificadores requeridos, la creación del
-adaptador gráfico y una operación básica del compositor.
-
-## Estructura del proyecto
-
-| Ruta | Contenido |
+| 기능 | 설명 |
 |---|---|
-| `crates/op-core` | Modelo de proyecto, tiempo exacto, parámetros, validación e historial |
-| `crates/op-timeline` | Operaciones y navegación de la Timeline |
-| `crates/op-project` | Formatos de proyecto e intercambio |
-| `crates/op-media` | Lectura, decodificación, caché y codificación con FFmpeg |
-| `crates/op-render` | Compositor GPU, efectos, transiciones, gráficos y scopes |
-| `crates/op-audio` | Mezclador, DSP, medidores y dispositivos de audio |
-| `crates/op-application` | Comandos, reproducción, autosave, preferencias y exportación |
-| `crates/op-ui` | Interfaz, paneles, monitores, Timeline, diálogos e idiomas |
-| `crates/openpremier` | Ejecutable, modo portátil, diagnóstico y self-test |
-| `xtask` | Automatización de compilación, pruebas y paquetes |
-| `docs` | Arquitectura, formatos, compatibilidad y estado técnico |
+| 한국어 화면 | 메뉴·패널·대화 상자 1,700여 개 문구를 한국어로 옮겼고, 한글 글꼴을 함께 지원합니다. 환경 설정 > 언어에서 바꿀 수 있습니다. |
+| 문장·단어로 편집 | Whisper가 말을 단어별로 받아쓰면, 단어를 눌러 그 위치로 가고 Shift+클릭으로 구간을 골라 **삭제(모든 트랙 리플 컷)** 하거나 **자막으로 만들 수** 있습니다. 한 번에 실행 취소됩니다. |
+| Whisper 모델 선택 | 환경 설정에서 tiny부터 large-v3, 한국어 특화 모델까지 고르고 **바로 내려받을 수** 있습니다. GPU가 있으면 GPU로 돌아갑니다. |
+| 클립 동기화 | 타임라인에서 클립 2개 이상을 선택하고 우클릭 > **동기화...** (시작 클립 / 끝 클립 / 오디오 트랙 채널). 서로 다른 카메라·마이크로 찍은 영상을 **소리로 맞춥니다.** |
+| AI 편집 도우미 | 프로그램 안 패널에서 대화로 편집합니다. 컷·이동·효과·키프레임·트랙·소리 싱크·문장 삭제·무음 제거·내보내기 등을 도구로 실행합니다. Claude Code 또는 ChatGPT(Codex)에 **로그인해서** 쓰며, 이 프로그램은 API 키를 저장하지 않습니다. |
+| AI 계정 설정 | 환경 설정 > AI 계정에서 Claude·ChatGPT 로그인 상태를 확인하고 로그인/로그아웃합니다. |
+| ComfyUI 연동 | 패널에서 ComfyUI를 켜고 끄고, **Z-Image Turbo / Krea 2 Turbo (이미지)**, **MiniMax H3 (영상)** 을 만들어 프로젝트로 바로 가져옵니다. 모델이 없으면 설치 버튼이 있습니다. |
+| 키프레임·트랙 제어 | AI 도구로 효과 키프레임을 찍고, 트랙 잠금·음소거·추가·삭제를 합니다. |
 
-## Contribuir
+> 아직 베타입니다. AI 도우미는 Claude Code 또는 Codex에 로그인되어 있어야 답합니다.
 
-Antes de enviar cambios, revisa [CONTRIBUTING.md](CONTRIBUTING.md) y ejecuta:
+## 설치와 실행
+
+Windows 10/11 64비트를 기준으로 합니다.
+
+### 직접 빌드
+
+1. [Rust](https://rustup.rs) 1.98 이상과 Visual Studio Build Tools(C++ 도구)를 설치합니다.
+2. 이 저장소를 받고 빌드합니다. FFmpeg 개발 파일은 빌드 중에 자동으로 받습니다.
+
+   ```text
+   cargo xtask build --release
+   ```
+
+3. 결과 `target\release\openpremier.exe`를 FFmpeg DLL(`third_party\ffmpeg\bin`의 avcodec, avformat, avutil, swresample, swscale)과
+   같은 폴더(`<폴더>\app`)에 두고 `We edit.exe`로 이름을 바꿔 실행합니다.
+
+### 받아쓰기 도우미(helper) 설정
+
+문장 편집과 Whisper 자막은 파이썬 도우미를 씁니다. 프로그램 폴더 옆에 `helper` 폴더를 만듭니다
+(`<폴더>\app\We edit.exe`, `<폴더>\helper\...`).
 
 ```text
-cargo xtask lint
-cargo xtask test
+python -m venv helper\venv
+helper\venv\Scripts\pip install faster-whisper numpy
+copy helper\transcribe.py <폴더>\helper\transcribe.py
 ```
 
-Los problemas de seguridad deben comunicarse siguiendo [SECURITY.md](SECURITY.md), no mediante un
-issue público.
+모델은 프로그램의 **환경 설정 > 음성 인식(Whisper)** 에서 내려받습니다. NVIDIA GPU에서 속도를 내려면
+`pip install --target <폴더>\helper\cuda nvidia-cublas-cu12`로 cuBLAS를 설치하세요.
 
-## Licencia
+## 라이선스
 
-OpenPremier se distribuye bajo la licencia
-[GNU General Public License 3.0 o posterior](LICENSE).
+**GNU General Public License v3.0 이상 (GPL-3.0-or-later)** 입니다. 누구나 자유롭게 **사용·복사·수정·배포**할 수 있습니다.
+수정하거나 배포할 때는 같은 GPL 조건으로 소스를 공개해야 합니다. 자세한 내용은 [LICENSE](LICENSE)와
+[NOTICE.md](NOTICE.md)를 보세요.
 
-## ⚠️ Aviso Legal / Disclaimer
+## 출처와 감사
 
-**OpenPremier** es un proyecto de código abierto desarrollado de forma 100% independiente. Este software **no tiene ninguna relación, afiliación, patrocinio ni respaldo por parte de Adobe Systems Incorporated**. 
-
-No utilizamos, distribuimos ni tenemos acceso a ningún código fuente de Adobe Premiere Pro ni de ningún otro producto de Adobe. OpenPremier ha sido construido desde cero por la comunidad y para la comunidad, sirviendo únicamente como una inspiración basada en los estándares de la industria de la edición de video para ofrecer una alternativa libre y accesible. 
-
-*Los nombres "Adobe" y "Premiere Pro" son marcas registradas de sus respectivos propietarios y se mencionan en este proyecto de manera puramente descriptiva y de referencia.*
+- [OpenPremier](https://github.com/xXKuroiKenshiXx/OpenPremier) — 이 프로젝트의 바탕 (GPL-3.0-or-later). 원 README는 [docs/OPENPREMIER_README.es.md](docs/OPENPREMIER_README.es.md)에 있습니다.
+- [FFmpeg](https://ffmpeg.org) — 영상·소리 처리.
+- [OpenAI Whisper](https://github.com/openai/whisper), [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — 음성 인식 (MIT).
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) — 이미지·영상 생성 연동.
+- 변경 내역은 [CHANGES.md](CHANGES.md)에 적었습니다.

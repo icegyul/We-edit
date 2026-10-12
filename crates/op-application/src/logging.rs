@@ -20,9 +20,9 @@ const RING: usize = 4000;
 /// The log file stops growing here (a session normally writes well under a megabyte).
 const MAX_FILE: u64 = 100 << 20;
 
-/// OPENPREMIER_LOG_LIBRARIES=1 records every library at the chosen level.
+/// WEEDIT_LOG_LIBRARIES=1 records every library at the chosen level.
 static ALL_LIBRARIES: std::sync::LazyLock<bool> =
-    std::sync::LazyLock::new(|| std::env::var("OPENPREMIER_LOG_LIBRARIES").is_ok_and(|v| v == "1"));
+    std::sync::LazyLock::new(|| std::env::var("WEEDIT_LOG_LIBRARIES").is_ok_and(|v| v == "1"));
 
 /// One recorded message.
 #[derive(Clone, Debug)]
@@ -117,7 +117,7 @@ impl log::Log for Logger {
         }
         // other libraries only report problems: at the most detailed levels the windowing and
         // graphics libraries write thousands of lines a second (gigabytes in minutes);
-        // OPENPREMIER_LOG_LIBRARIES=1 lets them through for debugging those libraries
+        // WEEDIT_LOG_LIBRARIES=1 lets them through for debugging those libraries
         let ours = m.target().starts_with("op_") || m.target().starts_with("openpremier");
         if ours || *ALL_LIBRARIES {
             return true;
@@ -179,7 +179,7 @@ impl log::Log for Logger {
 
 fn open_file(dir: &Path) -> Option<std::fs::File> {
     let _ = std::fs::create_dir_all(dir);
-    let path = dir.join("openpremier.log");
+    let path = dir.join("we-edit.log");
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -187,13 +187,13 @@ fn open_file(dir: &Path) -> Option<std::fs::File> {
         .ok()
 }
 
-/// Installs the logger. `dir` receives `openpremier.log`; the previous session's log becomes
-/// `openpremier.previous.log`.
+/// Installs the logger. `dir` receives `we-edit.log`; the previous session's log becomes
+/// `we-edit.previous.log`.
 pub fn init(dir: &Path, enabled: bool, level: &str) {
     let l = logger();
     let _ = std::fs::create_dir_all(dir);
-    let path = dir.join("openpremier.log");
-    let previous = dir.join("openpremier.previous.log");
+    let path = dir.join("we-edit.log");
+    let previous = dir.join("we-edit.previous.log");
     let too_big = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > MAX_FILE);
     if too_big(&previous) {
         let _ = std::fs::remove_file(&previous);
@@ -263,7 +263,7 @@ pub fn folder() -> Option<PathBuf> {
 }
 
 pub fn file_path() -> Option<PathBuf> {
-    folder().map(|d| d.join("openpremier.log"))
+    folder().map(|d| d.join("we-edit.log"))
 }
 
 /// Writes a crash report (always, even with logging off). Returns its path.
@@ -273,7 +273,7 @@ pub fn crash_report(text: &str) -> Option<PathBuf> {
     let name = format!("crash-{}.txt", crate::autosave::stamp(SystemTime::now()));
     let path = dir.join(name);
     let mut body = format!(
-        "OpenPremier {} ({} {})\n{} UTC\n\n{text}\n\nRecent log:\n",
+        "We edit {} ({} {})\n{} UTC\n\n{text}\n\nRecent log:\n",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
@@ -308,7 +308,7 @@ mod tests {
                 .any(|l| l.message == "off")
         );
         configure(true, "info");
-        let text = std::fs::read_to_string(dir.path().join("openpremier.log")).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("we-edit.log")).unwrap();
         assert!(text.contains("hello 1"));
         assert!(crash_report("test panic").is_some_and(|p| p.exists()));
         assert!(utc_now().len() == 19);

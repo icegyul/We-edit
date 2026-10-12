@@ -33,13 +33,13 @@ impl Target for Local {
     }
 
     fn describe(&self) -> String {
-        "OpenPremier is not open (or does not allow assistants), so edits go to a project of this \
-         session: save it with save_project and open the file in OpenPremier."
+        "We edit is not open (or does not allow assistants), so edits go to a project of this \
+         session: save it with save_project and open the file in We edit."
             .into()
     }
 }
 
-const INSTRUCTIONS: &str = "OpenPremier is a video editor. Start with get_project and \
+const INSTRUCTIONS: &str = "We edit is a video editor. Start with get_project and \
 get_timeline. Times are in seconds, tracks are named V1, V2... (video) and A1, A2... (audio). \
 Use list_effects to find effect ids and parameters, render_frame to look at the result, and \
 export to write a video file. Every change is one undo step.";
@@ -87,7 +87,7 @@ pub fn handle(target: &mut dyn Target, msg: &Json) -> Option<Json> {
                 .and_then(Json::as_str)
                 .unwrap_or("2025-06-18"),
             "capabilities": {"tools": {"listChanged": false}},
-            "serverInfo": {"name": "openpremier", "version": env!("CARGO_PKG_VERSION")},
+            "serverInfo": {"name": "we-edit", "version": env!("CARGO_PKG_VERSION")},
             "instructions": format!("{INSTRUCTIONS} {}", target.describe()),
         })),
         "ping" => Ok(json!({})),
