@@ -29,8 +29,18 @@ Adobe 및 Premiere Pro는 Adobe Inc.의 상표이며, We edit는 Adobe와 관계
 | AI 계정 설정 | 환경 설정 > AI 계정에서 Claude·ChatGPT 로그인 상태를 확인하고 로그인/로그아웃합니다. |
 | ComfyUI 연동 | 패널에서 ComfyUI를 켜고 끄고, **Z-Image Turbo / Krea 2 Turbo (이미지)**, **MiniMax H3 (영상)** 을 만들어 프로젝트로 바로 가져옵니다. 모델이 없으면 설치 버튼이 있습니다. |
 | 키프레임·트랙 제어 | AI 도구로 효과 키프레임을 찍고, 트랙 잠금·음소거·추가·삭제를 합니다. |
+| 한글 자막 디자인 12종 | 예능 노랑·말자막·뉴스·쇼츠 단어 강조·먹방·네온·손글씨·형광펜 등. 문장 편집 창(새 자막)과 캡션 패널(만든 자막)에서 고릅니다. 글꼴은 무료(OFL) 글꼴을 **처음 쓸 때 한 번만** 내려받습니다. |
+| 쇼츠(세로) 만들기 | 시퀀스 > 쇼츠(세로) 시퀀스 만들기. 가로 영상을 1080x1920 새 시퀀스에 **화면 꽉 채우기(보여줄 위치 선택)** 또는 **블러 배경**으로 맞춥니다. 원본은 그대로입니다. |
+| 내보내기 형식 | H.264·HEVC, YouTube 720p/1080p/1440p/4K/쇼츠 프리셋, **Apple ProRes 6종**(Proxy~4444 XQ, .mov), DNxHR, **Sony XDCAM HD422 호환 MXF**. 모든 형식을 실제로 내보내 다시 열어 확인하는 테스트가 있습니다. |
+| 효과음·배경음 | 저작권 걱정 없는(CC0) 효과음·배경음 806개. **설치하지 않고**, 듣거나 추가할 때 한 번만 내려받습니다. 창 > 효과음·배경음. |
+| 모션 템플릿 10종 | 팝업 제목·하단 이름표·강조 박스·구독 알림·화면 번쩍·충격 글자·말풍선 등. 키프레임이 들어간 클립 묶음으로 들어가며 효과 컨트롤에서 모두 고칠 수 있습니다. 창 > 모션 템플릿. |
+| 생성형 AI 설정 | 환경 설정 > 생성형 AI. 내 PC(그래픽 카드·메모리·디스크) 확인, 로컬 모델(Z-Image Turbo·Krea 2 Turbo·MiniMax H3)의 사양 판정·라이선스 경고·설치, **Nano Banana(Gemini)·ChatGPT 이미지 API 키**(Windows 자격 증명 관리자에만 저장). |
 
 > 아직 베타입니다. AI 도우미는 Claude Code 또는 Codex에 로그인되어 있어야 답합니다.
+>
+> 확인 상태: 위 기능은 실제 창과 시험으로 확인했습니다. 다만 **클라우드 이미지(Nano Banana·ChatGPT)는 API 키가 없어 실제 서비스 호출을 시험하지 못했고**(시험용 서버로 요청·응답 처리만 확인),
+> MiniMax H3는 이 PC(비디오 메모리 8GB)에서 시험하지 않았으며, Sony XDCAM은 Sony 인증이 아닌 호환 규격입니다.
+> MiniMax H3·Krea 2의 라이선스에는 사용 지역·상업 이용 제한이 있을 수 있으니 모델 카드를 직접 확인하세요.
 
 ## 설치와 실행
 
@@ -74,4 +84,6 @@ copy helper\transcribe.py <폴더>\helper\transcribe.py
 - [FFmpeg](https://ffmpeg.org) — 영상·소리 처리.
 - [OpenAI Whisper](https://github.com/openai/whisper), [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — 음성 인식 (MIT).
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) — 이미지·영상 생성 연동.
+- [google/fonts](https://github.com/google/fonts) — 자막 글꼴(SIL OFL 1.1). [Kenney](https://kenney.nl) 등 CC0 소리 —
+  [NOTICE.md](NOTICE.md)에 출처와 라이선스를 적었습니다.
 - 변경 내역은 [CHANGES.md](CHANGES.md)에 적었습니다.
