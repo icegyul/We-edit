@@ -243,7 +243,7 @@ impl AiChat {
                     Command::new(&codex)
                 };
                 // only this program's tools; Codex edits nothing on disk (read-only sandbox)
-                cmd.args(["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only"])
+                cmd.args(["exec", "--json", "--skip-git-repo-check", "--ignore-user-config", "--sandbox", "read-only"])
                     .arg("-c")
                     .arg(format!("mcp_servers.we-edit.command='{}'", exe.display()))
                     .args(["-c", "mcp_servers.we-edit.args=['--mcp']"])
@@ -290,12 +290,20 @@ impl AiChat {
             let (tx, ctx) = (tx.clone(), s.ctx.clone());
             std::thread::spawn(move || {
                 let mut seen = HashSet::new();
+                let mut last_warning = String::new();
                 for line in BufReader::new(out).lines().map_while(Result::ok) {
                     let evs = match provider {
                         Provider::Claude => claude_events(&line),
                         Provider::ChatGpt => codex_events(&line, &mut seen),
                     };
                     for ev in evs {
+                        // Codex reports a failure twice (error, then turn.failed): show it once
+                        if let Event::Warn(w) = &ev {
+                            if *w == last_warning {
+                                continue;
+                            }
+                            last_warning = w.clone();
+                        }
                         let _ = tx.send(ev);
                     }
                     ctx.request_repaint();

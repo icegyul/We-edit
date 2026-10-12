@@ -66,13 +66,34 @@ pub fn claude_path() -> Option<PathBuf> {
     })
 }
 
-/// `codex` from the PATH, else the copy installed in `helper\codex` by the Install button.
+/// `codex` from the PATH, else the copy installed in `helper\codex` by the Install button, else
+/// the one the Codex desktop app keeps for itself (`%LOCALAPPDATA%\OpenAI\Codex\bin\<id>\codex.exe`,
+/// the newest), else the one inside that app's package.
 pub fn codex_path() -> Option<PathBuf> {
     let names: &[&str] = if cfg!(windows) { &["codex.cmd", "codex.exe"] } else { &["codex"] };
-    find_on_path(names).or_else(|| {
-        let bin = helper_dir()?.join("codex").join("node_modules").join(".bin");
-        names.iter().map(|n| bin.join(n)).find(|p| p.is_file())
-    })
+    find_on_path(names)
+        .or_else(|| {
+            let bin = helper_dir()?.join("codex").join("node_modules").join(".bin");
+            names.iter().map(|n| bin.join(n)).find(|p| p.is_file())
+        })
+        .or_else(|| {
+            let bin = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("OpenAI").join("Codex").join("bin");
+            std::fs::read_dir(bin)
+                .ok()?
+                .flatten()
+                .map(|d| d.path().join("codex.exe"))
+                .filter(|p| p.is_file())
+                .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+        })
+        .or_else(|| {
+            let apps = PathBuf::from(std::env::var_os("ProgramFiles")?).join("WindowsApps");
+            std::fs::read_dir(apps)
+                .ok()?
+                .flatten()
+                .filter(|d| d.file_name().to_string_lossy().starts_with("OpenAI.Codex_"))
+                .map(|d| d.path().join("app").join("resources").join("codex.exe"))
+                .find(|p| p.is_file())
+        })
 }
 
 fn quiet(cmd: &mut Command) -> &mut Command {
