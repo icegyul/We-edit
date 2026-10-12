@@ -121,9 +121,14 @@ fn export_settings(ed: &mut Editor, a: &Json) -> Result<(ExportSettings, PathBuf
     let codec = match format {
         "h264" | "mp4" => VideoCodec::H264,
         "hevc" | "h265" => VideoCodec::Hevc,
-        "prores" => VideoCodec::ProRes422Hq,
+        "prores_proxy" => VideoCodec::ProResProxy,
+        "prores_lt" => VideoCodec::ProResLt,
+        "prores422" => VideoCodec::ProRes422,
+        "prores" | "prores422hq" => VideoCodec::ProRes422Hq,
         "prores4444" => VideoCodec::ProRes4444,
+        "prores4444xq" => VideoCodec::ProRes4444Xq,
         "dnxhr" => VideoCodec::DnxhrHq,
+        "xdcam" | "mxf" => VideoCodec::XdcamHd422,
         "png" => VideoCodec::Png,
         other => return Err(format!("unknown format {other}")),
     };

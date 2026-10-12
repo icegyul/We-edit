@@ -106,6 +106,7 @@ fn every_format_with_effects_and_sound() {
     }
     let project = Arc::new(p);
 
+    let mut sizes = std::collections::HashMap::new();
     for codec in VideoCodec::ALL {
         let path = dir
             .path()
@@ -159,6 +160,23 @@ fn every_format_with_effects_and_sound() {
 
         let mut out = op_media::probe(&path).unwrap();
         let v = out.video.clone().expect("a video stream");
+        sizes.insert(codec, std::fs::metadata(&path).unwrap().len());
+        let (name, pix) = match codec {
+            VideoCodec::ProResProxy | VideoCodec::ProResLt | VideoCodec::ProRes422 | VideoCodec::ProRes422Hq => {
+                ("prores", Some("yuv422p10le"))
+            }
+            // the ProRes decoder reports 4444 with alpha as 12-bit
+            VideoCodec::ProRes4444 | VideoCodec::ProRes4444Xq => ("prores", Some("yuva444p12le")),
+            VideoCodec::XdcamHd422 => ("mpeg2video", Some("yuv422p")),
+            VideoCodec::DnxhrHq => ("dnxhd", None),
+            VideoCodec::H264 => ("h264", None),
+            VideoCodec::Hevc => ("hevc", None),
+            VideoCodec::Png => ("png", None),
+        };
+        assert_eq!(v.codec, name, "{codec:?}: codec of the file");
+        if let Some(pix) = pix {
+            assert_eq!(v.pixel_format, pix, "{codec:?}: pixel format");
+        }
         assert_eq!((v.width, v.height), (956, 720), "{codec:?}");
         assert!((v.frames - 15).abs() <= 1, "{codec:?}: {} frames", v.frames);
         assert_eq!(
@@ -187,4 +205,10 @@ fn every_format_with_effects_and_sound() {
             "{codec:?}: average color {px:?}"
         );
     }
+    // each ProRes profile is richer than the one before, so the profile option really reaches the encoder
+    let size = |c: VideoCodec| sizes[&c];
+    assert!(size(VideoCodec::ProResProxy) < size(VideoCodec::ProResLt));
+    assert!(size(VideoCodec::ProResLt) < size(VideoCodec::ProRes422));
+    assert!(size(VideoCodec::ProRes422) < size(VideoCodec::ProRes422Hq));
+    // (4444 and 4444 XQ come out the same on this plain gradient: both hit the encoder's best quality)
 }

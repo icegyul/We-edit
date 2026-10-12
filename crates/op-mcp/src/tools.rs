@@ -296,7 +296,7 @@ pub fn list() -> Json {
         tool(
             "export",
             "Exports the active sequence and waits until the file is written.",
-            json!({"path": s("Output file (.mp4, .mov, .mxf, .png)"), "format": s("h264 (default), hevc, prores, prores4444, dnxhr or png"), "start": num("Seconds (default 0)"), "end": num("Seconds (default: the end of the sequence)"), "width": int("Default: the sequence's"), "height": int("Default: the sequence's")}),
+            json!({"path": s("Output file (.mp4, .mov, .mxf, .png)"), "format": s("h264 (default), hevc, prores (422 HQ), prores_proxy, prores_lt, prores422, prores4444, prores4444xq, dnxhr, xdcam (XDCAM HD422 50 Mbps MXF, 1080p) or png"), "start": num("Seconds (default 0)"), "end": num("Seconds (default: the end of the sequence)"), "width": int("Default: the sequence's"), "height": int("Default: the sequence's")}),
             &["path"]
         ),
         tool(

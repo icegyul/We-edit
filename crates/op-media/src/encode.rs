@@ -16,19 +16,30 @@ use crate::{MediaError, Result, init};
 pub enum VideoCodec {
     H264,
     Hevc,
+    ProResProxy,
+    ProResLt,
+    ProRes422,
     ProRes422Hq,
     ProRes4444,
+    ProRes4444Xq,
     DnxhrHq,
+    /// MPEG-2 4:2:2 at 50 Mbps in an MXF file, the layout of Sony XDCAM HD422 (compatible, not certified by Sony).
+    XdcamHd422,
     Png,
 }
 
 impl VideoCodec {
-    pub const ALL: [VideoCodec; 6] = [
+    pub const ALL: [VideoCodec; 11] = [
         VideoCodec::H264,
         VideoCodec::Hevc,
+        VideoCodec::ProResProxy,
+        VideoCodec::ProResLt,
+        VideoCodec::ProRes422,
         VideoCodec::ProRes422Hq,
         VideoCodec::ProRes4444,
+        VideoCodec::ProRes4444Xq,
         VideoCodec::DnxhrHq,
+        VideoCodec::XdcamHd422,
         VideoCodec::Png,
     ];
 
@@ -36,9 +47,14 @@ impl VideoCodec {
         match self {
             VideoCodec::H264 => "H.264",
             VideoCodec::Hevc => "HEVC (H.265)",
+            VideoCodec::ProResProxy => "Apple ProRes 422 Proxy",
+            VideoCodec::ProResLt => "Apple ProRes 422 LT",
+            VideoCodec::ProRes422 => "Apple ProRes 422",
             VideoCodec::ProRes422Hq => "Apple ProRes 422 HQ",
             VideoCodec::ProRes4444 => "Apple ProRes 4444",
+            VideoCodec::ProRes4444Xq => "Apple ProRes 4444 XQ",
             VideoCodec::DnxhrHq => "DNxHR HQ",
+            VideoCodec::XdcamHd422 => "XDCAM HD422 50 Mbps (MXF)",
             VideoCodec::Png => "PNG (QuickTime)",
         }
     }
@@ -46,6 +62,7 @@ impl VideoCodec {
     pub fn extension(self) -> &'static str {
         match self {
             VideoCodec::H264 | VideoCodec::Hevc => "mp4",
+            VideoCodec::XdcamHd422 => "mxf",
             _ => "mov",
         }
     }
@@ -54,9 +71,12 @@ impl VideoCodec {
     pub fn input(self) -> VideoInput {
         match self {
             VideoCodec::H264 | VideoCodec::Hevc => VideoInput::Yuv420p,
-            VideoCodec::ProRes422Hq => VideoInput::Yuv422p10,
-            VideoCodec::DnxhrHq => VideoInput::Yuv422p,
-            VideoCodec::ProRes4444 => VideoInput::Yuva444p10,
+            VideoCodec::ProResProxy
+            | VideoCodec::ProResLt
+            | VideoCodec::ProRes422
+            | VideoCodec::ProRes422Hq => VideoInput::Yuv422p10,
+            VideoCodec::DnxhrHq | VideoCodec::XdcamHd422 => VideoInput::Yuv422p,
+            VideoCodec::ProRes4444 | VideoCodec::ProRes4444Xq => VideoInput::Yuva444p10,
             VideoCodec::Png => VideoInput::Rgba8,
         }
     }
@@ -90,8 +110,14 @@ impl VideoCodec {
                 }
                 v.push("libx265");
             }
-            VideoCodec::ProRes422Hq | VideoCodec::ProRes4444 => v.push("prores_ks"),
+            VideoCodec::ProResProxy
+            | VideoCodec::ProResLt
+            | VideoCodec::ProRes422
+            | VideoCodec::ProRes422Hq
+            | VideoCodec::ProRes4444
+            | VideoCodec::ProRes4444Xq => v.push("prores_ks"),
             VideoCodec::DnxhrHq => v.push("dnxhd"),
+            VideoCodec::XdcamHd422 => v.push("mpeg2video"),
             VideoCodec::Png => v.push("png"),
         }
         v
@@ -524,9 +550,24 @@ fn try_video(
         }
     }
     match s.codec {
+        VideoCodec::ProResProxy => opts.set("profile", "0"),
+        VideoCodec::ProResLt => opts.set("profile", "1"),
+        VideoCodec::ProRes422 => opts.set("profile", "2"),
         VideoCodec::ProRes422Hq => opts.set("profile", "3"),
         VideoCodec::ProRes4444 => opts.set("profile", "4"),
+        VideoCodec::ProRes4444Xq => opts.set("profile", "5"),
         VideoCodec::DnxhrHq => opts.set("profile", "dnxhr_hq"),
+        VideoCodec::XdcamHd422 => {
+            // constant 50 Mbps, 4:2:2 profile, long GOP of 12 with two B-frames (the XDCAM HD422 layout)
+            enc.set_bit_rate(50_000_000);
+            enc.set_max_bit_rate(50_000_000);
+            enc.set_gop(12);
+            enc.set_max_b_frames(2);
+            opts.set("minrate", "50000000");
+            opts.set("bufsize", "36408333");
+            opts.set("profile", "0");
+            opts.set("level", "2");
+        }
         _ => {}
     }
     if global_header {
@@ -536,6 +577,9 @@ fn try_video(
     let mut stream = octx.add_stream(codec)?;
     stream.set_parameters(&encoder);
     stream.set_time_base(tb);
+    // MXF refuses a stream without a frame rate (mp4 and mov work it out from the time base)
+    stream.set_rate(rational(s.rate));
+    stream.set_avg_frame_rate(rational(s.rate));
     let index = stream.index();
     let frame = ff::frame::Video::new(enc_format, s.width, s.height);
     let (staging, scaler) = if enc_format != wanted {
