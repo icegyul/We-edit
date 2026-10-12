@@ -208,9 +208,10 @@ pub const DESIGNS: &[Design] = &[
     },
 ];
 
-/// The Caption parameters that give a caption this design on a picture `height` pixels tall.
-pub fn values(d: &Design, height: u32) -> Vec<(String, Value)> {
-    let size = (f64::from(height) * d.size).round().max(12.0);
+/// The Caption parameters that give a caption this design on a picture whose shorter side is
+/// `base` pixels (1080 for HD, and for a vertical shorts frame).
+pub fn values(d: &Design, base: u32) -> Vec<(String, Value)> {
+    let size = (f64::from(base) * d.size).round().max(12.0);
     let color = |c: [f32; 3]| Value::Color(Rgba::new(c[0], c[1], c[2], 1.0));
     let style = CAPTION_STYLES.iter().position(|s| *s == d.style).unwrap_or(0) as u32;
     let mut v = vec![
@@ -293,9 +294,9 @@ impl Editor {
             return;
         }
         let Some(d) = DESIGNS.get(design) else { return };
-        let Some(height) = self.active_seq().map(|s| s.settings.height) else { return };
+        let Some(base) = self.active_seq().map(|s| s.settings.width.min(s.settings.height)) else { return };
         self.caption_edit(|e| {
-            e.set_caption_values(targets, values(d, height), None);
+            e.set_caption_values(targets, values(d, base), None);
             e.seal();
         });
         self.info(format!("자막 디자인 '{}'을(를) 적용했습니다", d.name));

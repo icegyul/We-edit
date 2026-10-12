@@ -246,6 +246,12 @@ pub fn list() -> Json {
             &["clip_ids"]
         ),
         tool(
+            "make_shorts",
+            "Makes a vertical 1080x1920 sequence (for Shorts, Reels, TikTok) from the active horizontal one and opens it; the original stays as it is. The horizontal sequence is nested whole: layout=fill crops it to fill the frame (focus picks the stretch that stays, 0 left to 1 right), layout=blur keeps the whole picture in the middle over a blurred enlarged copy. Afterwards transcribe_sentences works on the new sequence, and captions made there get the vertical layout.",
+            json!({"layout": s("fill or blur (default fill)"), "focus": num("fill only: where to look, 0 left, 0.5 middle, 1 right (default 0.5)")}),
+            &[]
+        ),
+        tool(
             "sync_by_audio",
             "Lines up two to six recordings of the same scene by their sound (several cameras, or a camera and a separate microphone). Returns for each media the second of the sequence where it must start (`timeline_start`, use it as `at` of add_clip on its own track) so that their sound matches. The first media is the reference. A low confidence means the sound did not match: do not use that result.",
             json!({"media_ids": ids("Media ids from get_project, the reference first"), "max_seconds": num("How much of each recording's beginning to compare (default 600)")}),
@@ -1135,6 +1141,16 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 .filter(|s| s.error)
                 .map(|s| s.text.clone());
             text(json!({"imported": new, "error": errors}))
+        }
+        "make_shorts" => {
+            let layout = match str_arg(a, "layout").unwrap_or("fill") {
+                "fill" => op_application::shorts::ShortsLayout::Fill,
+                "blur" => op_application::shorts::ShortsLayout::Blur,
+                other => return Err(format!("layout must be fill or blur, not {other}")),
+            };
+            let sid = ed.make_shorts(layout, f64_arg(a, "focus").unwrap_or(0.5))?;
+            let name = ed.project.sequence(sid).map(|s| s.name.clone()).unwrap_or_default();
+            text(json!({"sequence_id": sid.0, "name": name, "size": "1080x1920"}))
         }
         "sync_by_audio" => sync_by_audio(ed, a),
         "comfy_status" => comfy_status(ed),

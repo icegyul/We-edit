@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use egui::{RichText, Ui};
 use op_application::captions::ModelSize;
 use op_application::keymap::{self, Binding, Chord, Keymap};
+use op_application::shorts::ShortsLayout;
 use op_application::performance::{Hardware, Profile};
 use op_application::{ExportJob, ExportSettings};
 use op_core::*;
@@ -131,6 +132,11 @@ pub enum Dialog {
     SyncClips {
         mode: u8,
         channel: u8,
+    },
+    /// Sequence > Make Shorts: 0 the picture fills the frame, 1 over a blurred copy; where to look (0 left .. 1 right).
+    Shorts {
+        layout: u8,
+        focus: f32,
     },
     PasteAttributes(Attributes),
     RemoveAttributes(Attributes),
@@ -916,6 +922,42 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                             &[&r.moved.to_string(), &r.skipped.join(", ")],
                         ));
                     }
+                    Err(e) => s.ed.error(e),
+                }
+            }
+            !(ok || cancel || esc)
+        }
+        Dialog::Shorts { layout, focus } => {
+            let ((ok, cancel), esc) = modal(ctx, "shorts", "쇼츠(세로) 시퀀스 만들기", 420.0, |ui| {
+                ui.label(
+                    egui::RichText::new("지금 시퀀스를 1080 x 1920 세로 시퀀스에 넣어 새로 만듭니다. 원래 시퀀스는 그대로 둡니다.")
+                        .color(theme::TEXT_DIM),
+                );
+                ui.add_space(6.0);
+                ui.radio_value(layout, 0u8, "화면 꽉 채우기 (좌우를 잘라냄)");
+                ui.add_enabled_ui(*layout == 0, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(22.0);
+                        ui.label("보여줄 위치");
+                        ui.add(egui::Slider::new(focus, 0.0..=1.0).show_value(false));
+                        ui.label(match *focus {
+                            f if f < 0.35 => "왼쪽",
+                            f if f > 0.65 => "오른쪽",
+                            _ => "가운데",
+                        });
+                    });
+                });
+                ui.radio_value(layout, 1u8, "블러 배경 (원본 전체를 가운데에, 뒤는 흐리게 확대)");
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("만든 뒤 '문장 편집' 창에서 디자인을 골라 자막을 넣으세요.").color(theme::TEXT_DIM),
+                );
+                buttons(ui, "만들기")
+            });
+            if ok {
+                let how = if *layout == 1 { ShortsLayout::Blur } else { ShortsLayout::Fill };
+                match s.ed.make_shorts(how, f64::from(*focus)) {
+                    Ok(_) => s.ed.info("쇼츠 시퀀스를 만들었습니다"),
                     Err(e) => s.ed.error(e),
                 }
             }

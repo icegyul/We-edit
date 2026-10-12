@@ -311,7 +311,7 @@ impl Editor {
         };
         let font = op_render::text::Fonts::default_family().to_string();
         // about 6.5 % of the picture height, 70 pixels in HD
-        let size = (seq.settings.height as f64 * 0.065).round().max(12.0);
+        let size = (seq.settings.width.min(seq.settings.height) as f64 * 0.065).round().max(12.0);
         let y = if seq.settings.height > seq.settings.width {
             0.7
         } else {
@@ -346,7 +346,7 @@ impl Editor {
             .iter()
             .rposition(|t| t.name == "Captions" && !t.locked && t.clips_in(range).next().is_none());
         let opts = opts.clone();
-        let height = seq.settings.height;
+        let height = seq.settings.width.min(seq.settings.height);
         let made = self.seq_edit("Create Captions", move |p, sid, _| {
             let mut ids = p.ids.clone();
             let mut clips = Vec::new();

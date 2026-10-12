@@ -508,6 +508,13 @@ impl State {
                 let d = Dialog::silence_batch(self);
                 self.dialogs.push(d);
             }
+            "we.shorts" => {
+                if self.ed.active.is_none() {
+                    self.ed.error(t("Open a sequence first"));
+                } else {
+                    self.dialogs.push(Dialog::Shorts { layout: 0, focus: 0.5 });
+                }
+            }
             "op.clip.synchronize" => {
                 if self.ed.selection.clips.len() < 2 {
                     self.ed.error(t("Select two or more clips to synchronize"));

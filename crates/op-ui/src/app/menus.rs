@@ -251,6 +251,7 @@ pub fn proxy_menu(ui: &mut Ui, s: &mut State) {
 pub(crate) fn sequence_menu(ui: &mut Ui, s: &mut State) {
     let has = s.ed.active.is_some();
     item_if(ui, s, "Sequence Settings...", "op.sequence.settings", has);
+    item_if(ui, s, "쇼츠(세로) 시퀀스 만들기...", "we.shorts", has);
     ui.separator();
     item(
         ui,
