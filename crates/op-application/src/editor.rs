@@ -106,6 +106,9 @@ pub struct Editor {
     pub design_font: Option<crate::caption_designs::FontJob>,
     /// The sound library: downloads and the preview.
     pub sound: crate::sound_library::SoundState,
+    /// A picture being made by a cloud service, and the last one saved.
+    pub cloud: Option<crate::cloud_images::CloudJob>,
+    pub cloud_last: Option<std::path::PathBuf>,
     /// Captions to make from the sentence transcript as soon as it is ready.
     pub captions_after: Option<crate::captions::CaptionOptions>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
@@ -197,6 +200,8 @@ impl Editor {
             whisper_dl: None,
             design_font: None,
             sound: Default::default(),
+            cloud: None,
+            cloud_last: None,
             captions_after: None,
             last_import_report: None,
             autosave_at: Instant::now(),
@@ -1169,6 +1174,7 @@ impl Editor {
         self.poll_whisper_download();
         self.poll_design_font();
         self.poll_sound();
+        self.poll_cloud();
         if !self.background {
             self.autosave();
             self.keep_recovery();

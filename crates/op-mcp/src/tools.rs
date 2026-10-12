@@ -270,6 +270,12 @@ pub fn list() -> Json {
             &["template"]
         ),
         tool(
+            "generate_image_api",
+            "Makes a picture with a cloud service and the user's saved API key (Preferences > 생성형 AI): provider=gemini (Nano Banana) or openai (ChatGPT image). Costs the user money at that service, so use it only when asked. The picture is saved in the generated folder and imported into the project (look for it with get_project). Fails with a clear message when no key is saved.",
+            json!({"provider": s("gemini or openai"), "prompt": s("What to draw"), "aspect": s("wide (16:9, default), tall (9:16) or square")}),
+            &["provider", "prompt"]
+        ),
+        tool(
             "make_shorts",
             "Makes a vertical 1080x1920 sequence (for Shorts, Reels, TikTok) from the active horizontal one and opens it; the original stays as it is. The horizontal sequence is nested whole: layout=fill crops it to fill the frame (focus picks the stretch that stays, 0 left to 1 right), layout=blur keeps the whole picture in the middle over a blurred enlarged copy. Afterwards transcribe_sentences works on the new sequence, and captions made there get the vertical layout.",
             json!({"layout": s("fill or blur (default fill)"), "focus": num("fill only: where to look, 0 left, 0.5 middle, 1 right (default 0.5)")}),
@@ -1240,6 +1246,28 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
             }
             let clips = ed.add_motion_template(id, &o)?;
             text(json!({"clips": clips, "clip_ids": ed.selection.clips.iter().map(|c| c.0).collect::<Vec<_>>()}))
+        }
+        "generate_image_api" => {
+            use op_application::cloud_images::{Aspect, Provider};
+            let provider = match str_arg(a, "provider").unwrap_or("") {
+                "gemini" => Provider::Gemini,
+                "openai" => Provider::OpenAi,
+                other => return Err(format!("provider must be gemini or openai, not {other}")),
+            };
+            let aspect = match str_arg(a, "aspect").unwrap_or("wide") {
+                "wide" => Aspect::Wide,
+                "tall" => Aspect::Tall,
+                "square" => Aspect::Square,
+                other => return Err(format!("aspect must be wide, tall or square, not {other}")),
+            };
+            ed.cloud_image(provider, str_arg(a, "prompt").ok_or("prompt is required")?, aspect)?;
+            wait(ed, 300, |e| e.cloud.is_some());
+            wait(ed, 60, |e| e.importing > 0);
+            match (&ed.cloud_last, ed.status.as_ref().filter(|s| s.error)) {
+                (Some(path), _) => text(json!({"path": path, "note": "imported into the project: find it with get_project"})),
+                (None, Some(err)) => Err(err.text.clone()),
+                (None, None) => Err("the picture was not made".into()),
+            }
         }
         "make_shorts" => {
             let layout = match str_arg(a, "layout").unwrap_or("fill") {

@@ -36,6 +36,10 @@ pub struct Preferences {
     pub ai_provider: String,
     /// The ComfyUI folder (the one with python_embeded); empty looks in the usual places.
     pub comfy_dir: String,
+    /// Model used for Nano Banana pictures (the key is not here: see `secrets`).
+    pub gemini_model: String,
+    /// Model used for ChatGPT pictures.
+    pub openai_model: String,
     /// The Whisper model of the sentence editor and automatic captions (an id of `whisper_models`).
     pub whisper_model: String,
     /// The port of the ComfyUI this program starts (the usual 8188 may belong to another program).
@@ -101,6 +105,8 @@ impl Default for Preferences {
             assistant_control: false,
             ai_provider: "claude".into(),
             comfy_dir: String::new(),
+            gemini_model: "gemini-nano-banana-2.1".into(),
+            openai_model: "gpt-image-2.5-flare".into(),
             whisper_model: "large-v3".into(),
             comfy_port: 8288,
             audio_scrubbing: true,

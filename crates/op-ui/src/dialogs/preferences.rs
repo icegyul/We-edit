@@ -19,6 +19,7 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
     let mut new_custom: Option<op_application::performance::CustomSettings> = None;
     let mut show_log = false;
     let mut open_logs = false;
+    let mut open_generative = false;
     // (model id, 1 download, 2 cancel)
     let mut whisper_action: Option<(&'static str, u8)> = None;
     // 0 nothing, 1 sign in, 2 install Codex
@@ -686,6 +687,20 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                     ui.label("");
                     ui.end_row();
                     ui.label(
+                        RichText::new("생성형 AI")
+                            .strong()
+                            .family(crate::fonts::strong())
+                            .color(theme::TEXT_BRIGHT),
+                    );
+                    ui.end_row();
+                    ui.label("내 PC·모델·API 키");
+                    if ui.button("생성형 AI 설정 열기...").clicked() {
+                        open_generative = true;
+                    }
+                    ui.end_row();
+                    ui.label("");
+                    ui.end_row();
+                    ui.label(
                         RichText::new(t("Pasted Images"))
                             .strong().family(crate::fonts::strong())
                             .color(theme::TEXT_BRIGHT),
@@ -751,6 +766,9 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
         if let Err(e) = result {
             s.ed.error(e);
         }
+    }
+    if open_generative && !s.dialogs.iter().any(|d| matches!(d, Dialog::Generative(_))) {
+        s.dialogs.push(Dialog::Generative(Box::default()));
     }
     if show_log && !s.dialogs.iter().any(|d| matches!(d, Dialog::Log { .. })) {
         s.dialogs.push(Dialog::log());

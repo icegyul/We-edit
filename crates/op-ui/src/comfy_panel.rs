@@ -112,6 +112,10 @@ fn place_when_ready(s: &mut State) {
 }
 
 fn body(s: &mut State, ui: &mut Ui) {
+    if ui.button("생성형 AI 설정 (내 PC 사양·모델 설치·API 키)...").clicked() {
+        crate::dialogs::open_generative(s);
+    }
+    ui.add_space(4.0);
     let green = Color32::from_rgb(0x2e, 0x9d, 0x4f);
     let running = s.comfy.up.is_some();
     let loading = !running && s.ed.comfy.child.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));

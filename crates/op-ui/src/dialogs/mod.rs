@@ -22,6 +22,7 @@ use crate::i18n::{self, t, tf, tn};
 use crate::{keys, theme, widgets};
 
 mod export;
+mod generative;
 mod media;
 mod paste;
 mod preferences;
@@ -31,9 +32,17 @@ mod silence;
 mod silence_batch;
 
 use export::*;
+use generative::*;
 use media::*;
 use paste::*;
 pub use preferences::hardware_summary;
+
+/// Opens the 생성형 AI settings window (one at a time).
+pub fn open_generative(s: &mut State) {
+    if !s.dialogs.iter().any(|d| matches!(d, Dialog::Generative(_))) {
+        s.dialogs.push(Dialog::Generative(Box::default()));
+    }
+}
 use preferences::*;
 use sequence::*;
 use shortcuts::*;
@@ -96,6 +105,8 @@ pub struct CaptionForm {
 }
 
 pub enum Dialog {
+    /// 생성형 AI settings: this PC, local models, cloud keys.
+    Generative(Box<GenForm>),
     Unsaved(Then),
     /// Closing the program while an export runs.
     ExportRunning,
@@ -744,6 +755,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             open
         }
         Dialog::Export(f) => export_dialog(s, ctx, f),
+        Dialog::Generative(f) => generative_dialog(s, ctx, f),
         Dialog::Speed {
             percent,
             duration,

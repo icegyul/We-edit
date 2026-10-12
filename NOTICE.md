@@ -27,6 +27,7 @@ affiliated with Adobe.
 | Sound effects of Kenney (kenney.nl), found through the index Mcamento8/open-game-sfx-index | CC0 1.0 | sound library, downloaded on demand (commit-pinned) |
 | RezaParsian/free-sfx-bgm-pack (sounds synthesized from code) | CC0 1.0 | sound library, downloaded on demand |
 | AERIS MUSIC tracks (farmmer938-lgtm/aeris-cc0-music) | CC0 1.0 | sound library, downloaded on demand |
+| keyring (Rust crate) | MIT OR Apache-2.0 | API keys kept in the Windows Credential Manager |
 
 Model files are never part of this repository; they are downloaded by the user from their
 original sources and keep their own licenses.

@@ -27,6 +27,8 @@ dirs.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
 sysinfo.workspace = true
+keyring.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

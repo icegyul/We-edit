@@ -23,13 +23,96 @@ pub struct Pack {
     pub label: &'static str,
     /// What it makes (English source text of the interface).
     pub note: &'static str,
+    /// "이미지" or "영상".
+    pub kind: &'static str,
+    /// Video memory the model wants, in GB.
+    pub vram_gb: u32,
+    /// What its license says that matters here (Korean).
+    pub license: &'static str,
+    /// The license has limits the user must read before using the results.
+    pub license_warning: bool,
     pub files: &'static [PackFile],
 }
 
-pub const PACKS: &[Pack] = &[Pack {
+pub const PACKS: &[Pack] = &[
+    Pack {
+        id: "z-image-turbo",
+        label: "Z-Image Turbo",
+        note: "Image, very fast (8 steps)",
+        kind: "이미지",
+        vram_gb: 8,
+        license: "Apache-2.0: 상업 이용 가능",
+        license_warning: false,
+        files: &[
+            PackFile {
+                dir: "diffusion_models",
+                name: "z_image_turbo_int8_convrot.safetensors",
+                url: "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors",
+                megabytes: 6201,
+            },
+            PackFile {
+                dir: "text_encoders",
+                name: "qwen_3_4b_fp8_mixed.safetensors",
+                url: "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors",
+                megabytes: 5632,
+            },
+            PackFile {
+                dir: "vae",
+                name: "ae.safetensors",
+                url: "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
+                megabytes: 335,
+            },
+        ],
+    },
+    Pack {
+        id: "minimax-h3",
+        label: "MiniMax H3 (영상+소리)",
+        note: "Video with sound, a few seconds",
+        kind: "영상",
+        vram_gb: 24,
+        license: "라이선스가 한국을 사용 제외 지역으로 두고 있다는 조사 결과가 있습니다. 쓰기 전에 모델 카드를 직접 확인하세요",
+        license_warning: true,
+        files: &[
+            PackFile {
+                dir: "diffusion_models",
+                name: "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                url: "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                megabytes: 20970,
+            },
+            PackFile {
+                dir: "text_encoders",
+                name: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+                url: "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+                megabytes: 15687,
+            },
+            PackFile {
+                dir: "vae",
+                name: "minimax_h3_video_vae_fp16.safetensors",
+                url: "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+                megabytes: 5208,
+            },
+            PackFile {
+                dir: "vae",
+                name: "minimax_h3_audio_vae_fp32.safetensors",
+                url: "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+                megabytes: 605,
+            },
+            PackFile {
+                dir: "loras",
+                name: "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+                url: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+                megabytes: 1956,
+            },
+        ],
+    },
+    Pack {
     id: "krea2-turbo",
     label: "Krea 2 Turbo",
     note: "Image, fast (8 steps)",
+    kind: "이미지",
+    vram_gb: 8,
+    license: "상업 이용에 조건이 있습니다(연 매출 규모 제한). 쓰기 전에 모델 카드를 확인하세요",
+    license_warning: true,
     files: &[
         PackFile {
             dir: "diffusion_models",
@@ -50,7 +133,8 @@ pub const PACKS: &[Pack] = &[Pack {
             megabytes: 254,
         },
     ],
-}];
+    },
+];
 
 pub fn pack(id: &str) -> Option<&'static Pack> {
     PACKS.iter().find(|p| p.id == id)
