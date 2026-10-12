@@ -3,6 +3,7 @@
 
 use egui::{Color32, RichText, Ui};
 use op_application::Monitor;
+use op_application::caption_designs::{DESIGNS, font_ready};
 use op_core::catalog;
 use op_core::*;
 
@@ -31,6 +32,24 @@ fn color_of(c: &Component, key: &str) -> [f32; 3] {
         Some(Value::Color(c)) => [c.r, c.g, c.b],
         _ => [1.0, 1.0, 1.0],
     }
+}
+
+/// The menu of Korean caption designs; returns the one clicked. `current` is the design in use.
+pub fn design_combo(ui: &mut Ui, id: &str, current: Option<usize>, none: &str) -> Option<Option<usize>> {
+    let mut picked = None;
+    let name = current.and_then(|i| DESIGNS.get(i)).map_or(none, |d| d.name);
+    egui::ComboBox::from_id_salt(id).selected_text(name).width(140.0).show_ui(ui, |ui| {
+        if current.is_some() && ui.selectable_label(false, none).clicked() {
+            picked = Some(None);
+        }
+        for (i, d) in DESIGNS.iter().enumerate() {
+            let label = if font_ready(d) { d.name.to_string() } else { format!("{} (글꼴 받기)", d.name) };
+            if ui.selectable_label(current == Some(i), label).on_hover_text(d.note).clicked() {
+                picked = Some(Some(i));
+            }
+        }
+    });
+    picked
 }
 
 pub fn captions(s: &mut State, ui: &mut Ui) {
@@ -117,6 +136,15 @@ fn body(s: &mut State, ui: &mut Ui) {
             .and_then(|c| c.component(catalog::CAPTION).cloned())
     });
     let Some(first) = first else { return };
+    ui.horizontal(|ui| {
+        ui.label("디자인");
+        if let Some(Some(i)) = design_combo(ui, "caption-design", None, "고르면 바로 적용") {
+            s.ed.use_caption_design(i, targets.clone());
+        }
+        if s.ed.design_font.is_some() {
+            ui.label(RichText::new("글꼴 내려받는 중…").color(theme::TEXT_DIM));
+        }
+    });
     let mut changes: Vec<(String, Value)> = Vec::new();
     let mut merge: Option<String> = None;
     // side by side when the panel is wide, one under the other (scrolling together) when not

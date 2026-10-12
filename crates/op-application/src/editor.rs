@@ -102,6 +102,8 @@ pub struct Editor {
     pub comfy: crate::comfy::State,
     /// A Whisper model being downloaded (Preferences > Speech Recognition).
     pub whisper_dl: Option<crate::whisper_models::Download>,
+    /// The font of a caption design being downloaded.
+    pub design_font: Option<crate::caption_designs::FontJob>,
     /// Captions to make from the sentence transcript as soon as it is ready.
     pub captions_after: Option<crate::captions::CaptionOptions>,
     pub last_import_report: Option<op_project::prproj::ImportReport>,
@@ -191,6 +193,7 @@ impl Editor {
             transcript: None,
             comfy: Default::default(),
             whisper_dl: None,
+            design_font: None,
             captions_after: None,
             last_import_report: None,
             autosave_at: Instant::now(),
@@ -1161,6 +1164,7 @@ impl Editor {
         self.poll_sentences();
         self.poll_comfy();
         self.poll_whisper_download();
+        self.poll_design_font();
         if !self.background {
             self.autosave();
             self.keep_recovery();

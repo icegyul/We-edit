@@ -7,6 +7,7 @@ pub mod clipsync;
 pub mod comfy;
 pub mod comfy_packs;
 pub mod download;
+pub mod caption_designs;
 pub mod captions;
 pub mod commands;
 pub mod editor;

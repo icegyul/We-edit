@@ -270,6 +270,23 @@ impl Editor {
             .is_some_and(|t| Some(t.sequence) == self.active && t.stamp == self.history.labels().1)
     }
 
+    /// Runs an edit that only touches captions (they move no sound) and, when the transcript
+    /// matched the timeline before, keeps it matching.
+    pub(crate) fn caption_edit<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let was_current = self.transcript_is_current();
+        let result = f(self);
+        if was_current && let Some(t) = self.transcript.clone() {
+            let stamp = self.history.labels().1;
+            self.transcript = Some(Arc::new(Transcript {
+                sequence: t.sequence,
+                language: t.language.clone(),
+                sentences: t.sentences.clone(),
+                stamp,
+            }));
+        }
+        result
+    }
+
     /// Cuts the sentences `ids` out of the active sequence (every track, gaps closed, one undo
     /// step) and moves the remaining sentences up. Returns how many were cut.
     pub fn delete_sentences(&mut self, ids: &[usize]) -> Result<usize, String> {
@@ -367,7 +384,7 @@ impl Editor {
             return Err("There are no words there".into());
         }
         let cues = op_core::captions::chunk(&words, opts.max_words.max(1), 0.8, 0.3);
-        let n = self.create_captions(&cues, opts);
+        let n = self.caption_edit(|e| e.create_captions(&cues, opts));
         if n == 0 {
             return Err("No captions could be made".into());
         }

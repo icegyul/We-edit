@@ -10,6 +10,7 @@ use op_core::catalog::CAPTION_STYLES;
 use op_core::*;
 
 use crate::app::State;
+use crate::captions_panel::design_combo;
 use crate::i18n::t;
 use crate::theme;
 
@@ -29,6 +30,8 @@ pub struct SentencesView {
     /// First and last selected word, counted over the whole transcript.
     sel: Option<(usize, usize)>,
     anchor: Option<usize>,
+    /// Caption design for new captions (index into the designs), or the plain style.
+    design: Option<usize>,
 }
 
 fn clock(seconds: f64) -> String {
@@ -115,25 +118,37 @@ fn body(s: &mut State, ui: &mut Ui) {
     // captions from the words, in the chosen design
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("자막").color(theme::TEXT_DIM));
-        let style = (s.caption_options.style as usize).min(CAPTION_STYLES.len() - 1);
-        egui::ComboBox::from_id_salt("sentence-caption-style")
-            .selected_text(t(CAPTION_STYLES[style]))
-            .width(120.0)
-            .show_ui(ui, |ui| {
-                for (i, name) in CAPTION_STYLES.iter().enumerate() {
-                    if ui.selectable_label(i == style, t(name)).clicked() {
-                        s.caption_options.style = i as u32;
+        if let Some(pick) = design_combo(ui, "sentence-caption-design", s.sentences.design, "디자인 없이 (기본 스타일)") {
+            s.sentences.design = pick;
+            if let Some(i) = pick {
+                s.ed.use_caption_design(i, Vec::new());
+            }
+        }
+        if s.sentences.design.is_none() {
+            let style = (s.caption_options.style as usize).min(CAPTION_STYLES.len() - 1);
+            egui::ComboBox::from_id_salt("sentence-caption-style")
+                .selected_text(t(CAPTION_STYLES[style]))
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    for (i, name) in CAPTION_STYLES.iter().enumerate() {
+                        if ui.selectable_label(i == style, t(name)).clicked() {
+                            s.caption_options.style = i as u32;
+                        }
                     }
-                }
-            });
+                });
+        }
+        let fetching = s.ed.design_font.is_some();
+        if fetching {
+            ui.label(RichText::new("글꼴 내려받는 중…").color(theme::TEXT_DIM));
+        }
         ui.add(egui::DragValue::new(&mut s.caption_options.max_words).range(1..=12).suffix(" 단어"));
-        let all = ui.add_enabled(current, egui::Button::new("전체 자막 만들기")).clicked();
+        let all = ui.add_enabled(current && !fetching, egui::Button::new("전체 자막 만들기")).clicked();
         let part = ui
-            .add_enabled(current && s.sentences.sel.is_some(), egui::Button::new("선택한 부분 자막"))
+            .add_enabled(current && !fetching && s.sentences.sel.is_some(), egui::Button::new("선택한 부분 자막"))
             .clicked();
         if all || part {
             let range = if part { s.sentences.sel.map(|(a, b)| (flat[a].0, flat[b].1)) } else { None };
-            let opts = s.caption_options.clone();
+            let opts = options(s);
             match s.ed.captions_from_transcript(&opts, range) {
                 Ok(n) => s.ed.info(format!("자막 {n}개를 만들었습니다")),
                 Err(e) => s.ed.error(e),
@@ -204,11 +219,18 @@ fn body(s: &mut State, ui: &mut Ui) {
     });
 }
 
+/// Options for new captions: the plain ones plus the design chosen in this panel.
+fn options(s: &State) -> op_application::captions::CaptionOptions {
+    let mut o = s.caption_options.clone();
+    o.design = s.sentences.design;
+    o
+}
+
 /// Starts the transcription; with `captions` the captions follow as soon as it is ready.
 fn start(s: &mut State, captions: bool) {
     s.sentences.sel = None;
     s.sentences.anchor = None;
-    s.ed.captions_after = captions.then(|| s.caption_options.clone());
+    s.ed.captions_after = captions.then(|| options(s));
     if let Err(e) = s.ed.transcribe_sentences(LANGUAGES[s.sentences.language].0) {
         s.ed.captions_after = None;
         s.ed.error(e);

@@ -27,6 +27,8 @@ pub struct CaptionOptions {
     pub style: u32,
     pub max_words: usize,
     pub uppercase: bool,
+    /// Index into `caption_designs::DESIGNS`; the design overrides style, font, size and colors.
+    pub design: Option<usize>,
 }
 
 impl Default for CaptionOptions {
@@ -35,6 +37,7 @@ impl Default for CaptionOptions {
             style: 2,
             max_words: 4,
             uppercase: false,
+            design: None,
         }
     }
 }
@@ -343,6 +346,7 @@ impl Editor {
             .iter()
             .rposition(|t| t.name == "Captions" && !t.locked && t.clips_in(range).next().is_none());
         let opts = opts.clone();
+        let height = seq.settings.height;
         let made = self.seq_edit("Create Captions", move |p, sid, _| {
             let mut ids = p.ids.clone();
             let mut clips = Vec::new();
@@ -373,6 +377,11 @@ impl Editor {
                 set(&mut comp, "font", Value::Text(font.clone()));
                 set(&mut comp, "font_size", Value::Float(size));
                 set(&mut comp, "uppercase", Value::Bool(opts.uppercase));
+                if let Some(d) = opts.design.and_then(|i| crate::caption_designs::DESIGNS.get(i)) {
+                    for (k, v) in crate::caption_designs::values(d, height) {
+                        set(&mut comp, &k, v);
+                    }
+                }
                 set(&mut comp, "position", Value::Point([0.5, y]));
                 let mut components = default_components(EffectKind::VideoFixed, &mut ids);
                 components.push(comp);

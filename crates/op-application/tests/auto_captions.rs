@@ -42,6 +42,7 @@ fn transcribes_the_sequence_into_animated_captions() {
             style: 2,
             max_words: 3,
             uppercase: false,
+            design: None,
         },
     }));
     let start = Instant::now();

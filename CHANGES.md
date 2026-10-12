@@ -15,6 +15,7 @@ We edit는 **OpenPremier 0.9.0**(커밋 `cda185d`)을 바탕으로 합니다. �
 - **클립 동기화** (`op-application/src/clipsync.rs`, `audio_sync.rs`): 클립 2개 이상 선택 후 우클릭/클립 메뉴에서 시작·끝·오디오 채널로 맞춤. 소리는 GCC-PHAT로 비교.
 - **문장·단어 편집** (`sentences.rs`, `sentences_panel.rs`): Whisper로 받아쓴 단어를 눌러 이동·구간 선택·삭제(모든 트랙 리플 컷)·자막 만들기.
 - **Whisper 모델 선택·다운로드** (`whisper_models.rs`, 환경 설정).
+- **자막 디자인 12종** (`caption_designs.rs`): 예능·말자막·뉴스·쇼츠·먹방·네온·손글씨 등. 문장 편집 패널(새 자막)과 자막 패널(기존 자막)에서 고르며, 글꼴(OFL, google/fonts)은 처음 쓸 때 한 번 내려받습니다.
 - 새 AI 도구(MCP): `sync_by_audio`, `synchronize_clips`, `transcribe_sentences`, `get_sentences`, `delete_sentences`,
   `set_keyframes`, `set_track`, `add_tracks`, `delete_track`, `comfy_*`. `get_timeline`(detail)에 키프레임 표시.
 
