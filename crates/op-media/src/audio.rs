@@ -160,7 +160,6 @@ pub fn conform(
         ff::software::resampling::Context,
     )> = None;
     let mut decoded = ff::frame::Audio::empty();
-    let mut converted = ff::frame::Audio::empty();
     let mut packet = ff::Packet::empty();
     let mut last_report = 0.0f32;
     let mut done_reading = false;
@@ -200,6 +199,10 @@ pub fn conform(
                 )?;
                 resampler = Some((fmt, layout_bits, frate, ctx));
             }
+            // a fresh output frame each time: the resampler fills the frame it is given up to the
+            // size it already has, so a first frame shorter than the rest (the 47 samples of an
+            // MP3's Xing header) would cut every later frame to that length
+            let mut converted = ff::frame::Audio::empty();
             resampler
                 .as_mut()
                 .unwrap()
@@ -240,11 +243,12 @@ pub fn conform(
             match packet.read(&mut input) {
                 Ok(()) => {
                     if packet.stream() == index {
-                        // corrupt packets are skipped rather than failing the whole conform
+                        // corrupt packets are skipped (the next one is read) rather than failing
+                        // the whole conform or ending the sound there
                         if decoder.send_packet(&packet).is_ok() {
                             fed = true;
+                            break;
                         }
-                        break;
                     }
                 }
                 Err(ff::Error::Eof) => break,
@@ -449,5 +453,29 @@ mod tests {
         assert!(info.samples >= 15_000, "{info:?}");
         let audio = ConformedAudio::open(&dir.path().join("a.pcm")).unwrap();
         assert!(audio.info.samples >= 15_000);
+    }
+
+    /// An MP3 begins with a Xing/Info frame that holds only a few samples; the frames after it
+    /// must not be cut to that length (the whole song was once reduced to its first 1.6 seconds).
+    #[test]
+    fn mp3_conforms_to_its_full_length() {
+        let dir = tempfile::tempdir().unwrap();
+        let mp3 = dir.path().join("tone.mp3");
+        let settings = crate::AudioSettings { codec: crate::AudioCodec::Mp3, rate: 44_100, channels: 2, bitrate_kbps: 128 };
+        let mut m = crate::Muxer::create(&mp3, None, Some(&settings)).unwrap();
+        let seconds = 6usize;
+        let mut pcm = Vec::with_capacity(44_100 * seconds * 2);
+        for i in 0..44_100 * seconds {
+            let v = (i as f32 * 440.0 * std::f32::consts::TAU / 44_100.0).sin() * 0.3;
+            pcm.push(v);
+            pcm.push(v);
+        }
+        for chunk in pcm.chunks(2048 * 2) {
+            m.push_audio(chunk).unwrap();
+        }
+        m.finish().unwrap();
+        let info = conform(&mp3, 0, Dur::ZERO, &dir.path().join("a.pcm"), &dir.path().join("a.peaks"), &mut |_| true).expect("conformed");
+        let wanted = 44_100 * seconds as i64;
+        assert!((info.samples - wanted).abs() < 4_000, "{} samples of {wanted}", info.samples);
     }
 }

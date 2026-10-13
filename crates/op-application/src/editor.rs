@@ -108,6 +108,8 @@ pub struct Editor {
     pub design_font: Option<crate::caption_designs::FontJob>,
     /// The sound library: downloads and the preview.
     pub sound: crate::sound_library::SoundState,
+    /// Music remix: the analysis running and the latest one.
+    pub remix: crate::remix::RemixState,
     /// A picture being made by a cloud service, and the last one saved.
     pub cloud: Option<crate::cloud_images::CloudJob>,
     pub cloud_last: Option<std::path::PathBuf>,
@@ -203,6 +205,7 @@ impl Editor {
             whisper_dl: None,
             design_font: None,
             sound: Default::default(),
+            remix: Default::default(),
             cloud: None,
             cloud_last: None,
             captions_after: None,
@@ -1178,6 +1181,7 @@ impl Editor {
         self.poll_whisper_download();
         self.poll_design_font();
         self.poll_sound();
+        self.poll_remix();
         self.poll_cloud();
         if !self.background {
             self.autosave();

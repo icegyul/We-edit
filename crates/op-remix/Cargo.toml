@@ -1,0 +1,14 @@
+[package]
+name = "op-remix"
+description = "We edit music remix: finds where music repeats and plans a longer or shorter version by repeating or skipping those parts (pure Rust)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+realfft.workspace = true
+
+[lints]
+workspace = true

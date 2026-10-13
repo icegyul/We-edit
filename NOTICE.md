@@ -27,7 +27,11 @@ affiliated with Adobe.
 | Sound effects of Kenney (kenney.nl), found through the index Mcamento8/open-game-sfx-index | CC0 1.0 | sound library, downloaded on demand (commit-pinned) |
 | RezaParsian/free-sfx-bgm-pack (sounds synthesized from code) | CC0 1.0 | sound library, downloaded on demand |
 | AERIS MUSIC tracks (farmmer938-lgtm/aeris-cc0-music) | CC0 1.0 | sound library, downloaded on demand |
+| PyMusicLooper by arkrow (algorithm for finding the places where music repeats: candidate pairs from beats, chroma and loudness, similarity score; ported to Rust in `crates/op-remix`, no Python code is included) | MIT | Remix (기본 사운드 패널) |
+| librosa (definitions of the chroma, loudness, onset, tempo and beat-tracking features; reimplemented in Rust) | ISC | Remix |
 | keyring (Rust crate) | MIT OR Apache-2.0 | API keys kept in the Windows Credential Manager |
+
+Related work that was looked at but is not used: reamix.me (a web service that remixes music, closed source).
 
 Model files are never part of this repository; they are downloaded by the user from their
 original sources and keep their own licenses.

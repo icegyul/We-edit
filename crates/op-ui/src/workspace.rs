@@ -28,10 +28,11 @@ pub enum Panel {
     Comfy,
     Sounds,
     Templates,
+    EssentialSound,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 22] = [
+    pub const ALL: [Panel; 23] = [
         Panel::Project,
         Panel::Source,
         Panel::Program,
@@ -54,6 +55,7 @@ impl Panel {
         Panel::Comfy,
         Panel::Sounds,
         Panel::Templates,
+        Panel::EssentialSound,
     ];
 
     pub fn title(self) -> &'static str {
@@ -80,6 +82,16 @@ impl Panel {
             Panel::Comfy => "ComfyUI",
             Panel::Sounds => "효과음·배경음",
             Panel::Templates => "모션 템플릿",
+            Panel::EssentialSound => "기본 사운드",
+        }
+    }
+
+    /// A panel that was added after a layout was saved opens beside this one, not in whatever tab
+    /// group has the focus (which would hide the timeline).
+    pub fn anchor(self) -> Option<Panel> {
+        match self {
+            Panel::EssentialSound => Some(Panel::EffectControls),
+            _ => None,
         }
     }
 
@@ -156,7 +168,7 @@ impl Workspace {
                     vec![Source, EffectControls, AudioMixer, Graphics, Captions],
                 );
                 // the AI assistant beside the program monitor
-                t.split_right(program, 0.68, vec![Ai, Sentences, Comfy, Sounds, Templates]);
+                t.split_right(program, 0.68, vec![Ai, Sentences, Comfy, Sounds, Templates, EssentialSound]);
                 let [timeline, _project] =
                     t.split_left(bottom, 0.3, vec![Project, Effects, Markers, History, Info]);
                 let [timeline, _tools] = t.split_left(timeline, 0.02, vec![Tools]);
@@ -196,7 +208,7 @@ impl Workspace {
             }
             Workspace::Audio => {
                 let [bottom, top] = t.split_above(NodeIndex::root(), 0.5, vec![Program]);
-                t.split_left(top, 0.55, vec![AudioMixer, EffectControls, Source]);
+                t.split_left(top, 0.55, vec![AudioMixer, EffectControls, EssentialSound, Source]);
                 let [timeline, _project] =
                     t.split_left(bottom, 0.25, vec![Project, Effects, Markers]);
                 t.split_right(timeline, 0.93, vec![Meters]);

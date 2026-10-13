@@ -3178,6 +3178,7 @@ dependencies = [
  "op-core",
  "op-media",
  "op-project",
+ "op-remix",
  "op-render",
  "op-silence",
  "op-speech",
@@ -3258,6 +3259,13 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "op-remix"
+version = "0.9.0"
+dependencies = [
+ "realfft",
 ]
 
 [[package]]

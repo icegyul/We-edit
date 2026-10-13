@@ -19,6 +19,7 @@ op-media = { path = "crates/op-media" }
 op-render = { path = "crates/op-render" }
 op-speech = { path = "crates/op-speech" }
 op-silence = { path = "crates/op-silence" }
+op-remix = { path = "crates/op-remix" }
 op-audio = { path = "crates/op-audio" }
 op-application = { path = "crates/op-application" }
 op-ui = { path = "crates/op-ui" }

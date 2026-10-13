@@ -16,6 +16,7 @@ op-render.workspace = true
 op-audio.workspace = true
 op-speech.workspace = true
 op-silence.workspace = true
+op-remix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true

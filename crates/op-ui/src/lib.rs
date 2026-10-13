@@ -6,6 +6,7 @@ mod ai_panel;
 mod app;
 mod captions_panel;
 mod sounds_panel;
+mod essential_sound;
 mod templates_panel;
 mod color;
 mod comfy_panel;

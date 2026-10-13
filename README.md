@@ -38,6 +38,7 @@ Adobe 및 Premiere Pro는 Adobe Inc.의 상표이며, We edit는 Adobe와 관계
 | 내보내기 형식 | H.264·HEVC, YouTube 720p/1080p/1440p/4K/쇼츠 프리셋, **Apple ProRes 6종**(Proxy~4444 XQ, .mov), DNxHR, **Sony XDCAM HD422 호환 MXF**. 모든 형식을 실제로 내보내 다시 열어 확인하는 테스트가 있습니다. |
 | 효과음·배경음 | 저작권 걱정 없는(CC0) 효과음·배경음 806개. **설치하지 않고**, 듣거나 추가할 때 한 번만 내려받습니다. 창 > 효과음·배경음. |
 | 모션 템플릿 10종 | 팝업 제목·하단 이름표·강조 박스·구독 알림·화면 번쩍·충격 글자·말풍선 등. 키프레임이 들어간 클립 묶음으로 들어가며 효과 컨트롤에서 모두 고칠 수 있습니다. 창 > 모션 템플릿. |
+| 리믹스 (기본 사운드) | 타임라인의 음악 클립을 우클릭 > 리믹스 > 리믹스 사용. 곡의 박자·화음·소리 크기를 분석해 **반복되는 부분을 찾고, 그 부분만 한 번 더 반복하거나 건너뛰어** 음악 길이를 자연스럽게 늘리거나 줄입니다. 길이는 1초 단위가 아니라 **반복 구간 길이 단위**(곡마다 다름)로 바뀝니다. 창 > 기본 사운드에서 대상 지속 시간(±5초 버튼)을 정하면 가장 가까운 길이로 맞추고, 이음새마다 짧은 크로스페이드가 들어갑니다. 원래 음악으로 되돌릴 수 있습니다. 모델 내려받기 없이 이 PC에서 바로 분석합니다. |
 | 생성형 AI 설정 | 환경 설정 > 생성형 AI. 내 PC(그래픽 카드·메모리·디스크) 확인, 로컬 모델(Z-Image Turbo·Krea 2 Turbo·MiniMax H3)의 사양 판정·라이선스 경고·설치, **Nano Banana(Gemini)·ChatGPT 이미지 API 키**(Windows 자격 증명 관리자에만 저장). |
 
 > 아직 베타입니다. AI 도우미는 Claude Code 또는 Codex에 로그인되어 있어야 답합니다.
@@ -87,6 +88,7 @@ copy helper\transcribe.py <폴더>\helper\transcribe.py
 - [OpenPremier](https://github.com/xXKuroiKenshiXx/OpenPremier) — 이 프로젝트의 바탕 (GPL-3.0-or-later). 원 README는 [docs/OPENPREMIER_README.es.md](docs/OPENPREMIER_README.es.md)에 있습니다.
 - [FFmpeg](https://ffmpeg.org) — 영상·소리 처리.
 - [OpenAI Whisper](https://github.com/openai/whisper), [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — 음성 인식 (MIT).
+- [PyMusicLooper](https://github.com/arkrow/PyMusicLooper) (MIT) — 음악에서 반복되는 부분을 찾는 방법. 리믹스는 이 방법을 Rust로 다시 구현했습니다(코드 복사 없음). 특징 추출은 [librosa](https://librosa.org)(ISC)의 정의를 따랐습니다.
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) — 이미지·영상 생성 연동.
 - [google/fonts](https://github.com/google/fonts) — 자막 글꼴(SIL OFL 1.1). [Kenney](https://kenney.nl) 등 CC0 소리 —
   [NOTICE.md](NOTICE.md)에 출처와 라이선스를 적었습니다.

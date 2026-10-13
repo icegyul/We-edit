@@ -258,6 +258,12 @@ pub fn list() -> Json {
             &["sound_id"]
         ),
         tool(
+            "remix_music",
+            "Makes a music clip on an audio track longer or shorter without a visible edit (Premiere's Remix): it finds where the music repeats itself and plays that part once more (or skips it once), so the length changes in whole repeated parts: the steps differ per song (8 s, 16 s ...), not in 1 second steps. The clip becomes a group of clips joined by short crossfades. Needs a clip of an audio file (not linked to video, normal speed), at least 10 seconds. Without `seconds` it only analyses and reports the tempo and the steps. With `revert` it puts the original clip back. Use it again with another `seconds` to change the length of an already remixed clip. The first call analyses the music (a few seconds); in the open window it only starts the analysis and you call again.",
+            json!({"clip_id": int("Id of the music clip (or of any piece of an already remixed one)"), "seconds": num("The length wanted, in seconds; the result is the nearest length the music's repeated parts allow"), "min_loop": num("Shortest stretch to repeat or skip, in seconds (default 4)"), "revert": json!({"type": "boolean", "description": "Put the original clip back"})}),
+            &["clip_id"]
+        ),
+        tool(
             "list_motion_templates",
             "Lists the motion templates (animated titles and graphics): id, name, what it looks like, how many text lines it takes and its default text. Use add_motion_template to put one on the timeline.",
             json!({}),
@@ -1031,6 +1037,65 @@ fn silence_tool(ed: &mut Editor, name: &str, a: &Json, live: bool) -> R {
     text(out)
 }
 
+/// The clips of a remixed music from `start` on the audio track (`len` seconds long, or the first
+/// clip only) and how many crossfades join them.
+fn remix_pieces(ed: &Editor, track: usize, start: SeqTime, len: Option<f64>) -> (Vec<u64>, usize) {
+    let Some(t) = ed.active_seq().and_then(|q| q.audio.get(track)) else { return (Vec::new(), 0) };
+    let ids: Vec<u64> = match len {
+        Some(l) => {
+            let end = start + Dur::from_seconds(l);
+            t.clips.iter().filter(|c| c.start >= start && c.start < end).map(|c| c.id.0).collect()
+        }
+        None => t.clips.iter().filter(|c| c.start == start).map(|c| c.id.0).collect(),
+    };
+    let crossfades = t.transitions.iter().filter(|x| x.from.is_some_and(|f| ids.contains(&f.0)) && x.to.is_some_and(|f| ids.contains(&f.0))).count();
+    (ids, crossfades)
+}
+
+/// remix_music. In the open window the analysis only starts (waiting would freeze it).
+fn remix_tool(ed: &mut Editor, a: &Json, live: bool) -> R {
+    active(ed)?;
+    let clip = ClipId(a.get("clip_id").and_then(Json::as_u64).ok_or("clip_id is required")?);
+    if a.get("revert").and_then(Json::as_bool) == Some(true) {
+        let (track, start) = ed.remix_target(clip).map(|t| (t.track, t.start))?;
+        ed.remix_revert(clip)?;
+        let (pieces, crossfades) = remix_pieces(ed, track, start, None);
+        return text(json!({"reverted": true, "pieces": pieces, "crossfades": crossfades}));
+    }
+    let min_loop = f64_arg(a, "min_loop").unwrap_or(op_application::remix::DEFAULT_MIN_LOOP).clamp(2.0, 60.0);
+    ed.remix_target(clip)?;
+    if !ed.remix_ready_for(clip) {
+        ed.remix_analyze(clip)?;
+        if live {
+            return text(json!({"started": true, "note": "the music is being analysed: call remix_music again with the same arguments in a few seconds"}));
+        }
+        wait(ed, 300, |e| e.remix.job.is_some());
+        if !ed.remix_ready_for(clip) {
+            return Err(status_error(ed, "the music could not be analysed"));
+        }
+    }
+    let analysis = ed.remix_analysis().ok_or("the music could not be analysed")?;
+    let (bpm, seconds) = (analysis.bpm(), analysis.seconds());
+    let steps: Vec<Json> = ed
+        .remix_steps(clip, min_loop)?
+        .into_iter()
+        .map(|(len, score)| json!({"seconds": (len * 100.0).round() / 100.0, "join_quality": (score * 100.0).round() / 100.0}))
+        .collect();
+    let Some(want) = f64_arg(a, "seconds") else {
+        return text(json!({"analysed": true, "bpm": bpm.round(), "original_seconds": seconds, "steps": steps}));
+    };
+    let plan = ed.remix_plan(clip, want, min_loop)?;
+    let (track, start) = ed.remix_target(clip).map(|t| (t.track, t.start))?;
+    let len = ed.remix_apply(clip, &plan)?;
+    let moves: Vec<Json> = plan
+        .moves
+        .iter()
+        .map(|m| json!({"from": (m.at.start * 100.0).round() / 100.0, "to": (m.at.end * 100.0).round() / 100.0, "extra_plays": m.times, "join_quality": (m.at.score * 100.0).round() / 100.0}))
+        .collect();
+    let (pieces, crossfades) = remix_pieces(ed, track, start, Some(len));
+    text(json!({"seconds": (len * 100.0).round() / 100.0, "requested": want, "original_seconds": seconds, "moves": moves, "pieces": pieces, "crossfades": crossfades, "steps": steps}))
+}
+
 /// Runs a tool on the open program's editor: exports and transcriptions start and show their
 /// progress in the window instead of holding it until they finish.
 pub fn call_live(ed: &mut Editor, name: &str, a: &Json) -> R {
@@ -1058,6 +1123,7 @@ fn live(ed: &mut Editor, name: &str, a: &Json) -> R {
             text(json!({"started": true, "note": "this takes a while: call get_sentences until its state is ready"}))
         }
         "detect_silence" | "remove_silence" => silence_tool(ed, name, a, true),
+        "remix_music" => remix_tool(ed, a, true),
         "transcribe_captions" => {
             let options = transcribe_options(a);
             ed.status = None;
@@ -1984,6 +2050,7 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
             text(json!({"ok": true}))
         }
         "detect_silence" | "remove_silence" => silence_tool(ed, name, a, false),
+        "remix_music" => remix_tool(ed, a, false),
         "set_playhead" => {
             ed.set_playhead(SeqTime::from_seconds(
                 f64_arg(a, "at").ok_or("at is required")?.max(0.0),

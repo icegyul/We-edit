@@ -112,6 +112,8 @@ pub(crate) struct State {
     pub sounds: crate::sounds_panel::SoundsView,
     /// The Motion Templates panel: chosen template and its texts.
     pub templates: crate::templates_panel::TemplatesView,
+    /// The Essential Sound panel: the length asked for in Remix.
+    pub essential: crate::essential_sound::EssentialView,
     pub scopes: panels::ScopesView,
     pub meters: panels::MeterState,
     pub graphics: panels::GraphicsView,
@@ -255,6 +257,7 @@ impl App {
             comfy: Default::default(),
             sounds: Default::default(),
             templates: Default::default(),
+            essential: Default::default(),
             scopes: panels::ScopesView::default(),
             meters: panels::MeterState::default(),
             graphics: panels::GraphicsView::default(),
@@ -309,7 +312,12 @@ impl App {
                         let _ = self.dock.set_active_tab(path);
                         self.dock.set_focused_node_and_surface(path.node_path());
                     }
-                    None => self.dock.push_to_focused_leaf(p),
+                    None => {
+                        if let Some(anchor) = p.anchor().and_then(|a| self.dock.find_tab(&a)) {
+                            self.dock.set_focused_node_and_surface(anchor.node_path());
+                        }
+                        self.dock.push_to_focused_leaf(p);
+                    }
                 }
                 if let Some(f) = focus_of(p) {
                     self.s.focus = f;
@@ -590,6 +598,13 @@ impl State {
                     None => self.ed.error("먼저 효과를 복사할 클립을 선택하세요"),
                 }
             }
+            "we.remix.on" => {
+                if crate::essential_sound::enable(self) {
+                    self.dock_action = Some(DockAction::Focus(Panel::EssentialSound));
+                }
+            }
+            "we.remix.props" => self.dock_action = Some(DockAction::Focus(Panel::EssentialSound)),
+            "we.remix.off" => crate::essential_sound::disable(self),
             "we.fx.paste" => match self.ed.paste_effects() {
                 Ok(n) => self.ed.info(format!("복사한 효과를 클립 {n}개에 한꺼번에 붙여넣었습니다")),
                 Err(e) => self.ed.error(e),
@@ -1052,6 +1067,7 @@ impl State {
             Panel::Comfy => crate::comfy_panel::show(self, ui),
             Panel::Sounds => crate::sounds_panel::show(self, ui),
             Panel::Templates => crate::templates_panel::show(self, ui),
+            Panel::EssentialSound => crate::essential_sound::show(self, ui),
         }));
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);

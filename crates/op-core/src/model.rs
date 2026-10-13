@@ -35,6 +35,10 @@ pub struct Project {
     /// Data kept verbatim from an imported foreign project (DM-004).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign: Vec<ForeignPayload>,
+    /// Groups of clips made by Remix (music made longer or shorter by repeating or skipping parts
+    /// where it repeats itself): Revert puts such a group back into one clip.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remixes: Vec<GroupId>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Serialize, Deserialize)]
@@ -952,6 +956,7 @@ impl Project {
             sequences: IndexMap::new(),
             ids,
             foreign: Vec::new(),
+            remixes: Vec::new(),
         }
     }
 

@@ -27,6 +27,7 @@ pub mod prefs;
 pub mod proxies;
 pub mod recovery;
 pub mod relink;
+pub mod remix;
 pub mod sentences;
 pub mod whisper_models;
 pub mod session;

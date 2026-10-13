@@ -72,9 +72,14 @@ impl HardwareDecoding {
 const SPEED_SAMPLE: usize = 24;
 
 /// Identity of media content for caches: path, size and modification time.
+/// Raised when the conform changes what it writes, so sound cached by an older version (cut
+/// short by the MP3 bug) is made again instead of reused.
+const CONFORM_VERSION: u32 = 2;
+
 fn content_key(a: &MediaAsset, stream: usize) -> String {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    CONFORM_VERSION.hash(&mut h);
     a.path.hash(&mut h);
     a.file_size.hash(&mut h);
     a.modified_unix.hash(&mut h);
