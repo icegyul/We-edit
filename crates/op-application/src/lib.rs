@@ -15,6 +15,7 @@ pub mod secrets;
 pub mod commands;
 pub mod editor;
 pub mod effect_preview;
+pub mod effects_clipboard;
 pub mod export;
 pub mod keymap;
 pub mod logging;
@@ -32,6 +33,7 @@ pub mod session;
 pub mod shorts;
 pub mod sound_library;
 pub mod silence;
+pub mod speech;
 
 pub use editor::{APP_NAME, Editor, LoadedProject, Placement, Status, Transport};
 pub use export::{ExportJob, ExportSettings, PreviewImage, Progress};

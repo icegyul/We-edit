@@ -358,7 +358,9 @@ fn copy_planes(frame: &ff::frame::Video, layout: PixelLayout) -> Vec<Plane> {
 fn hw_device_types() -> &'static [ff::ffi::AVHWDeviceType] {
     use ff::ffi::AVHWDeviceType::*;
     if cfg!(windows) {
-        &[AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2]
+        // NVIDIA's decoder engine (NVDEC) through CUDA first: it takes more codecs and profiles;
+        // other cards use DirectX Video Acceleration
+        &[AV_HWDEVICE_TYPE_CUDA, AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2]
     } else if cfg!(target_os = "macos") {
         &[AV_HWDEVICE_TYPE_VIDEOTOOLBOX]
     } else if vaapi_installed() {
@@ -413,7 +415,7 @@ unsafe extern "C" fn pick_hw_format(
 }
 
 /// Sets up hardware decoding on a codec context that is not open yet. Returns the device name.
-fn attach_hardware(
+pub(crate) fn attach_hardware(
     ctx: &mut ff::codec::context::Context,
     id: ff::codec::Id,
 ) -> Option<&'static str> {
@@ -460,6 +462,7 @@ fn attach_hardware(
                 "hardware"
             } else {
                 match std::ffi::CStr::from_ptr(name).to_str() {
+                    Ok("cuda") => "cuda",
                     Ok("d3d11va") => "d3d11va",
                     Ok("dxva2") => "dxva2",
                     Ok("vaapi") => "vaapi",
@@ -469,6 +472,27 @@ fn attach_hardware(
             });
         }
         None
+    }
+}
+
+/// Whether NVIDIA's CUDA can be used on this PC: the decoder engine (NVDEC) and the encoder
+/// (NVENC) both go through it. Opens and closes a CUDA device to find out.
+pub fn cuda_available() -> bool {
+    init();
+    // SAFETY: the device reference is created and released here, nothing else uses it.
+    unsafe {
+        let mut dev: *mut ff::ffi::AVBufferRef = std::ptr::null_mut();
+        let r = ff::ffi::av_hwdevice_ctx_create(
+            &mut dev,
+            ff::ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            0,
+        );
+        if r >= 0 {
+            ff::ffi::av_buffer_unref(&mut dev);
+        }
+        r >= 0
     }
 }
 
@@ -804,6 +828,36 @@ impl VideoDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// On a PC with an NVIDIA card the decoder engine is used through CUDA, and its pictures match
+    /// the processor's. Elsewhere the test only checks that decoding still works.
+    #[test]
+    fn hardware_decoding_uses_cuda_where_it_exists_and_matches_software() {
+        use crate::encode::{Muxer, VideoCodec, VideoSettings};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hw.mp4");
+        let (w, h) = (1280u32, 720u32);
+        let v = VideoSettings { codec: VideoCodec::H264, width: w, height: h, rate: Rate::FPS_25, bitrate_kbps: None, quality: 20, hardware: false };
+        let mut m = Muxer::create(&path, Some(&v), None).unwrap();
+        for i in 0..12u32 {
+            let luma: Vec<u8> = (0..w * h).map(|p| (60 + (p % w) * 150 / w + i * 3) as u8).collect();
+            let chroma = vec![110u8; (w / 2 * h / 2) as usize];
+            m.push_video(&[&luma, &chroma, &chroma]).unwrap();
+        }
+        m.finish().unwrap();
+        let open = |hw: bool| VideoDecoder::open_with(&path, None, None, ColorInfo::default(), false, hw).unwrap();
+        let mut soft = open(false);
+        let mut hard = open(true);
+        eprintln!("hardware decoder in use: {:?}", hard.hardware());
+        assert!(soft.hardware().is_none());
+        let (a, b) = (soft.frame(6).unwrap().to_rgba8_scaled(8, 4), hard.frame(6).unwrap().to_rgba8_scaled(8, 4));
+        for (x, y) in a.iter().zip(&b) {
+            assert!((i32::from(*x) - i32::from(*y)).abs() <= 6, "{a:?} vs {b:?}");
+        }
+        if std::env::var("WEEDIT_EXPECT_CUDA").is_ok_and(|v| v == "1") {
+            assert_eq!(hard.hardware(), Some("cuda"));
+        }
+    }
 
     #[test]
     fn yuv_to_rgb_is_exact_for_primaries() {

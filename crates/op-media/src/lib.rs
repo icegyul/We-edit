@@ -18,7 +18,7 @@ use thiserror::Error;
 pub use audio::{AudioInfo, ConformedAudio, Peaks, conform};
 pub use encode::{AudioCodec, AudioSettings, Muxer, Tuning, VideoCodec, VideoInput, VideoSettings};
 pub use probe::probe;
-pub use video::{PixelLayout, Plane, VideoDecoder, VideoFrame};
+pub use video::{PixelLayout, Plane, VideoDecoder, VideoFrame, cuda_available};
 
 #[derive(Debug, Error)]
 pub enum MediaError {

@@ -19,6 +19,10 @@ We edit는 **OpenPremier 0.9.0**(커밋 `cda185d`)을 바탕으로 합니다. �
 - **효과음·배경음 라이브러리** (`sound_library.rs`, `sounds_panel.rs`, `data/sounds.json`, `tools/build_sound_catalog.py`): 저작권 걱정 없는(CC0) 효과음·배경음 806개 목록. 파일은 설치하지 않고, 듣거나 추가할 때 GitHub에서(커밋 고정 주소) 한 번만 내려받습니다. 창 > 효과음·배경음, AI 도구 `search_sounds`·`add_sound`.
 - **모션 템플릿 10종** (`motion_templates.rs`, `templates_panel.rs`): 팝업 제목, 하단 이름표, 강조 박스, 구독·좋아요 알림, 화면 번쩍, 충격 흔들림 글자, 슬라이드 제목, 형광펜 글자, 말풍선 팝, 제목 띠. 텍스트·도형 그래픽 클립에 키프레임을 입혀 한 묶음으로 타임라인에 넣으며, 효과 컨트롤에서 모두 고칠 수 있습니다. AI 도구 `list_motion_templates`·`add_motion_template`.
 - **생성형 AI 설정** (환경 설정 > 생성형 AI, ComfyUI 패널; `generative.rs`, `comfy_packs.rs`, `cloud_images.rs`, `secrets.rs`, `dialogs/generative.rs`): 내 PC(그래픽 카드·메모리·디스크) 확인, 로컬 모델 3종(Z-Image Turbo, Krea 2 Turbo, MiniMax H3)의 사양 판정·라이선스 경고·설치, Nano Banana(Gemini)·ChatGPT 이미지 API 키(Windows 자격 증명 관리자에만 저장)와 그림 만들기. 클라우드 호출은 시험용 서버로 요청·응답 처리만 검증했고, 실제 서비스 호출은 키가 없어 시험하지 못했습니다.
+- **무음 제거 개선**: 위스퍼를 그래픽 카드(CUDA)용 도우미로 실행하고 large-v3까지 고르고 내려받을 수 있음(`speech.rs`), 내려받은 모델 삭제(환경 설정·무음 제거 창), **문장 밖 빈 공간 모두 삭제** 모드. 자동 자막·문장 편집도 같은 CUDA 경로를 씁니다.
+- **CUDA 사용 범위 확대**: 영상 디코딩 NVDEC(CUDA 우선, 안 되면 DirectX·CPU), 프록시 만들기 NVDEC+NVENC, 위스퍼 CUDA. 생성형 AI 창에 사용 현황 표시.
+- **효과 복사·붙여넣기** (`effects_clipboard.rs`): 효과 컨트롤에서 수정한 효과를 복사하고 타임라인 우클릭 > 복사한 효과 붙여넣기로 선택한 클립 전부에 한꺼번에 적용. AI 도구 `copy_effects`·`paste_effects`.
+- **시퀀스 설정**: 프로젝트 패널에서 시퀀스를 우클릭 > 시퀀스 설정...에서 크기·프레임 속도 등을 바꿈.
 - **Whisper 모델 선택·다운로드** (`whisper_models.rs`, 환경 설정).
 - **자막 디자인 12종** (`caption_designs.rs`): 예능·말자막·뉴스·쇼츠·먹방·네온·손글씨 등. 문장 편집 패널(새 자막)과 자막 패널(기존 자막)에서 고르며, 글꼴(OFL, google/fonts)은 처음 쓸 때 한 번 내려받습니다.
 - 새 AI 도구(MCP): `sync_by_audio`, `synchronize_clips`, `transcribe_sentences`, `get_sentences`, `delete_sentences`,

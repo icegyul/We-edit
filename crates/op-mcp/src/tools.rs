@@ -276,6 +276,18 @@ pub fn list() -> Json {
             &["provider", "prompt"]
         ),
         tool(
+            "copy_effects",
+            "Copies the effects of a clip to paste on other clips (like copying in Effect Controls): without `effect_index` every changed effect (Motion, Opacity, volume ... with their keyframes, and added effects), else only that one (index in the clip's component list from get_timeline detail).",
+            json!({"clip_id": int("The clip to copy from"), "effect_index": int("Only this component (its index in the clip's effects)")}),
+            &["clip_id"]
+        ),
+        tool(
+            "paste_effects",
+            "Pastes the effects copied by copy_effects on all the clips in clip_ids at once (one undo step). Video effects go on video clips, audio effects on audio clips.",
+            json!({"clip_ids": ids("Clips to paste on")}),
+            &["clip_ids"]
+        ),
+        tool(
             "make_shorts",
             "Makes a vertical 1080x1920 sequence (for Shorts, Reels, TikTok) from the active horizontal one and opens it; the original stays as it is. The horizontal sequence is nested whole: layout=fill crops it to fill the frame (focus picks the stretch that stays, 0 left to 1 right), layout=blur keeps the whole picture in the middle over a blurred enlarged copy. Afterwards transcribe_sentences works on the new sequence, and captions made there get the vertical layout.",
             json!({"layout": s("fill or blur (default fill)"), "focus": num("fill only: where to look, 0 left, 0.5 middle, 1 right (default 0.5)")}),
@@ -604,7 +616,7 @@ fn silence_schema() -> Json {
         "pad_before": {"type": "number", "description": "Seconds of air kept after a word, before the cut (default 0.08)"},
         "pad_after": {"type": "number", "description": "Seconds of air kept before the next word, after the cut (default 0.12)"},
         "preset": {"type": "string", "enum": ["gentle", "podcast", "tutorial", "jump_cuts", "noisy_room"], "description": "Start from a preset; the other fields override it"},
-        "words": {"type": "object", "description": "Also cut by what was said (transcribes on this computer; downloads the speech model once). Fields: language (code like es), model (tiny, base, small), fillers (default true), aggressive_fillers, custom (comma-separated words or phrases), repeated_words (default true), repeated_phrases (default true), retakes (keep the last of a repeated sentence), gap (cut dead air between words of at least this many seconds), retake_similarity (0 to 1)"}
+        "words": {"type": "object", "description": "Also cut by what was said (transcribes on this computer; downloads the speech model once). Fields: language (code like es), model (speech model: tiny, base, small, medium, large-v3-turbo, large-v2, large-v3 or korean-turbo; large-v3 is the most exact and runs on the NVIDIA card), speech_only (cut everything that is not speech: before the first word, between sentences and after the last), speech_gap (shortest stretch cut by speech_only, seconds, default 0.25), speech_air (air left beside the words, default 0.12), fillers (default true), aggressive_fillers, custom (comma-separated words or phrases), repeated_words (default true), repeated_phrases (default true), retakes (keep the last of a repeated sentence), gap (cut dead air between words of at least this many seconds), retake_similarity (0 to 1)"}
     })
 }
 
@@ -689,11 +701,27 @@ pub fn silence_settings(a: &Json) -> Result<op_application::silence::SilenceSett
         if let Some(l) = str_arg(w, "language") {
             s.language = Some(l.to_string());
         }
-        match str_arg(w, "model") {
-            Some("tiny") => s.model = ModelSize::Tiny,
-            Some("small") => s.model = ModelSize::Small,
-            Some("base") | None => {}
-            Some(other) => return Err(format!("model {other}: use tiny, base or small")),
+        if let Some(id) = str_arg(w, "model") {
+            // the speech helper's models (up to large-v3); the first three are also the built-in ones
+            if op_application::whisper_models::info(id).is_none() {
+                let ids: Vec<&str> = op_application::whisper_models::MODELS.iter().map(|m| m.id).collect();
+                return Err(format!("model {id}: use one of {ids:?}"));
+            }
+            s.whisper = id.to_string();
+            match id {
+                "tiny" => s.model = ModelSize::Tiny,
+                "small" => s.model = ModelSize::Small,
+                _ => {}
+            }
+        }
+        if let Some(v) = bool_arg(w, "speech_only") {
+            s.speech_only = v;
+        }
+        if let Some(v) = f64_arg(w, "speech_gap") {
+            s.speech_gap = v.max(0.05);
+        }
+        if let Some(v) = f64_arg(w, "speech_air") {
+            s.speech_air = v.max(0.0);
         }
         if let Some(v) = bool_arg(w, "fillers") {
             s.words.fillers = v;
@@ -718,6 +746,11 @@ pub fn silence_settings(a: &Json) -> Result<op_application::silence::SilenceSett
         }
         if let Some(v) = f64_arg(w, "retake_similarity") {
             s.words.retake_similarity = v.clamp(0.3, 1.0);
+        }
+        // speech_only alone means "only the empty space": no filler or repeat search unless asked for
+        let others = ["fillers", "aggressive_fillers", "custom", "repeated_words", "repeated_phrases", "retakes", "gap", "retake_similarity"];
+        if s.speech_only && !others.iter().any(|k| w.get(*k).is_some()) {
+            s.by_words = false;
         }
     }
     s.action = match str_arg(a, "action").unwrap_or("remove") {
@@ -982,7 +1015,7 @@ fn sync_by_audio(ed: &mut Editor, a: &Json) -> R {
 fn silence_tool(ed: &mut Editor, name: &str, a: &Json, live: bool) -> R {
     active(ed)?;
     let s = silence_settings(a)?;
-    if live && s.by_words {
+    if live && s.needs_words() {
         return Err("transcribing would freeze the open window: use Clip > Remove Silence there, or run the tool with We edit closed".into());
     }
     let d = analyze_blocking(ed, &s)?;
@@ -1268,6 +1301,32 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 (None, Some(err)) => Err(err.text.clone()),
                 (None, None) => Err("the picture was not made".into()),
             }
+        }
+        "copy_effects" => {
+            active(ed)?;
+            let clip = ClipId(a.get("clip_id").and_then(Json::as_u64).ok_or("clip_id is required")?);
+            let only = match a.get("effect_index").and_then(Json::as_u64) {
+                Some(i) => Some(
+                    ed.active_seq()
+                        .and_then(|q| q.clip(clip))
+                        .and_then(|c| c.components.get(i as usize))
+                        .map(|c| c.id)
+                        .ok_or("that clip has no such effect")?,
+                ),
+                None => None,
+            };
+            let names = ed.copy_effects(clip, only)?;
+            text(json!({"copied": names}))
+        }
+        "paste_effects" => {
+            active(ed)?;
+            let clips = ids_arg(a, "clip_ids");
+            if clips.is_empty() {
+                return Err("clip_ids is required".into());
+            }
+            ed.selection = op_application::Selection::only(clips);
+            let n = ed.paste_effects()?;
+            text(json!({"pasted_on_clips": n}))
         }
         "make_shorts" => {
             let layout = match str_arg(a, "layout").unwrap_or("fill") {

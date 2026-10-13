@@ -37,11 +37,20 @@ pub enum HardwareDecoding {
     Never,
 }
 
+/// Whether NVDEC can be used through CUDA (found out once).
+fn nvidia_decoder() -> bool {
+    static FOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FOUND.get_or_init(op_media::cuda_available)
+}
+
 impl HardwareDecoding {
     pub fn from_pref(s: &str) -> HardwareDecoding {
         match s {
             "always" => HardwareDecoding::Always,
             "never" => HardwareDecoding::Never,
+            // automatic: an NVIDIA card (CUDA) always decodes with its own engine, which spares the
+            // processor; elsewhere software first, moving to the card only when it cannot keep up
+            _ if nvidia_decoder() => HardwareDecoding::Always,
             _ => HardwareDecoding::Auto,
         }
     }

@@ -22,6 +22,14 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
     let mut open_generative = false;
     // (model id, 1 download, 2 cancel)
     let mut whisper_action: Option<(&'static str, u8)> = None;
+    // a model folder to delete (asked for twice, so a misclick keeps it)
+    let mut whisper_delete: Option<PathBuf> = None;
+    // other model folders on disk (older downloads, the built-in Whisper), with their size
+    let other_models: Vec<_> = op_application::whisper_models::folders()
+        .into_iter()
+        .filter(|f| f.known.is_none())
+        .chain(op_application::whisper_models::builtin_folders(&op_application::captions::models_dir(&s.ed)))
+        .collect();
     // 0 nothing, 1 sign in, 2 install Codex
     let mut account_action: Option<(crate::ai_accounts::Provider, u8)> = None;
     window(ctx, t("Preferences"))
@@ -468,7 +476,7 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                     ui.end_row();
                     ui.label(t("Hardware Decoding"));
                     let modes = [
-                        ("auto", t("Automatic")),
+                        ("auto", "자동 (NVIDIA 카드는 CUDA로 항상)"),
                         ("always", t("Always (graphics card)")),
                         ("never", t("Never (processor only)")),
                     ];
@@ -608,6 +616,12 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                                         RichText::new(format!("\u{2713} {}", t("Installed")))
                                             .color(egui::Color32::from_rgb(0x2e, 0x9d, 0x4f)),
                                     );
+                                    if downloading.is_none()
+                                        && confirm_delete(ui, ("pref-model", m.id))
+                                        && let Some(dir) = op_application::whisper_models::dir_of(m.id)
+                                    {
+                                        whisper_delete = Some(dir);
+                                    }
                                 }
                                 _ => {
                                     if ui
@@ -619,6 +633,18 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
                                 }
                             }
                             ui.label(RichText::new(t(m.note)).size(11.0).color(theme::TEXT_DIM));
+                        });
+                        ui.end_row();
+                    }
+                    // what is not in the list above is shown with its size so it can be deleted
+                    for f in &other_models {
+                        ui.label(RichText::new(&f.name).color(theme::TEXT_DIM));
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new(format!("{:.1} GB", f.bytes as f64 / 1e9)).color(theme::TEXT_DIM));
+                            ui.label(RichText::new("목록에 없는 모델 폴더").size(11.0).color(theme::TEXT_DIM));
+                            if downloading.is_none() && confirm_delete(ui, ("pref-folder", &f.name)) {
+                                whisper_delete = Some(f.path.clone());
+                            }
                         });
                         ui.end_row();
                     }
@@ -760,6 +786,11 @@ pub(super) fn preferences(s: &mut State, ctx: &egui::Context, scale: &mut f32) -
         } else if let Some(d) = &s.ed.whisper_dl {
             d.cancel();
         }
+    }
+    if let Some(path) = whisper_delete
+        && let Err(e) = s.ed.whisper_remove(&path)
+    {
+        s.ed.error(e);
     }
     if let Some((which, what)) = account_action {
         let result = if what == 2 { s.accounts.install_codex() } else { s.accounts.sign_in(which) };

@@ -168,3 +168,119 @@ impl Editor {
         }
     }
 }
+
+// ------------------------------------------------------------------------- what is on the disk
+
+/// A speech model folder found on this computer.
+pub struct Folder {
+    pub path: PathBuf,
+    /// Folder name.
+    pub name: String,
+    pub bytes: u64,
+    /// The model of `MODELS` it is, if it is one.
+    pub known: Option<&'static ModelInfo>,
+}
+
+/// Bytes of the files in `dir` and one level below.
+fn folder_bytes(dir: &Path) -> u64 {
+    let mut total = 0;
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            match e.metadata() {
+                Ok(m) if m.is_file() => total += m.len(),
+                Ok(m) if m.is_dir() => {
+                    if let Ok(inner) = std::fs::read_dir(e.path()) {
+                        total += inner.flatten().filter_map(|f| f.metadata().ok()).filter(|m| m.is_file()).map(|m| m.len()).sum::<u64>();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    total
+}
+
+fn list(root: &Path, known: impl Fn(&str) -> Option<&'static ModelInfo>) -> Vec<Folder> {
+    let mut out: Vec<Folder> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.metadata().is_ok_and(|m| m.is_dir()))
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            Folder { bytes: folder_bytes(&e.path()), known: known(&name), path: e.path(), name }
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Every folder in the speech helper's `models` folder.
+pub fn folders() -> Vec<Folder> {
+    let Some(root) = models_root() else { return Vec::new() };
+    list(&root, |name| name.strip_prefix("faster-whisper-").and_then(info))
+}
+
+/// The built-in Whisper's models (`SpeechModels` in the program's data folder).
+pub fn builtin_folders(models: &Path) -> Vec<Folder> {
+    list(models, |_| None)
+}
+
+impl Editor {
+    /// Deletes a downloaded speech model folder. Only folders directly inside the helper's
+    /// `models` folder or the built-in models folder can go, and not while speech is being
+    /// recognized or the model is being downloaded.
+    pub fn whisper_remove(&mut self, path: &Path) -> Result<(), String> {
+        if self.whisper_dl.is_some() || self.sentencing.is_some() || self.silencing.is_some() || self.captioning.is_some() {
+            return Err("음성 인식이나 모델 내려받기가 끝난 뒤에 지울 수 있습니다".into());
+        }
+        let builtin = crate::captions::models_dir(self);
+        let inside = |root: Option<PathBuf>| {
+            root.and_then(|r| r.canonicalize().ok())
+                .zip(path.canonicalize().ok())
+                .is_some_and(|(root, p)| p.parent() == Some(root.as_path()) && p.is_dir())
+        };
+        if !inside(models_root()) && !inside(Some(builtin)) {
+            return Err("이 폴더는 모델 폴더가 아니어서 지우지 않습니다".into());
+        }
+        std::fs::remove_dir_all(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        self.info(format!("'{}' 모델을 지웠습니다", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod disk_tests {
+    use super::*;
+
+    #[test]
+    fn folders_are_listed_with_their_size_and_only_model_folders_go() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
+        let dir = tempfile::tempdir().unwrap();
+        let helper = dir.path().join("helper");
+        let models = helper.join("models");
+        std::fs::create_dir_all(models.join("faster-whisper-small")).unwrap();
+        std::fs::write(models.join("faster-whisper-small").join("model.bin"), vec![0u8; 1000]).unwrap();
+        std::fs::create_dir_all(models.join("whisper-old")).unwrap();
+        std::fs::write(models.join("whisper-old").join("a.bin"), vec![0u8; 10]).unwrap();
+        // SAFETY: tests of this module are the only ones that touch this variable
+        unsafe { std::env::set_var("WEEDIT_HELPER", &helper) };
+        let found = folders();
+        assert_eq!(found.len(), 2);
+        let small = found.iter().find(|f| f.name == "faster-whisper-small").unwrap();
+        assert_eq!(small.bytes, 1000);
+        assert_eq!(small.known.map(|m| m.id), Some("small"));
+        assert!(found.iter().find(|f| f.name == "whisper-old").unwrap().known.is_none());
+
+        let mut ed = Editor::new(crate::Dirs::portable(dir.path()), crate::Preferences::default(), false);
+        // a folder outside the models folder is refused
+        let other = dir.path().join("elsewhere");
+        std::fs::create_dir_all(&other).unwrap();
+        assert!(ed.whisper_remove(&other).is_err());
+        assert!(other.is_dir());
+        ed.whisper_remove(&models.join("whisper-old")).unwrap();
+        assert!(!models.join("whisper-old").exists());
+        assert!(models.join("faster-whisper-small").exists());
+        unsafe { std::env::remove_var("WEEDIT_HELPER") };
+    }
+}

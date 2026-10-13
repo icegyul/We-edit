@@ -14,8 +14,7 @@ use parking_lot::Mutex;
 use serde_json::{Value as Json, json};
 
 use crate::captions::{
-    CaptionProgress, CaptionStage, ModelSize, Task, TranscribeOptions, audio_16k, ensure_model,
-    models_dir, transcribe_words,
+    CaptionProgress, CaptionStage, ModelSize, Task, TranscribeOptions, audio_16k, models_dir,
 };
 use crate::editor::Editor;
 
@@ -72,6 +71,16 @@ pub struct SilenceSettings {
     pub by_words: bool,
     pub words: sil::TextParams,
     pub model: ModelSize,
+    /// Speech model of the speech helper (an id of `whisper_models`, up to large-v3), used on the
+    /// graphics card when the helper is installed; `model` is for the built-in Whisper without it.
+    pub whisper: String,
+    /// Cut everything that is not speech: before the first word, between sentences, after the last
+    /// (needs a transcription).
+    pub speech_only: bool,
+    /// Shortest stretch outside the words that is cut, in seconds.
+    pub speech_gap: f64,
+    /// Air left beside the words that stay, in seconds.
+    pub speech_air: f64,
     /// Spoken language code; None detects it.
     pub language: Option<String>,
     pub action: Action,
@@ -90,6 +99,10 @@ impl Default for SilenceSettings {
             by_words: false,
             words: sil::TextParams::default(),
             model: ModelSize::Base,
+            whisper: "large-v3".into(),
+            speech_only: false,
+            speech_gap: 0.25,
+            speech_air: 0.12,
             language: None,
             action: Action::Remove,
             snap: true,
@@ -101,6 +114,11 @@ impl Default for SilenceSettings {
 impl SilenceSettings {
     /// Whether a setting uses the neural curve. It is measured with every analysis (it is cheap),
     /// so switching to it later does not ask to analyze again.
+    /// Whether the audio must be transcribed.
+    pub fn needs_words(&self) -> bool {
+        self.by_words || self.speech_only
+    }
+
     pub fn needs_neural(&self) -> bool {
         matches!(self.sound.method, sil::Method::Neural { .. }) || self.sound.voice_only
     }
@@ -147,6 +165,17 @@ impl Detection {
                 }
             }
             all.extend(found);
+        }
+        if s.speech_only
+            && let Some(words) = &self.words
+        {
+            let p = sil::TextParams {
+                gap: s.speech_gap.max(0.05),
+                pad_before: s.speech_air * 0.7,
+                pad_after: s.speech_air,
+                ..Default::default()
+            };
+            all.extend(sil::text::gaps(words, self.analysis.duration(), &p));
         }
         sil::text::merge(all)
     }
@@ -245,7 +274,12 @@ impl Editor {
         let cancel = Arc::new(AtomicBool::new(false));
         let result = Arc::new(Mutex::new(None));
         let (p, c, r) = (progress.clone(), cancel.clone(), result.clone());
-        let (neural, words, model, language) = (true, s.by_words, s.model, s.language.clone());
+        let (neural, words, model, language) = (true, s.needs_words(), s.model, s.language.clone());
+        // hesitations are only written down when words are cut by what they are
+        let verbatim = s.by_words;
+        // the speech helper (graphics card) when it is installed; Err when its model is missing
+        let engine = if words { crate::speech::pick_engine(&s.whisper)? } else { None };
+        let scratch = self.dirs.cache.clone();
         let origin = range.start;
         let secs = range.duration().seconds();
         let spawned = std::thread::Builder::new()
@@ -260,15 +294,14 @@ impl Editor {
                     let analysis = sil::analyze(&pcm, neural, &mut |f| p.lock().fraction = f, &c)
                         .map_err(|_| "cancelled".to_string())?;
                     let (language, words) = if words {
-                        ensure_model(&models, model, &p, &c)?;
                         let opts = TranscribeOptions {
                             model,
                             language,
                             task: Task::Transcribe,
-                            verbatim: true,
+                            verbatim,
                             captions: Default::default(),
                         };
-                        let (lang, w) = transcribe_words(&pcm, &models, &opts, &p, &c)?;
+                        let (lang, w) = crate::speech::words(engine.as_ref(), &pcm, &models, &opts, &scratch, &p, &c)?;
                         let w: Vec<sil::Word> = w
                             .into_iter()
                             .map(|w| sil::Word {
@@ -642,4 +675,50 @@ pub fn describe(cuts: &[Cut]) -> Json {
             "text": c.text,
         })).collect::<Vec<_>>(),
     })
+}
+
+#[cfg(test)]
+mod speech_only_tests {
+    use super::*;
+
+    fn detection(words: &[(&str, f64, f64)]) -> Detection {
+        let pcm = vec![0.0f32; 16_000 * 6];
+        let analysis = sil::analyze(&pcm, false, &mut |_| {}, &AtomicBool::new(false)).ok().expect("an analysis");
+        Detection {
+            origin: SeqTime::ZERO,
+            analysis: Arc::new(analysis),
+            words: Some(Arc::new(
+                words.iter().map(|(t, s, e)| sil::Word { text: (*t).into(), start: *s, end: *e }).collect(),
+            )),
+            language: "ko".into(),
+            clips: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn everything_outside_the_words_is_cut_but_a_little_air() {
+        let d = detection(&[("안녕", 1.0, 1.5), ("하세요", 1.6, 2.1), ("네", 4.0, 4.4)]);
+        let mut s = SilenceSettings::default();
+        s.by_sound = false;
+        s.by_words = false;
+        s.speech_only = true;
+        s.speech_gap = 0.25;
+        s.speech_air = 0.1;
+        let cuts = d.cuts(&s);
+        // before the first word, the long pause between sentences, after the last word
+        assert_eq!(cuts.len(), 3, "{cuts:?}");
+        assert!(cuts.iter().all(|c| c.kind == Kind::Gap));
+        // the pause inside a sentence (0.1 s) is shorter than the gap and stays
+        assert!(cuts[0].range.start < 0.01 && cuts[0].range.end > 0.8 && cuts[0].range.end < 1.0, "{:?}", cuts[0]);
+        assert!(cuts[1].range.start > 2.1 && cuts[1].range.end < 4.0, "{:?}", cuts[1]);
+        assert!(cuts[2].range.start > 4.4 && cuts[2].range.end > 5.9, "{:?}", cuts[2]);
+        // with the mode off nothing is found
+        s.speech_only = false;
+        assert!(d.cuts(&s).is_empty());
+        // a smaller gap and no air also take the short pause between the first two words
+        s.speech_only = true;
+        s.speech_gap = 0.05;
+        s.speech_air = 0.0;
+        assert_eq!(d.cuts(&s).len(), 4);
+    }
 }

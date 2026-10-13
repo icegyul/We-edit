@@ -29,6 +29,22 @@ pub fn detect_gpu() -> Option<Gpu> {
     String::from_utf8_lossy(&out.stdout).lines().find_map(parse_gpu)
 }
 
+/// What the speech helper says about the graphics card: (CUDA usable, number of cards). None
+/// without the helper. Starts Python (about a second): call it off the interface thread.
+pub fn helper_cuda() -> Option<(bool, usize)> {
+    let (python, script) = crate::sentences::helper_files()?;
+    let mut cmd = std::process::Command::new(python);
+    cmd.arg(script).arg("--check");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok().filter(|o| o.status.success())?;
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    Some((json["cuda"].as_bool().unwrap_or(false), json["devices"].as_u64().unwrap_or(0) as usize))
+}
+
 pub fn memory_gb() -> f64 {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();

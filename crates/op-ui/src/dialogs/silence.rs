@@ -15,7 +15,8 @@ struct Key {
     scope: Scope,
     neural: bool,
     words: bool,
-    model: ModelSize,
+    /// The speech model that made the words (the helper's model id, or the built-in one's).
+    engine: String,
     language: Option<String>,
 }
 
@@ -25,7 +26,7 @@ impl Key {
         self.scope == need.scope
             && (self.neural || !need.neural)
             && (!need.words
-                || (self.words && self.model == need.model && self.language == need.language))
+                || (self.words && self.engine == need.engine && self.language == need.language))
     }
 }
 
@@ -33,9 +34,18 @@ fn key_of(s: &SilenceSettings) -> Key {
     Key {
         scope: s.scope,
         neural: true,
-        words: s.by_words,
-        model: s.model,
+        words: s.needs_words(),
+        engine: engine_id(s),
         language: s.language.clone(),
+    }
+}
+
+/// Which speech model the settings will use: the helper's (graphics card) when it is installed.
+fn engine_id(s: &SilenceSettings) -> String {
+    if op_application::sentences::helper_files().is_some() {
+        s.whisper.clone()
+    } else {
+        s.model.id().to_string()
     }
 }
 
@@ -68,7 +78,7 @@ impl Dialog {
             analyzed: None,
             error: None,
         };
-        if !form.settings.by_words {
+        if !form.settings.needs_words() {
             form.start(s);
         }
         Some(Dialog::Silence(Box::new(form)))
@@ -172,7 +182,7 @@ fn method_param(ui: &mut Ui, m: &mut Method) -> bool {
 
 pub(super) fn silence_dialog(s: &mut State, ctx: &egui::Context, form: &mut SilenceForm) -> bool {
     let busy = s.ed.silencing.is_some();
-    if busy {
+    if busy || s.ed.whisper_dl.is_some() {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
     let detection: Option<std::sync::Arc<Detection>> = s.ed.silence_result.clone();
@@ -236,7 +246,23 @@ pub(super) fn silence_dialog(s: &mut State, ctx: &egui::Context, form: &mut Sile
                 .on_hover_text(t(
                     "Filler words (um, eh), repeated words and phrases, and sentences said twice (the last take stays). Transcribes the audio on this computer; the speech model is downloaded once.",
                 ));
+            ui.checkbox(&mut form.settings.speech_only, "문장 밖 빈 공간 모두 삭제")
+                .on_hover_text("받아쓴 글(단어·문장)이 없는 구간, 즉 말이 시작되기 전, 문장 사이, 끝난 뒤를 모두 지웁니다. 위스퍼로 받아쓰기를 하며, 글이 있는 부분만 남습니다.");
         });
+        if form.settings.needs_words() {
+            speech_model_row(s, ui, &mut form.settings);
+        }
+        if form.settings.speech_only {
+            ui.horizontal(|ui| {
+                ui.label("문장 밖 삭제:");
+                ui.label("이보다 긴 빈 공간만");
+                ui.add(egui::Slider::new(&mut form.settings.speech_gap, 0.05..=2.0).suffix(" 초"))
+                    .on_hover_text("글과 글 사이가 이 길이 이상 비어 있으면 지웁니다. 작을수록 말이 빽빽해집니다.");
+                ui.label("앞뒤로 남길 여유");
+                ui.add(egui::Slider::new(&mut form.settings.speech_air, 0.0..=0.5).suffix(" 초"))
+                    .on_hover_text("말이 끊기지 않게 글 앞뒤로 남겨 두는 시간입니다.");
+            });
+        }
         ui.add_space(6.0);
         ui.horizontal_top(|ui| {
             // ------------------------------------------------------------------ settings
@@ -388,6 +414,63 @@ pub(super) fn silence_dialog(s: &mut State, ctx: &egui::Context, form: &mut Sile
     true
 }
 
+/// The speech model of the words search: the helper's models (up to large-v3, on the graphics
+/// card), with a download and a delete button; without the helper the built-in Whisper is used.
+fn speech_model_row(s: &mut State, ui: &mut Ui, settings: &mut SilenceSettings) {
+    use op_application::whisper_models as wm;
+    ui.horizontal_wrapped(|ui| {
+        ui.label("음성 인식 모델");
+        if op_application::sentences::helper_files().is_none() {
+            ui.label(RichText::new("음성 인식 도우미(helper)가 없어 내장 위스퍼(CPU, 최대 small)로 실행합니다").color(theme::WARN));
+            return;
+        }
+        let shown = wm::info(&settings.whisper).map_or(settings.whisper.clone(), |m| m.label.to_string());
+        egui::ComboBox::from_id_salt("sil-whisper").selected_text(shown).width(180.0).show_ui(ui, |ui| {
+            for m in wm::MODELS {
+                let mark = if wm::installed(m.id) { "✔" } else { "내려받기" };
+                let text = format!("{}  ({:.1} GB)  {mark}", m.label, f64::from(m.megabytes) / 1000.0);
+                if ui.selectable_label(settings.whisper == m.id, text).clicked() {
+                    settings.whisper = m.id.to_string();
+                }
+            }
+        });
+        let downloading = s.ed.whisper_dl.as_ref().map(|d| (d.id, d.progress()));
+        match downloading {
+            Some((id, (done, total))) if id == settings.whisper => {
+                let f = (done as f32 / total.max(1) as f32).min(1.0);
+                ui.add(egui::ProgressBar::new(f).desired_width(120.0).text(format!("{:.0}%", f * 100.0)));
+                if ui.small_button("취소").clicked()
+                    && let Some(d) = &s.ed.whisper_dl
+                {
+                    d.cancel();
+                }
+            }
+            _ if wm::installed(&settings.whisper) => {
+                ui.label(RichText::new("✔ 설치됨").color(egui::Color32::from_rgb(0x2e, 0x9d, 0x4f)));
+                if confirm_delete(ui, ("silence-model", settings.whisper.clone()))
+                    && let Some(dir) = wm::dir_of(&settings.whisper)
+                    && let Err(e) = s.ed.whisper_remove(&dir)
+                {
+                    s.ed.error(e);
+                }
+            }
+            _ => {
+                if let Some(m) = wm::info(&settings.whisper)
+                    && ui
+                        .add_enabled(downloading.is_none(), egui::Button::new(format!("내려받기 ({:.1} GB)", f64::from(m.megabytes) / 1000.0)))
+                        .clicked()
+                    && let Err(e) = s.ed.whisper_download(m.id)
+                {
+                    s.ed.error(e);
+                }
+            }
+        }
+        if let Some(m) = wm::info(&settings.whisper) {
+            ui.label(RichText::new(format!("{} · NVIDIA 그래픽 카드(CUDA)로 실행", t(m.note))).size(11.0).color(theme::TEXT_DIM));
+        }
+    });
+}
+
 /// Everything the dialog sets except what to look at: shared with the batch dialog.
 pub(super) fn settings_panel(ui: &mut Ui, settings: &mut SilenceSettings) {
     ui.checkbox(&mut settings.by_sound, t("Find Silences in the Sound"))
@@ -495,20 +578,22 @@ pub(super) fn settings_panel(ui: &mut Ui, settings: &mut SilenceSettings) {
                         }
                     });
                 ui.end_row();
-                ui.label(t("Speech Model"));
-                egui::ComboBox::from_id_salt("sil-model")
-                    .selected_text(settings.model.label())
-                    .width(190.0)
-                    .show_ui(ui, |ui| {
-                        for m in ModelSize::ALL {
-                            ui.selectable_value(
-                                &mut settings.model,
-                                m,
-                                format!("{} ({} MB)", m.label(), m.megabytes()),
-                            );
-                        }
-                    });
-                ui.end_row();
+                if op_application::sentences::helper_files().is_none() {
+                    ui.label(t("Speech Model"));
+                    egui::ComboBox::from_id_salt("sil-model")
+                        .selected_text(settings.model.label())
+                        .width(190.0)
+                        .show_ui(ui, |ui| {
+                            for m in ModelSize::ALL {
+                                ui.selectable_value(
+                                    &mut settings.model,
+                                    m,
+                                    format!("{} ({} MB)", m.label(), m.megabytes()),
+                                );
+                            }
+                        });
+                    ui.end_row();
+                }
                 ui.label("");
                 ui.checkbox(&mut settings.words.fillers, t("Filler Words"))
                     .on_hover_text(t("um, uh, eh, euh... in the spoken language."));
@@ -871,7 +956,7 @@ mod tests {
             scope: Scope::Sequence,
             neural,
             words,
-            model,
+            engine: model.id().to_string(),
             language: None,
         }
     }

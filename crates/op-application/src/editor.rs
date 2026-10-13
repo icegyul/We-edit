@@ -75,6 +75,8 @@ pub struct Editor {
     pub source: SourceMonitor,
     pub transport: Transport,
     pub clipboard: Clipboard,
+    /// Effects copied from Effect Controls or the timeline, to paste on other clips.
+    pub fx_clipboard: Option<Clip>,
     /// Project panel selection and the bin new items go into.
     pub items: Vec<ItemId>,
     pub bin: ItemId,
@@ -182,6 +184,7 @@ impl Editor {
                 ..Default::default()
             },
             clipboard: Clipboard::default(),
+            fx_clipboard: None,
             items: Vec::new(),
             bin,
             status: None,
@@ -394,6 +397,7 @@ impl Editor {
         self.items.clear();
         self.bin = self.project.root;
         self.clipboard = Clipboard::default();
+        self.fx_clipboard = None;
     }
 
     /// Reads a native project, or imports a Premiere Pro / FCP XML / OTIO file as a new project.

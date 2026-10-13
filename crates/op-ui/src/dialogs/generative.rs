@@ -14,6 +14,9 @@ use super::*;
 type Check = Arc<Mutex<Option<Result<(), String>>>>;
 
 pub struct GenForm {
+    /// Answers of the checks of what uses the graphics card (run once, off the interface thread).
+    cuda: Arc<Mutex<Option<GpuUse>>>,
+    cuda_started: bool,
     gpu: Option<Option<Gpu>>,
     memory: f64,
     keys: [String; 2],
@@ -28,6 +31,8 @@ pub struct GenForm {
 impl Default for GenForm {
     fn default() -> Self {
         GenForm {
+            cuda: Arc::new(Mutex::new(None)),
+            cuda_started: false,
             gpu: None,
             memory: memory_gb(),
             keys: [String::new(), String::new()],
@@ -46,6 +51,14 @@ fn heading(ui: &mut Ui, text: &str) {
     ui.add_space(6.0);
     ui.label(RichText::new(text).strong().family(crate::fonts::strong()).color(theme::TEXT_BRIGHT));
     ui.separator();
+}
+
+/// What the checks found.
+struct GpuUse {
+    /// CUDA works for the video decoder (NVDEC) and encoder (NVENC).
+    media: bool,
+    /// The speech helper: (CUDA usable, cards); None without the helper.
+    speech: Option<(bool, usize)>,
 }
 
 fn gb(megabytes: u64) -> String {
@@ -71,6 +84,15 @@ pub(super) fn generative_dialog(s: &mut State, ctx: &egui::Context, f: &mut GenF
     if f.checks.iter().any(Option::is_some) || s.ed.cloud.is_some() || s.ed.comfy.install.is_some() {
         ctx.request_repaint_after(std::time::Duration::from_millis(300));
     }
+    if !f.cuda_started {
+        f.cuda_started = true;
+        let slot = f.cuda.clone();
+        std::thread::spawn(move || {
+            let media = op_media::cuda_available();
+            let speech = op_application::generative::helper_cuda();
+            *slot.lock() = Some(GpuUse { media, speech });
+        });
+    }
     window(ctx, "생성형 AI")
         .open(&mut open)
         .resizable(true)
@@ -79,6 +101,7 @@ pub(super) fn generative_dialog(s: &mut State, ctx: &egui::Context, f: &mut GenF
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 pc(s, ui, f);
+                gpu_use(s, ui, f);
                 local_models(s, ui, f);
                 cloud_keys(s, ui, f);
                 cloud_make(s, ui, f);
@@ -116,6 +139,45 @@ fn pc(s: &mut State, ui: &mut Ui, f: &mut GenForm) {
         }
         ui.end_row();
     });
+}
+
+/// Which parts of the program run on the NVIDIA card, as found on this PC just now.
+fn gpu_use(s: &mut State, ui: &mut Ui, f: &mut GenForm) {
+    heading(ui, "이 프로그램이 그래픽 카드(CUDA)를 쓰는 곳");
+    let found = f.cuda.lock();
+    let row = |ui: &mut Ui, what: &str, ok: Option<bool>, detail: String| {
+        ui.horizontal_wrapped(|ui| {
+            let (mark, color) = match ok {
+                Some(true) => ("✔", GOOD),
+                Some(false) => ("✘", theme::WARN),
+                None => ("…", theme::TEXT_DIM),
+            };
+            ui.label(RichText::new(mark).color(color));
+            ui.label(RichText::new(what).strong());
+            ui.label(RichText::new(detail).size(11.5).color(theme::TEXT_DIM));
+        });
+    };
+    row(ui, "화면 합성·색보정·효과", Some(true), format!("그래픽 카드(GPU)로 처리: {}", s.gpu.description()));
+    let (decode, encode) = (s.ed.prefs.hardware_decoding.as_str(), s.ed.prefs.hardware_encoding);
+    match found.as_ref() {
+        None => {
+            row(ui, "영상 디코딩 (NVDEC)", None, "확인하는 중…".into());
+            row(ui, "내보내기·프록시 인코딩 (NVENC)", None, "확인하는 중…".into());
+            row(ui, "음성 인식 (위스퍼)", None, "확인하는 중…".into());
+        }
+        Some(u) => {
+            let dec = u.media && decode != "never";
+            row(ui, "영상 디코딩 (NVDEC)", Some(dec), if u.media { if decode == "never" { "환경 설정에서 꺼져 있음".into() } else { "CUDA로 재생·썸네일·프록시 디코딩 (지원하지 않는 영상은 자동으로 CPU)".into() } } else { "CUDA를 쓸 수 없어 CPU·DirectX로 디코딩".into() });
+            let enc = u.media && encode;
+            row(ui, "내보내기·프록시 인코딩 (NVENC)", Some(enc), if u.media { if encode { "H.264·HEVC 내보내기와 프록시를 NVENC로 (안 되면 자동으로 CPU)".into() } else { "환경 설정에서 꺼져 있음".into() } } else { "CUDA를 쓸 수 없어 CPU로 인코딩".into() });
+            match u.speech {
+                Some((true, n)) => row(ui, "음성 인식 (위스퍼)", Some(true), format!("CUDA로 실행 (카드 {n}개): 무음 제거·자막·문장 편집 모두")),
+                Some((false, _)) => row(ui, "음성 인식 (위스퍼)", Some(false), "도우미가 CUDA를 찾지 못해 CPU로 실행 (느림)".into()),
+                None => row(ui, "음성 인식 (위스퍼)", Some(false), "음성 인식 도우미(helper)가 없어 내장 CPU 위스퍼로 실행".into()),
+            }
+        }
+    }
+    row(ui, "이미지·영상 생성 (ComfyUI)", Some(true), "ComfyUI가 NVIDIA 카드로 실행".into());
 }
 
 fn local_models(s: &mut State, ui: &mut Ui, f: &mut GenForm) {

@@ -80,13 +80,16 @@ pub fn helper_files() -> Option<(PathBuf, PathBuf)> {
     (python.is_file() && script.is_file()).then_some((python, script))
 }
 
-/// Runs the helper on 16 kHz mono sound; returns the language and the sentences.
-fn run_helper(
+/// Runs the helper on 16 kHz mono sound; returns the language and the sentences. `verbatim` also
+/// writes down hesitations (for finding filler words), `translate` writes English.
+pub(crate) fn run_helper(
     python: &Path,
     script: &Path,
     pcm: &[f32],
     language: &str,
     model: &Path,
+    verbatim: bool,
+    translate: bool,
     scratch: &Path,
     progress: &Arc<Mutex<CaptionProgress>>,
     cancel: &Arc<AtomicBool>,
@@ -98,6 +101,12 @@ fn run_helper(
     cmd.arg(script).arg("--pcm").arg(&file).arg("--model").arg(model);
     if !language.is_empty() {
         cmd.arg("--language").arg(language);
+    }
+    if verbatim {
+        cmd.arg("--verbatim");
+    }
+    if translate {
+        cmd.arg("--translate");
     }
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
@@ -217,7 +226,7 @@ impl Editor {
                     fraction: 0.0,
                 };
                 let _ = std::fs::create_dir_all(&scratch);
-                run_helper(&python, &script, &pcm, &language, &model, &scratch, &p, &c)
+                run_helper(&python, &script, &pcm, &language, &model, false, false, &scratch, &p, &c)
             }))
             .unwrap_or_else(|_| Err("the transcription stopped unexpectedly".into()));
             *r.lock() = Some(res);
@@ -398,6 +407,8 @@ mod tests {
 
     #[test]
     fn the_helper_is_found_by_environment_variable() {
+        // the helper variable is shared by the whole process: one test at a time
+        let _guard = crate::recovery::TEST_GUARD.lock();
         let dir = tempfile::tempdir().unwrap();
         let py = if cfg!(windows) { dir.path().join("venv/Scripts") } else { dir.path().join("venv/bin") };
         std::fs::create_dir_all(&py).unwrap();

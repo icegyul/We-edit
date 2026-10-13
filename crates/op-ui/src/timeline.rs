@@ -1981,6 +1981,12 @@ fn context_menu(s: &mut State, ui: &mut Ui, h: Option<Hit>) {
             run(s, ui, "Copy", "cmd.edit.copy");
             run(s, ui, "Paste Attributes...", "cmd.edit.pasteattributes");
             ui.separator();
+            run(s, ui, "수정한 효과 복사", "we.fx.copy");
+            let has_fx = s.ed.has_copied_effects();
+            ui.add_enabled_ui(has_fx, |ui| {
+                run(s, ui, "복사한 효과 붙여넣기", "we.fx.paste");
+            });
+            ui.separator();
             let enabled =
                 s.ed.active_seq()
                     .and_then(|q| q.clip(id))

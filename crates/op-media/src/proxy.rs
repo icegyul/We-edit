@@ -49,7 +49,16 @@ pub fn make_proxy(
 ) -> Result<(u32, u32)> {
     init();
     let partial = dst.with_extension("partial.mp4");
-    let result = write(src, stream, rate, frames, &partial, short_side, progress);
+    // the graphics card first (NVDEC decoding, NVENC encoding); anything it cannot do is redone on
+    // the processor
+    let mut result = write(src, stream, rate, frames, &partial, short_side, true, progress);
+    if let Err(e) = &result
+        && !matches!(e, MediaError::Cancelled)
+    {
+        log::info!("proxy on the graphics card failed ({e}): making it on the processor");
+        let _ = std::fs::remove_file(&partial);
+        result = write(src, stream, rate, frames, &partial, short_side, false, progress);
+    }
     match result {
         Ok(size) => {
             std::fs::rename(&partial, dst)?;
@@ -69,6 +78,7 @@ fn write(
     frames: i64,
     out: &Path,
     short_side: u32,
+    hardware: bool,
     progress: &mut dyn FnMut(f32) -> bool,
 ) -> Result<(u32, u32)> {
     let mut input = ff::format::input(src)?;
@@ -90,9 +100,12 @@ fn write(
         0
     };
     let mut ctx = ff::codec::context::Context::from_parameters(st.parameters())?;
+    // the decoder engine of the graphics card (NVDEC through CUDA on NVIDIA) when it can take the
+    // video; a decoder that cannot starts over in software
+    let on_card = hardware && crate::video::attach_hardware(&mut ctx, st.parameters().id()).is_some();
     ctx.set_threading(ff::threading::Config {
         kind: ff::threading::Type::Frame,
-        count: 0,
+        count: if on_card { 1 } else { 0 },
     });
     let mut decoder = ctx.decoder().video()?;
     let (pw, ph) = proxy_size(decoder.width(), decoder.height(), short_side);
@@ -103,7 +116,8 @@ fn write(
         rate,
         bitrate_kbps: None,
         quality: 23,
-        hardware: false,
+        // NVENC (with the software encoder as the fallback) when the card has one
+        hardware,
     };
     let mut muxer = Muxer::create_tuned(out, Some(&settings), None, Tuning::PROXY)?;
     let total = frames.max(1);
@@ -124,7 +138,19 @@ fn write(
      -> Result<bool> {
         let mut raw = ff::frame::Video::empty();
         while decoder.receive_frame(&mut raw).is_ok() {
-            let fmt = raw.format();
+            // frames of the graphics card's decoder are copied to memory first
+            let mut copied = ff::frame::Video::empty();
+            // SAFETY: reading a field of a frame we own
+            let on_device = unsafe { !(*raw.as_ptr()).hw_frames_ctx.is_null() };
+            if on_device {
+                // SAFETY: both frames are valid; FFmpeg allocates the destination
+                let r = unsafe { ff::ffi::av_hwframe_transfer_data(copied.as_mut_ptr(), raw.as_ptr(), 0) };
+                if r < 0 {
+                    return Err(MediaError::Unsupported("the hardware decoder could not hand over a frame".into()));
+                }
+            }
+            let frame: &ff::frame::Video = if on_device { &copied } else { &raw };
+            let fmt = frame.format();
             if !yuv_source(fmt) {
                 return Err(MediaError::Unsupported(format!(
                     "proxies are made from YUV video; this file is {fmt:?}"
@@ -136,7 +162,7 @@ fn write(
             if idx < *written {
                 continue;
             }
-            let (w, h) = (raw.width(), raw.height());
+            let (w, h) = (frame.width(), frame.height());
             if !matches!(&scaler, Some((f, sw, sh, _)) if *f == fmt && *sw == w && *sh == h) {
                 let ctx = ff::software::scaling::Context::get(
                     fmt,
@@ -150,7 +176,7 @@ fn write(
                 scaler = Some((fmt, w, h, ctx));
             }
             if let Some((_, _, _, s)) = &mut scaler {
-                s.run(&raw, &mut scaled)?;
+                s.run(frame, &mut scaled)?;
             }
             let planes = packed_planes(&scaled, pw as usize, ph as usize);
             // a gap in the timestamps holds the previous picture (or this one, at the start)

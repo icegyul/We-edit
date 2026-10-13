@@ -122,6 +122,21 @@ fn commit(s: &mut State, cx: &ClipCtx, comp: ComponentId, key: &str, v: Value) {
     });
 }
 
+/// Copies the effects of `clip` (one component, or every modified one) and says what was copied.
+pub fn copy_effects_message(s: &mut State, clip: ClipId, only: Option<ComponentId>) {
+    match s.ed.copy_effects(clip, only) {
+        Ok(names) => {
+            let list: Vec<String> = names.iter().map(|n| tn(n)).collect();
+            s.ed.info(format!(
+                "효과 {}개를 복사했습니다 ({}): 붙여넣을 클립을 타임라인에서 고르고 오른쪽 클릭 > 복사한 효과 붙여넣기",
+                list.len(),
+                list.join(", ")
+            ));
+        }
+        Err(e) => s.ed.error(e),
+    }
+}
+
 pub fn show(s: &mut State, ui: &mut Ui) {
     let full = ui.max_rect();
     // effects dropped on the panel go to the clip it shows
@@ -249,6 +264,24 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                 let comps: Vec<Component> = cx.clip.components.clone();
                 let video = cx.clip.is_video();
                 ui.add_space(2.0);
+                // copy what was changed here and paste it on any number of clips at once
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .button("수정한 효과 복사")
+                        .on_hover_text("값을 바꾼 모션·불투명도·소리 설정과 넣은 효과를 모두 복사합니다 (효과 이름을 오른쪽 클릭하면 그 효과만 복사)")
+                        .clicked()
+                    {
+                        copy_effects_message(s, cx.clip.id, None);
+                    }
+                    let can = s.ed.has_copied_effects();
+                    if ui
+                        .add_enabled(can, egui::Button::new("복사한 효과 붙여넣기"))
+                        .on_hover_text("타임라인에서 고른 클립 모두에 한꺼번에 붙여넣습니다")
+                        .clicked()
+                    {
+                        s.command("we.fx.paste");
+                    }
+                });
                 widgets::dim_label(
                     ui,
                     if video {
@@ -495,6 +528,16 @@ fn component_ui(
     }
     resp.context_menu(|ui| {
         let (sid, clip, id) = (cx.sid, cx.clip.id, comp.id);
+        if ui.button("이 효과 복사").clicked() {
+            copy_effects_message(s, clip, Some(id));
+            ui.close();
+        }
+        let can_paste = s.ed.has_copied_effects();
+        if ui.add_enabled(can_paste, egui::Button::new("복사한 효과 붙여넣기 (선택한 클립 모두)")).clicked() {
+            s.command("we.fx.paste");
+            ui.close();
+        }
+        ui.separator();
         if !comp.is_fixed() {
             if ui.button(t("Remove Effect")).clicked() {
                 s.ed.seq_edit("Remove Effect", |p, _, _| {

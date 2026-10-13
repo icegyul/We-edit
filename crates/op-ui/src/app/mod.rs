@@ -580,6 +580,20 @@ impl State {
                         .push(Dialog::PasteAttributes(op_timeline::Attributes::default()));
                 }
             }
+            "we.fx.copy" => {
+                // the first selected video clip (or any clip)
+                let clip = self.ed.selection.clips.iter().copied().find(|id| {
+                    self.ed.active_seq().and_then(|q| q.clip(*id)).is_some_and(|c| c.is_video())
+                });
+                match clip.or_else(|| self.ed.selection.clips.first().copied()) {
+                    Some(c) => crate::effect_controls::copy_effects_message(self, c, None),
+                    None => self.ed.error("먼저 효과를 복사할 클립을 선택하세요"),
+                }
+            }
+            "we.fx.paste" => match self.ed.paste_effects() {
+                Ok(n) => self.ed.info(format!("복사한 효과를 클립 {n}개에 한꺼번에 붙여넣었습니다")),
+                Err(e) => self.ed.error(e),
+            },
             "cmd.edit.removeattributes" => {
                 if self.ed.selection.clips.is_empty() {
                     self.ed.error(t("Select the clips first"));
@@ -630,6 +644,7 @@ impl State {
             "op.sequence.settings" => {
                 if let Some(seq) = self.ed.active_seq() {
                     self.dialogs.push(Dialog::SequenceSettings {
+                        sequence: None,
                         name: seq.name.clone(),
                         settings: seq.settings.clone(),
                     });

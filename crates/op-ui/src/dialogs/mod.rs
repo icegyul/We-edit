@@ -116,7 +116,9 @@ pub enum Dialog {
         name: String,
         settings: SequenceSettings,
     },
+    /// Sequence settings of `sequence` (the active one when None): size, frame rate and more.
     SequenceSettings {
+        sequence: Option<SequenceId>,
         name: String,
         settings: SequenceSettings,
     },
@@ -330,6 +332,29 @@ pub fn show(s: &mut State, ctx: &egui::Context) {
 }
 
 /// Every window opens centered on the program window.
+/// A "삭제" button that asks once: the first click turns it into "정말 지울까요? [지우기] [취소]".
+/// Returns true on the second, confirming click.
+fn confirm_delete(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug) -> bool {
+    let key = egui::Id::new(("confirm-delete", id));
+    let asking = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(false);
+    if !asking {
+        if ui.small_button("삭제").clicked() {
+            ui.data_mut(|d| d.insert_temp(key, true));
+        }
+        return false;
+    }
+    ui.label(RichText::new("정말 지울까요?").color(theme::WARN));
+    let mut done = false;
+    if ui.small_button("지우기").clicked() {
+        done = true;
+        ui.data_mut(|d| d.remove::<bool>(key));
+    }
+    if ui.small_button("취소").clicked() {
+        ui.data_mut(|d| d.remove::<bool>(key));
+    }
+    done
+}
+
 fn window<'a>(ctx: &egui::Context, title: &'a str) -> egui::Window<'a> {
     egui::Window::new(title)
         .pivot(egui::Align2::CENTER_CENTER)
@@ -640,7 +665,7 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
             }
             !(ok || cancel || esc)
         }
-        Dialog::SequenceSettings { name, settings } => {
+        Dialog::SequenceSettings { sequence, name, settings } => {
             let ((ok, cancel), esc) =
                 modal(ctx, "seqsettings", t("Sequence Settings"), 460.0, |ui| {
                     ui.horizontal(|ui| {
@@ -651,11 +676,11 @@ fn dialog(s: &mut State, ctx: &egui::Context, d: &mut Dialog) -> bool {
                     sequence_form(ui, settings, false);
                     buttons(ui, t("OK"))
                 });
-            if ok {
+            if ok && let Some(sid) = sequence.or(s.ed.active) {
                 let (n, st) = (name.clone(), settings.clone());
-                s.ed.seq_edit("Sequence Settings", |p, sid, _| {
+                s.ed.edit("Sequence Settings", |p| {
                     let item = p.sequence_item(sid);
-                    let q = p.sequence_mut(sid).unwrap();
+                    let q = p.sequence_mut(sid).ok_or(EditError::NotFound("sequence".into()))?;
                     q.name = n.clone();
                     let (vt, at) = (q.video.len(), q.audio.len());
                     q.settings = SequenceSettings {

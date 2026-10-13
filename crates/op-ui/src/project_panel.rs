@@ -385,11 +385,22 @@ fn item_menu(s: &mut State, ui: &mut Ui, id: ItemId) {
             ui.close();
         }
     }
-    if let ItemKind::Sequence { sequence } = it.kind
-        && ui.button(t("Open in Timeline")).clicked()
-    {
-        s.ed.open_sequence(sequence);
-        ui.close();
+    if let ItemKind::Sequence { sequence } = it.kind {
+        if ui.button(t("Open in Timeline")).clicked() {
+            s.ed.open_sequence(sequence);
+            ui.close();
+        }
+        // frame size, frame rate, audio rate ...: of this sequence, open or not
+        if ui.button(t("Sequence Settings...")).clicked() {
+            if let Some(seq) = s.ed.project.sequence(sequence) {
+                s.dialogs.push(Dialog::SequenceSettings {
+                    sequence: Some(sequence),
+                    name: seq.name.clone(),
+                    settings: seq.settings.clone(),
+                });
+            }
+            ui.close();
+        }
     }
     if let ItemKind::Media { asset, .. } = it.kind
         && let Some(a) = s.ed.project.asset(asset).cloned()

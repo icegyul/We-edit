@@ -249,11 +249,14 @@ impl Editor {
             opts.language.as_deref().unwrap_or("auto"),
             opts.task
         );
+        // the speech helper (graphics card) when it is installed, else the built-in Whisper
+        let engine = crate::speech::best_engine(&self.prefs.whisper_model);
+        let scratch = self.dirs.cache.clone();
         let spawned = std::thread::Builder::new()
             .name("captions".into())
             .spawn(move || {
                 let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_transcription(&project, sid, &media, &models, &opts, &p, &c)
+                    run_transcription(&project, sid, &media, &models, &opts, engine.as_ref(), &scratch, &p, &c)
                 }))
                 .unwrap_or_else(|_| Err("the transcription stopped unexpectedly".into()));
                 *r.lock() = Some(res);
@@ -710,16 +713,17 @@ fn run_transcription(
     media: &Arc<MediaService>,
     models: &Path,
     opts: &TranscribeOptions,
-    progress: &Mutex<CaptionProgress>,
-    cancel: &AtomicBool,
+    engine: Option<&crate::speech::Engine>,
+    scratch: &Path,
+    progress: &Arc<Mutex<CaptionProgress>>,
+    cancel: &Arc<AtomicBool>,
 ) -> Result<(String, Vec<Cue>), String> {
-    ensure_model(models, opts.model, progress, cancel)?;
     *progress.lock() = CaptionProgress {
         stage: CaptionStage::MixingAudio,
         fraction: 0.0,
     };
     let pcm = speech_audio(project, sid, media, progress, cancel)?;
-    let (lang, words) = transcribe_words(&pcm, models, opts, progress, cancel)?;
+    let (lang, words) = crate::speech::words(engine, &pcm, models, opts, scratch, progress, cancel)?;
     Ok((
         lang,
         captions::chunk(&words, opts.captions.max_words, 0.7, 0.6),
