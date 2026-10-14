@@ -23,7 +23,16 @@ const RULER_H: f32 = 30.0;
 const TABS_H: f32 = 24.0;
 const SCROLL_H: f32 = 14.0;
 const EDGE: f32 = 7.0;
-const SECTION_GAP: f32 = 6.0;
+/// The bar between the video and the audio tracks.
+const DIVIDER_H: f32 = 6.0;
+/// Least height of the video or the audio part of the timeline.
+const MIN_PANE: f32 = 36.0;
+const MIN_TRACK_H: f32 = 22.0;
+const MAX_TRACK_H: f32 = 400.0;
+/// The vertical scroll bars.
+const VSCROLL_W: f32 = 9.0;
+/// Pressing this close to a cut between two clips grabs the cut itself (a rolling edit).
+const CUT_GRAB: f32 = 4.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum TrimKind {
@@ -82,6 +91,9 @@ enum TlDrag {
         from: Pos2,
         scroll: f64,
         scroll_y: f32,
+        video_scroll: f32,
+        /// The part of the timeline the drag began in.
+        video: bool,
     },
 }
 
@@ -90,6 +102,8 @@ enum Zone {
     Head,
     Tail,
     Body,
+    /// The cut between this clip and the one that follows it directly.
+    Cut,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -172,6 +186,32 @@ struct Row {
     r: TrackRef,
     top: f32,
     h: f32,
+    /// The part of the screen this row may show in (the video or the audio part).
+    lo: f32,
+    hi: f32,
+}
+
+/// Where the video and audio tracks sit: the video part on top, the bar, then the audio part.
+/// Each part scrolls by itself.
+#[derive(Clone, Copy, Default, Debug)]
+struct Panes {
+    top: f32,
+    video_h: f32,
+    audio_h: f32,
+    video_content: f32,
+    audio_content: f32,
+}
+
+impl Panes {
+    fn divider(&self) -> (f32, f32) {
+        (self.top + self.video_h, self.top + self.video_h + DIVIDER_H)
+    }
+    fn audio_top(&self) -> f32 {
+        self.top + self.video_h + DIVIDER_H
+    }
+    fn is_video(&self, y: f32) -> bool {
+        y < self.top + self.video_h + DIVIDER_H * 0.5
+    }
 }
 
 struct Geo {
@@ -179,6 +219,15 @@ struct Geo {
     zoom: f64,
     scroll: f64,
     rows: Vec<Row>,
+    panes: Panes,
+}
+
+/// The part of `area` a row may paint in.
+fn row_clip(area: Rect, row: &Row) -> Rect {
+    Rect::from_min_max(
+        pos2(area.min.x, row.lo.max(area.min.y)),
+        pos2(area.max.x, row.hi.min(area.max.y)),
+    )
 }
 
 impl Geo {
@@ -192,34 +241,70 @@ impl Geo {
         Dur::from_seconds(px as f64 / self.zoom)
     }
     fn row_at(&self, y: f32) -> Option<&Row> {
-        self.rows.iter().find(|r| y >= r.top && y < r.top + r.h)
+        self.rows
+            .iter()
+            .find(|r| y >= r.top && y < r.top + r.h && y >= r.lo && y < r.hi)
     }
     fn row_of(&self, r: TrackRef) -> Option<&Row> {
         self.rows.iter().find(|x| x.r == r)
     }
 }
 
-fn layout_rows(seq: &Sequence, v: &TimelineView, top: f32, scroll_y: f32) -> (Vec<Row>, f32) {
-    let mut y = top - scroll_y;
+/// The height of one track: set by hand, else the common height.
+fn track_h(view: &SeqView, tl: &TimelineView, r: TrackRef) -> f32 {
+    view.track_height(r).unwrap_or(match r.kind {
+        TrackKind::Video => tl.video_height,
+        TrackKind::Audio => tl.audio_height,
+    })
+    .clamp(MIN_TRACK_H, MAX_TRACK_H)
+}
+
+/// How the height from `top` to `bottom` is shared by the video and the audio tracks. Without a
+/// height set by the bar, everything shows when it fits, else the parts share the room by what
+/// their tracks need.
+fn pane_sizes(seq: &Sequence, tl: &TimelineView, view: &SeqView, top: f32, bottom: f32) -> Panes {
+    let video_content: f32 = (0..seq.video.len()).map(|i| track_h(view, tl, TrackRef::video(i))).sum();
+    let audio_content: f32 = (0..seq.audio.len()).map(|i| track_h(view, tl, TrackRef::audio(i))).sum();
+    let room = (bottom - top - DIVIDER_H).max(0.0);
+    let least = MIN_PANE.min(room / 2.0);
+    let video_h = if view.split > 0.0 {
+        view.split
+    } else if video_content + audio_content <= room {
+        video_content
+    } else if video_content + audio_content > 0.0 {
+        room * video_content / (video_content + audio_content)
+    } else {
+        room / 2.0
+    }
+    .clamp(least, (room - least).max(least));
+    Panes {
+        top,
+        video_h,
+        audio_h: (room - video_h).max(0.0),
+        video_content,
+        audio_content,
+    }
+}
+
+fn layout_rows(seq: &Sequence, tl: &TimelineView, view: &SeqView, panes: &Panes) -> Vec<Row> {
     let mut out = Vec::new();
+    let (vlo, vhi) = (panes.top, panes.top + panes.video_h);
+    let mut y = vlo - view.video_scroll;
     for i in (0..seq.video.len()).rev() {
-        out.push(Row {
-            r: TrackRef::video(i),
-            top: y,
-            h: v.video_height,
-        });
-        y += v.video_height;
+        let r = TrackRef::video(i);
+        let h = track_h(view, tl, r);
+        out.push(Row { r, top: y, h, lo: vlo, hi: vhi });
+        y += h;
     }
-    y += SECTION_GAP;
+    let (alo, ahi) = (panes.audio_top(), panes.audio_top() + panes.audio_h);
+    let mut y = alo - view.scroll_y;
     for i in 0..seq.audio.len() {
-        out.push(Row {
-            r: TrackRef::audio(i),
-            top: y,
-            h: v.audio_height,
-        });
-        y += v.audio_height;
+        let r = TrackRef::audio(i);
+        let h = track_h(view, tl, r);
+        out.push(Row { r, top: y, h, lo: alo, hi: ahi });
+        y += h;
     }
-    (out, y + scroll_y - top)
+    out
 }
 
 fn hit(seq: &Sequence, g: &Geo, p: Pos2) -> Hit {
@@ -251,6 +336,15 @@ fn hit(seq: &Sequence, g: &Geo, p: Pos2) -> Hit {
     for (i, c) in tr.clips.iter().enumerate() {
         let (x0, x1) = (g.x(c.start), g.x(c.end()));
         let edge = EDGE.min((x1 - x0) / 3.0).max(2.0);
+        // the cut between two clips that touch: grabbing it moves the cut (the first clip shows
+        // more of what follows its end, the next one less of its start)
+        if tr.clips.get(i + 1).is_some_and(|n| n.start == c.end()) && (p.x - x1).abs() <= CUT_GRAB {
+            return Hit::Clip {
+                id: c.id,
+                track: row.r,
+                zone: Zone::Cut,
+            };
+        }
         if p.x >= x0 && p.x < x1 {
             let zone = if p.x - x0 < edge {
                 Zone::Head
@@ -445,16 +539,20 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         Some(q) => q.clone(),
         None => s.ed.project.sequence(sid).unwrap().clone(),
     };
-    let (_, content_h) = layout_rows(&shown, &s.tl, area.min.y, view.scroll_y);
+    let panes = pane_sizes(&shown, &s.tl, &view, area.min.y, area.max.y);
+    view.video_scroll = view
+        .video_scroll
+        .clamp(0.0, (panes.video_content - panes.video_h).max(0.0));
     view.scroll_y = view
         .scroll_y
-        .clamp(0.0, (content_h - area.height() + 20.0).max(0.0));
-    let (rows, _) = layout_rows(&shown, &s.tl, area.min.y, view.scroll_y);
+        .clamp(0.0, (panes.audio_content - panes.audio_h).max(0.0));
+    let rows = layout_rows(&shown, &s.tl, &view, &panes);
     let g = Geo {
         body: area,
         zoom: view.zoom.max(0.01),
         scroll: view.scroll.max(0.0),
         rows,
+        panes,
     };
     if let Some(p) = ui.input(|i| i.pointer.hover_pos())
         && area.contains(p)
@@ -498,7 +596,9 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         &shown,
         &mut view,
     );
-    wheel(ui, &g, rest, &mut view, content_h);
+    vertical_bars(ui, &g, &mut view);
+    divider(ui, &g, rest, &mut view);
+    wheel(ui, &g, rest, &mut view);
     // keep the playhead visible while playing
     if s.ed.transport.playing == Some(Monitor::Program) {
         let x = g.x(s.ed.playhead());
@@ -821,12 +921,17 @@ fn headers(
             ui.close();
         }
     });
+    let saved_clip = ui.clip_rect();
     for row in &g.rows {
         let r = Rect::from_min_size(pos2(area.min.x, row.top), vec2(area.width(), row.h));
-        if !r.intersects(area) {
+        let clip = row_clip(area, row);
+        if !r.intersects(clip) {
             continue;
         }
         let Some(tr) = seq.track(row.r) else { continue };
+        // a row scrolled half out of its part must not show or take clicks outside it
+        let painter = painter.with_clip_rect(clip);
+        ui.set_clip_rect(clip.intersect(saved_clip));
         let video = row.r.kind == TrackKind::Video;
         painter.rect_filled(
             r.shrink2(vec2(0.0, 0.5)),
@@ -1082,6 +1187,31 @@ fn headers(
             }
         });
     }
+    ui.set_clip_rect(saved_clip);
+    // the lower edge of a track header: drag it down and the track above it grows (the waveform
+    // of an audio track grows with it)
+    for row in &g.rows {
+        let clip = row_clip(area, row);
+        let y = row.top + row.h;
+        if y < clip.min.y || y > clip.max.y {
+            continue;
+        }
+        let handle = Rect::from_min_max(pos2(area.min.x, y - 3.0), pos2(area.max.x, y + 3.0)).intersect(clip);
+        if handle.is_negative() {
+            continue;
+        }
+        let video = row.r.kind == TrackKind::Video;
+        let resp = ui
+            .interact(handle, ui.id().with(("hdr-size", video, row.r.index)), Sense::drag())
+            .on_hover_text("아래로 끌면 이 트랙이 커집니다");
+        if resp.hovered() || resp.dragged() {
+            ui.ctx().set_cursor_icon(CursorIcon::ResizeVertical);
+        }
+        if resp.dragged() {
+            let h = track_h(view, &s.tl, row.r) + resp.drag_delta().y;
+            view.set_track_height(row.r, h.clamp(MIN_TRACK_H, MAX_TRACK_H));
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------ body
@@ -1311,7 +1441,8 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
     painter.rect_filled(area, 0.0, theme::PANEL_DARK);
     for row in &g.rows {
         let r = Rect::from_min_max(pos2(area.min.x, row.top), pos2(area.max.x, row.top + row.h));
-        if r.intersects(area) {
+        if r.intersects(row_clip(area, row)) {
+            let painter = painter.with_clip_rect(row_clip(area, row));
             let video = row.r.kind == TrackKind::Video;
             painter.rect_filled(
                 r.shrink2(vec2(0.0, 0.5)),
@@ -1347,10 +1478,12 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
     }
     let selection = s.ed.selection.clone();
     for row in &g.rows {
-        if row.top > area.max.y || row.top + row.h < area.min.y {
+        let clip = row_clip(area, row);
+        if row.top > clip.max.y || row.top + row.h < clip.min.y {
             continue;
         }
         let Some(tr) = seq.track(row.r) else { continue };
+        let painter = painter.with_clip_rect(clip);
         for c in &tr.clips {
             draw_clip(s, ui, &painter, g, row, c, selection.clips.contains(&c.id));
         }
@@ -1519,6 +1652,7 @@ fn input(
             // the Razor tool draws its own scissors cursor (see the razor preview)
             (Tool::Razor, _) => Some(CursorIcon::None),
             (Tool::Slip | Tool::Slide, Hit::Clip { .. }) => Some(CursorIcon::ResizeColumn),
+            (_, Hit::Clip { zone: Zone::Cut, .. }) => Some(CursorIcon::ResizeColumn),
             (
                 _,
                 Hit::Clip {
@@ -1539,8 +1673,11 @@ fn input(
 
     // drag start
     if resp.drag_started_by(PointerButton::Primary)
-        && let Some(p) = resp.interact_pointer_pos()
+        && let Some(now) = resp.interact_pointer_pos()
     {
+        // where the button went down: egui reports a drag only after the pointer moved several
+        // pixels, and what was grabbed (an edge, a cut) is what was under the pointer then
+        let p = ui.input(|i| i.pointer.press_origin()).unwrap_or(now);
         let h = hit(&seq, g, p);
         let tt = g.t(p.x);
         let clip_of = |id: ClipId| seq.clip(id).cloned();
@@ -1549,6 +1686,8 @@ fn input(
                 from: p,
                 scroll: view.scroll,
                 scroll_y: view.scroll_y,
+                video_scroll: view.video_scroll,
+                video: g.panes.is_video(p.y),
             }),
             (Tool::Razor | Tool::Zoom, _) => None,
             (
@@ -1572,6 +1711,12 @@ fn input(
                     delta: Dur::ZERO,
                 })
             }
+            (_, Hit::Clip { id, track, zone: Zone::Cut }) => clip_of(id).map(|c| TlDrag::Roll {
+                track,
+                cut: c.end(),
+                grab: tt,
+                delta: Dur::ZERO,
+            }),
             (Tool::Roll, Hit::Clip { id, track, zone }) => clip_of(id).map(|c| {
                 let cut =
                     if zone == Zone::Head || (zone == Zone::Body && tt - c.start < c.end() - tt) {
@@ -1709,9 +1854,16 @@ fn input(
                 from,
                 scroll,
                 scroll_y,
+                video_scroll,
+                video,
             } => {
                 view.scroll = (*scroll - (p.x - from.x) as f64 / g.zoom).max(0.0);
-                view.scroll_y = (*scroll_y - (p.y - from.y)).max(0.0);
+                let pn = g.panes;
+                if *video {
+                    view.video_scroll = (*video_scroll - (p.y - from.y)).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
+                } else {
+                    view.scroll_y = (*scroll_y - (p.y - from.y)).clamp(0.0, (pn.audio_content - pn.audio_h).max(0.0));
+                }
             }
             TlDrag::Marquee { to, .. } => *to = p,
             TlDrag::Move {
@@ -1810,7 +1962,8 @@ fn input(
                 let r = Rect::from_two_pos(from, to);
                 let mut ids = Vec::new();
                 for row in &g.rows {
-                    if row.top + row.h < r.min.y || row.top > r.max.y {
+                    let (top, bottom) = (row.top.max(row.lo), (row.top + row.h).min(row.hi));
+                    if bottom <= top || bottom < r.min.y || top > r.max.y {
                         continue;
                     }
                     if let Some(tr) = seq.track(row.r) {
@@ -1983,11 +2136,18 @@ fn context_menu(s: &mut State, ui: &mut Ui, h: Option<Hit>) {
             run(s, ui, "Copy", "cmd.edit.copy");
             run(s, ui, "Paste Attributes...", "cmd.edit.pasteattributes");
             ui.separator();
-            run(s, ui, "수정한 효과 복사", "we.fx.copy");
-            let has_fx = s.ed.has_copied_effects();
-            ui.add_enabled_ui(has_fx, |ui| {
-                run(s, ui, "복사한 효과 붙여넣기", "we.fx.paste");
-            });
+            run(s, ui, "효과 복사", "we.fx.copy");
+            // pastes on every selected clip at once; always offered, so that a click without
+            // anything copied says what to do first
+            let n = s.ed.selection.clips.len();
+            if ui
+                .button(format!("복사한 효과 붙여넣기 (선택한 클립 {n}개 모두)"))
+                .clicked()
+            {
+                s.focus = op_application::Focus::Timeline;
+                s.command("we.fx.paste");
+                ui.close();
+            }
             ui.separator();
             let enabled =
                 s.ed.active_seq()
@@ -2307,6 +2467,75 @@ fn external_drop(s: &mut State, ui: &Ui, g: &Geo, sid: SequenceId, painter: &egu
     ui.ctx().request_repaint();
 }
 
+/// A vertical scroll bar for each of the video and audio parts whose tracks do not all fit.
+fn vertical_bars(ui: &mut Ui, g: &Geo, view: &mut SeqView) {
+    let pn = g.panes;
+    let parts = [
+        ("vscroll-video", pn.top, pn.video_h, pn.video_content, true),
+        ("vscroll-audio", pn.audio_top(), pn.audio_h, pn.audio_content, false),
+    ];
+    for (name, top, height, content, video) in parts {
+        if content <= height + 0.5 || height < 20.0 {
+            continue;
+        }
+        let track = Rect::from_min_max(pos2(g.body.max.x - VSCROLL_W, top), pos2(g.body.max.x, top + height));
+        let resp = ui.interact(track, ui.id().with(name), Sense::click_and_drag());
+        let scroll = if video { &mut view.video_scroll } else { &mut view.scroll_y };
+        let max = content - height;
+        let thumb_h = (height * height / content).clamp(24.0, height);
+        let room = (height - thumb_h).max(1.0);
+        if resp.dragged() {
+            *scroll = (*scroll + resp.drag_delta().y * max / room).clamp(0.0, max);
+        } else if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            *scroll = ((p.y - top - thumb_h / 2.0) / room * max).clamp(0.0, max);
+        }
+        let y = top + (*scroll / max) * room;
+        let thumb = Rect::from_min_max(pos2(track.min.x + 1.0, y), pos2(track.max.x - 1.0, y + thumb_h));
+        let p = ui.painter().with_clip_rect(track);
+        p.rect_filled(track, 0.0, Color32::from_black_alpha(70));
+        p.rect_filled(
+            thumb,
+            3.0,
+            if resp.hovered() || resp.dragged() { theme::TEXT_DIM } else { theme::LINE },
+        );
+    }
+}
+
+/// The bar between the video and the audio tracks: drag it to give one part more room.
+fn divider(ui: &mut Ui, g: &Geo, rest: Rect, view: &mut SeqView) {
+    let (y0, y1) = g.panes.divider();
+    let bar = Rect::from_min_max(pos2(rest.min.x, y0), pos2(rest.max.x, y1));
+    let resp = ui
+        .interact(bar, ui.id().with("tl-divider"), Sense::drag())
+        .on_hover_text("위아래로 끌어 비디오와 오디오 트랙의 높이를 나눕니다");
+    let active = resp.hovered() || resp.dragged();
+    if active {
+        ui.ctx().set_cursor_icon(CursorIcon::ResizeVertical);
+    }
+    let key = ui.id().with("tl-divider-grab");
+    if resp.drag_started()
+        && let Some(p) = ui.input(|i| i.pointer.press_origin())
+    {
+        ui.data_mut(|d| d.insert_temp(key, (g.panes.video_h, p.y)));
+    }
+    if resp.dragged()
+        && let Some((start, from)) = ui.data(|d| d.get_temp::<(f32, f32)>(key))
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let room = g.panes.video_h + g.panes.audio_h;
+        let least = MIN_PANE.min(room / 2.0);
+        view.split = (start + p.y - from).clamp(least, (room - least).max(least));
+    }
+    ui.painter().rect_filled(bar, 0.0, if active { theme::ACCENT_DIM } else { Color32::from_rgb(0x2c, 0x2c, 0x32) });
+    // a little grip in the middle
+    let c = bar.center();
+    for dx in [-8.0, 0.0, 8.0] {
+        ui.painter().circle_filled(pos2(c.x + dx, c.y), 1.2, theme::TEXT_DIM);
+    }
+}
+
 fn scrollbar(s: &mut State, ui: &mut Ui, g: &Geo, r: Rect, seq: &Sequence, view: &mut SeqView) {
     let p = ui.painter();
     p.rect_filled(r, 0.0, theme::PANEL);
@@ -2364,7 +2593,7 @@ fn discrete_wheel_zoom(events: &[egui::Event]) -> Option<f64> {
     (steps != 0).then(|| WHEEL_ZOOM_STEP.powi(steps))
 }
 
-fn wheel(ui: &Ui, g: &Geo, panel: Rect, view: &mut SeqView, content_h: f32) {
+fn wheel(ui: &Ui, g: &Geo, panel: Rect, view: &mut SeqView) {
     if !ui.rect_contains_pointer(panel) {
         return;
     }
@@ -2393,12 +2622,20 @@ fn wheel(ui: &Ui, g: &Geo, panel: Rect, view: &mut SeqView, content_h: f32) {
     if delta == egui::Vec2::ZERO {
         return;
     }
+    // the vertical wheel scrolls the part (video or audio) under the pointer
+    let vertical = |view: &mut SeqView, dy: f32| {
+        let video = pointer.is_none_or(|p| g.panes.is_video(p.y));
+        let pn = g.panes;
+        if video {
+            view.video_scroll = (view.video_scroll - dy).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
+        } else {
+            view.scroll_y = (view.scroll_y - dy).clamp(0.0, (pn.audio_content - pn.audio_h).max(0.0));
+        }
+    };
     if m.shift {
-        view.scroll_y = (view.scroll_y - (delta.x + delta.y))
-            .clamp(0.0, (content_h - g.body.height() + 20.0).max(0.0));
+        vertical(view, delta.x + delta.y);
     } else if pointer.is_some_and(|p| p.x < g.body.min.x) {
-        view.scroll_y =
-            (view.scroll_y - delta.y).clamp(0.0, (content_h - g.body.height() + 20.0).max(0.0));
+        vertical(view, delta.y);
     } else {
         view.scroll = (view.scroll - (delta.y + delta.x) as f64 / g.zoom).max(0.0);
     }
@@ -2440,5 +2677,118 @@ mod wheel_tests {
         );
         assert_eq!(discrete_wheel_zoom(&[wheel_event(3.0, false)]), None);
         assert_eq!(discrete_wheel_zoom(&[]), None);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use op_timeline::{EditOptions, Patch, SourceClip, overwrite};
+
+    fn sequence_with_two_clips() -> (Project, SequenceId) {
+        let mut p = Project::new("t");
+        let root = p.root;
+        let item = p.add_item(
+            root,
+            "Matte",
+            ItemKind::Synthetic {
+                generator: Generator::ColorMatte { color: Rgba::BLACK },
+                duration: Dur::from_seconds(60.0),
+            },
+        );
+        let (sid, _) = p.add_sequence(root, "S", SequenceSettings::default());
+        let mut p = p;
+        for from in [0.0, 5.0] {
+            let mut spec = SourceClip::from_item(&p, item).unwrap();
+            spec.range = SrcRange::new(SrcTime::ZERO, SrcTime::from_seconds(5.0));
+            let (next, _) = p
+                .transact(|p| {
+                    overwrite(p, sid, &spec, SeqTime::from_seconds(from), &Patch { video: Some(0), audio: vec![] }, EditOptions::default())
+                })
+                .unwrap();
+            p = next;
+        }
+        (p, sid)
+    }
+
+    fn geo(seq: &Sequence, view: &SeqView, top: f32, bottom: f32) -> Geo {
+        let tl = TimelineView::default();
+        let panes = pane_sizes(seq, &tl, view, top, bottom);
+        let rows = layout_rows(seq, &tl, view, &panes);
+        Geo { body: Rect::from_min_max(pos2(100.0, top), pos2(900.0, bottom)), zoom: 40.0, scroll: 0.0, rows, panes }
+    }
+
+    #[test]
+    fn what_fits_shows_as_before_and_a_tall_track_grows_its_part() {
+        let (p, sid) = sequence_with_two_clips();
+        let seq = p.sequence(sid).unwrap();
+        let (nv, na) = (seq.video.len() as f32, seq.audio.len() as f32);
+        let g = geo(seq, &SeqView::default(), 0.0, 1000.0);
+        // video part exactly as tall as its tracks, the bar, then the audio part
+        assert_eq!(g.panes.video_h, nv * 46.0);
+        assert_eq!(g.panes.audio_top(), nv * 46.0 + DIVIDER_H);
+        assert!(g.panes.audio_h >= na * 46.0);
+        // the highest video track is at the top
+        assert_eq!(g.rows[0].r, TrackRef::video(seq.video.len() - 1));
+        assert_eq!(g.rows[0].top, 0.0);
+        // a track made taller by hand
+        let mut view = SeqView::default();
+        view.set_track_height(TrackRef::audio(0), 200.0);
+        let g = geo(seq, &view, 0.0, 1000.0);
+        let a0 = g.rows.iter().find(|r| r.r == TrackRef::audio(0)).unwrap();
+        let a1 = g.rows.iter().find(|r| r.r == TrackRef::audio(1)).unwrap();
+        assert_eq!(a0.h, 200.0);
+        assert_eq!(a1.top, a0.top + 200.0);
+    }
+
+    #[test]
+    fn a_part_that_does_not_fit_scrolls_by_itself_and_never_takes_clicks_outside_it() {
+        let (p, sid) = sequence_with_two_clips();
+        let seq = p.sequence(sid).unwrap();
+        let mut view = SeqView::default();
+        for i in 0..seq.video.len() {
+            view.set_track_height(TrackRef::video(i), 150.0);
+        }
+        // 300 px for everything: the video tracks (450 px) must scroll in their part
+        let g = geo(seq, &view, 0.0, 300.0);
+        assert!(g.panes.video_content > g.panes.video_h);
+        let bar_end = g.panes.audio_top();
+        view.video_scroll = g.panes.video_content - g.panes.video_h;
+        let g = geo(seq, &view, 0.0, 300.0);
+        // the lowest video track now ends at the bottom of the video part ...
+        let v0 = g.rows.iter().find(|r| r.r == TrackRef::video(0)).unwrap();
+        assert!((v0.top + v0.h - g.panes.video_h).abs() < 0.01);
+        // ... and a track scrolled partly below that never answers a click in the audio part
+        view.video_scroll = 0.0;
+        let g = geo(seq, &view, 0.0, 300.0);
+        for y in [bar_end + 2.0, bar_end + 10.0, 299.0] {
+            if let Some(row) = g.row_at(y) {
+                assert_eq!(row.r.kind, TrackKind::Audio, "y {y}");
+            }
+        }
+        // a click in the video part finds a video track
+        assert_eq!(g.row_at(10.0).map(|r| r.r.kind), Some(TrackKind::Video));
+    }
+
+    #[test]
+    fn grabbing_the_cut_between_two_clips_is_a_rolling_edit_and_the_edges_still_trim() {
+        let (p, sid) = sequence_with_two_clips();
+        let seq = p.sequence(sid).unwrap();
+        let g = geo(seq, &SeqView::default(), 0.0, 1000.0);
+        let row = g.row_of(TrackRef::video(0)).unwrap();
+        let y = row.top + row.h / 2.0;
+        let cut = g.x(SeqTime::from_seconds(5.0));
+        let zone = |dx: f32| match hit(seq, &g, pos2(cut + dx, y)) {
+            Hit::Clip { zone, .. } => zone,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(zone(0.0), Zone::Cut);
+        assert_eq!(zone(-3.0), Zone::Cut);
+        assert_eq!(zone(3.0), Zone::Cut);
+        // a little further out the clips' own edges, then their bodies
+        assert_eq!(zone(-6.0), Zone::Tail);
+        assert_eq!(zone(6.0), Zone::Head);
+        assert_eq!(zone(-30.0), Zone::Body);
+        assert_eq!(zone(30.0), Zone::Body);
     }
 }

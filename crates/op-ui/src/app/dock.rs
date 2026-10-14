@@ -138,7 +138,16 @@ impl TabViewer for Viewer<'_> {
             self.s.command("cmd.window.workspace.revert");
             ui.close();
         }
-        let _ = tab;
+        // close the panel (Window menu brings it back)
+        let closeable = self.is_closeable(tab);
+        if ui
+            .add_enabled(closeable, egui::Button::new("패널 닫기"))
+            .on_hover_text("이 패널 탭을 끕니다. 창 메뉴에서 다시 열 수 있습니다")
+            .clicked()
+        {
+            self.s.dock_action = Some(super::DockAction::Close(*tab));
+            ui.close();
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Panel) {

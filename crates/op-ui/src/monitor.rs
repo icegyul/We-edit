@@ -149,7 +149,9 @@ fn render(
     let mut scale = 1.0 / div as f32;
     if v.zoom == 0.0 {
         let ppp = s.ctx.pixels_per_point();
-        while w as f32 * scale > avail.x * ppp * 1.6 && scale > 0.125 {
+        // the frame is never smaller than what the monitor shows (that would blur it) and at
+        // most twice as wide (halving it again would, so the picture is drawn as is)
+        while w as f32 * scale * 0.5 >= avail.x * ppp && scale > 0.125 {
             scale *= 0.5;
         }
     }

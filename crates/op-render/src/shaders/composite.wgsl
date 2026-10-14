@@ -23,6 +23,32 @@ fn layer_uv(px: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(lx, ly) / u.in_size;
 }
 
+// The layer under an output pixel, averaged over the area the pixel covers. One bilinear tap
+// averages 2x2 texels, so a layer drawn at less than half its size (a 4K picture in a small
+// monitor) would skip texels and alias; here the taps are spread over the pixel's footprint, one
+// per 2 texels, which is a box filter. At half size or more it is the single tap as before.
+fn sample_area(t: texture_2d<f32>, px: vec2<f32>) -> vec4<f32> {
+    let uv0 = layer_uv(px);
+    let size = u.in_size;
+    // the step of the layer uv for one output pixel in x and in y
+    let ddx = vec2<f32>(prm(0), prm(3)) / size;
+    let ddy = vec2<f32>(prm(1), prm(4)) / size;
+    let foot = max(length(ddx * size), length(ddy * size));
+    let n = clamp(ceil(foot * 0.5 - 0.001), 1.0, 8.0);
+    if (n <= 1.0) {
+        return sample_clear(t, uv0);
+    }
+    var acc = vec4<f32>(0.0);
+    let taps = i32(n);
+    for (var j = 0; j < taps; j = j + 1) {
+        for (var i = 0; i < taps; i = i + 1) {
+            let o = (vec2<f32>(f32(i), f32(j)) + 0.5) / n - 0.5;
+            acc = acc + sample_clear(t, uv0 + ddx * o.x + ddy * o.y);
+        }
+    }
+    return acc / (n * n);
+}
+
 fn lum(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.3, 0.59, 0.11));
 }
@@ -164,7 +190,7 @@ fn blend(d: vec4<f32>, s: vec4<f32>, mode: i32, px: vec2<f32>) -> vec4<f32> {
 fn fs_composite(in: VOut) -> @location(0) vec4<f32> {
     let px = pixel(in.uv);
     var d = textureSampleLevel(tex0, samp, in.uv, 0.0);
-    var s = sample_clear(tex1, layer_uv(px)) * prm(6);
+    var s = sample_area(tex1, px) * prm(6);
     let linear = prm(8) > 0.5;
     if (linear) {
         d = vec4<f32>(to_linear(d.rgb), d.a);
@@ -180,7 +206,7 @@ fn fs_composite(in: VOut) -> @location(0) vec4<f32> {
 // Layer through a transform onto a transparent canvas. prm(6) opacity.
 @fragment
 fn fs_place(in: VOut) -> @location(0) vec4<f32> {
-    return sample_clear(tex1, layer_uv(pixel(in.uv))) * prm(6);
+    return sample_area(tex1, pixel(in.uv)) * prm(6);
 }
 
 @fragment

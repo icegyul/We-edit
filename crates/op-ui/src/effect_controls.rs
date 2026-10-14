@@ -124,11 +124,17 @@ fn commit(s: &mut State, cx: &ClipCtx, comp: ComponentId, key: &str, v: Value) {
 
 /// Copies the effects of `clip` (one component, or every modified one) and says what was copied.
 pub fn copy_effects_message(s: &mut State, clip: ClipId, only: Option<ComponentId>) {
+    let unchanged = only.is_none()
+        && s.ed
+            .active_seq()
+            .and_then(|q| q.clip(clip))
+            .is_some_and(|c| !c.components.iter().any(op_application::effects_clipboard::is_modified));
     match s.ed.copy_effects(clip, only) {
         Ok(names) => {
             let list: Vec<String> = names.iter().map(|n| tn(n)).collect();
+            let note = if unchanged { "수정한 효과가 없어 모든 효과를 기본값 그대로 " } else { "" };
             s.ed.info(format!(
-                "효과 {}개를 복사했습니다 ({}): 붙여넣을 클립을 타임라인에서 고르고 오른쪽 클릭 > 복사한 효과 붙여넣기",
+                "{note}효과 {}개를 복사했습니다 ({}): 붙여넣을 클립을 타임라인에서 고르고 오른쪽 클릭 > 복사한 효과 붙여넣기",
                 list.len(),
                 list.join(", ")
             ));
@@ -267,8 +273,8 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                 // copy what was changed here and paste it on any number of clips at once
                 ui.horizontal_wrapped(|ui| {
                     if ui
-                        .button("수정한 효과 복사")
-                        .on_hover_text("값을 바꾼 모션·불투명도·소리 설정과 넣은 효과를 모두 복사합니다 (효과 이름을 오른쪽 클릭하면 그 효과만 복사)")
+                        .button("효과 복사")
+                        .on_hover_text("값을 바꾼 모션·불투명도·소리 설정과 넣은 효과를 복사합니다. 바꾼 것이 없으면 모든 효과를 기본값 그대로 복사합니다(값을 바꾼 클립에 붙여넣으면 원래대로 돌아옵니다). 효과 이름을 오른쪽 클릭하면 그 효과만 복사")
                         .clicked()
                     {
                         copy_effects_message(s, cx.clip.id, None);
@@ -389,6 +395,27 @@ fn lane_ruler(s: &mut State, ui: &mut Ui, lane: &Lane, r: Rect) {
         2.0,
         theme::RAISED,
     );
+}
+
+/// Right-click menu of an effect (its header or any of its parameter rows): copy it, and paste
+/// what was copied on every clip selected in the timeline.
+fn copy_paste_menu(s: &mut State, ui: &mut Ui, cx: &ClipCtx, comp: &Component) {
+    if ui.button("이 효과 복사").clicked() {
+        copy_effects_message(s, cx.clip.id, Some(comp.id));
+        ui.close();
+    }
+    if ui.button("효과 모두 복사").clicked() {
+        copy_effects_message(s, cx.clip.id, None);
+        ui.close();
+    }
+    let can_paste = s.ed.has_copied_effects();
+    if ui
+        .add_enabled(can_paste, egui::Button::new("복사한 효과 붙여넣기 (타임라인에서 고른 클립 모두)"))
+        .clicked()
+    {
+        s.command("we.fx.paste");
+        ui.close();
+    }
 }
 
 /// One component with its header and parameters. `lane` adds keyframe lanes right of `split`.
@@ -528,15 +555,7 @@ fn component_ui(
     }
     resp.context_menu(|ui| {
         let (sid, clip, id) = (cx.sid, cx.clip.id, comp.id);
-        if ui.button("이 효과 복사").clicked() {
-            copy_effects_message(s, clip, Some(id));
-            ui.close();
-        }
-        let can_paste = s.ed.has_copied_effects();
-        if ui.add_enabled(can_paste, egui::Button::new("복사한 효과 붙여넣기 (선택한 클립 모두)")).clicked() {
-            s.command("we.fx.paste");
-            ui.close();
-        }
+        copy_paste_menu(s, ui, cx, comp);
         ui.separator();
         if !comp.is_fixed() {
             if ui.button(t("Remove Effect")).clicked() {
@@ -679,7 +698,10 @@ fn param_row(
     indent: f32,
 ) {
     let h = row_height(spec);
-    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
+    // the row senses clicks only for its right-click menu; the controls on it are added after it
+    // and take their own clicks
+    let (row, row_resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    row_resp.context_menu(|ui| copy_paste_menu(s, ui, cx, comp));
     let left = Rect::from_min_max(row.min, pos2(split, row.max.y));
     let prm = comp
         .param(spec.key)

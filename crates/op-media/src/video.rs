@@ -414,7 +414,31 @@ unsafe extern "C" fn pick_hw_format(
     }
 }
 
-/// Sets up hardware decoding on a codec context that is not open yet. Returns the device name.
+/// Whether the hardware decoders (NVDEC, DXVA, VideoToolbox, VAAPI) can take a stream: 4:2:0
+/// only, and H.264 only in 8 bits. NVIDIA's engine cannot decode the 4:2:2 10-bit H.264 that many
+/// cameras record. A stream they cannot take is decoded by the processor on all its cores; if the
+/// card were attached to it anyway, FFmpeg would still end up decoding in software, but on one
+/// thread (a 4K 4:2:2 10-bit clip: 10 frames per second instead of 57).
+fn hardware_can_decode(codec: ff::ffi::AVCodecID, fmt: ff::ffi::AVPixelFormat) -> bool {
+    use ff::ffi;
+    if fmt == ffi::AVPixelFormat::AV_PIX_FMT_NONE {
+        // not known before decoding: let the decoder decide
+        return true;
+    }
+    // SAFETY: the descriptor table is static; a null result means an unknown format
+    let desc = unsafe { ffi::av_pix_fmt_desc_get(fmt) };
+    if desc.is_null() {
+        return false;
+    }
+    // SAFETY: checked for null above
+    let d = unsafe { &*desc };
+    let is_420 = d.nb_components >= 3 && d.log2_chroma_w == 1 && d.log2_chroma_h == 1;
+    let limit = if codec == ffi::AVCodecID::AV_CODEC_ID_H264 { 8 } else { 10 };
+    is_420 && d.comp[0].depth <= limit
+}
+
+/// Sets up hardware decoding on a codec context that is not open yet. Returns the device name,
+/// or None when the stream is one the hardware decoders cannot take.
 pub(crate) fn attach_hardware(
     ctx: &mut ff::codec::context::Context,
     id: ff::codec::Id,
@@ -424,6 +448,10 @@ pub(crate) fn attach_hardware(
     unsafe {
         let codec = ffi::avcodec_find_decoder(id.into());
         if codec.is_null() {
+            return None;
+        }
+        let raw = ctx.as_ptr();
+        if !hardware_can_decode((*raw).codec_id, (*raw).pix_fmt) {
             return None;
         }
         for &kind in hw_device_types() {
@@ -663,6 +691,11 @@ impl VideoDecoder {
                     let idx = self.index_of(pts);
                     // SAFETY: reading a field of a frame we own
                     let on_device = unsafe { !(*raw.as_ptr()).hw_frames_ctx.is_null() };
+                    if !on_device && self.hardware.is_some() {
+                        // the card refused the stream and FFmpeg decoded it in software
+                        log::warn!("the hardware decoder did not take this stream: decoding with the processor");
+                        self.hardware = None;
+                    }
                     if on_device {
                         // copy the surface to memory (NV12, P010, ...)
                         let mut sw = ff::frame::Video::empty();
@@ -857,6 +890,22 @@ mod tests {
         if std::env::var("WEEDIT_EXPECT_CUDA").is_ok_and(|v| v == "1") {
             assert_eq!(hard.hardware(), Some("cuda"));
         }
+    }
+
+    #[test]
+    fn the_card_is_only_given_streams_it_can_decode() {
+        use ff::ffi::AVCodecID::*;
+        use ff::ffi::AVPixelFormat::*;
+        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P));
+        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUVJ420P));
+        assert!(hardware_can_decode(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV420P10LE));
+        // what cameras such as the Sony FX3 record: NVDEC cannot decode it
+        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV422P10LE));
+        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P10LE));
+        assert!(!hardware_can_decode(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV422P10LE));
+        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV444P));
+        // unknown before decoding: tried
+        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_NONE));
     }
 
     #[test]

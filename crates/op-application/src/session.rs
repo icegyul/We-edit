@@ -117,7 +117,21 @@ pub struct SeqView {
     pub zoom: f64,
     /// Timeline scroll: first visible time in seconds.
     pub scroll: f64,
+    /// Vertical scroll of the audio tracks (pixels from their top).
     pub scroll_y: f32,
+    /// Vertical scroll of the video tracks (pixels from their top).
+    #[serde(default)]
+    pub video_scroll: f32,
+    /// Height of the video part of the timeline in pixels; 0 lets the program choose. The bar
+    /// between the video and the audio tracks sets it.
+    #[serde(default)]
+    pub split: f32,
+    /// Height of single tracks (0 or missing: the common height), set by dragging the lower edge
+    /// of a track header.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub video_heights: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audio_heights: Vec<f32>,
 }
 
 impl Default for SeqView {
@@ -130,11 +144,41 @@ impl Default for SeqView {
             zoom: 40.0,
             scroll: 0.0,
             scroll_y: 0.0,
+            video_scroll: 0.0,
+            split: 0.0,
+            video_heights: Vec::new(),
+            audio_heights: Vec::new(),
         }
     }
 }
 
 impl SeqView {
+    /// The height set for one track by hand, if any.
+    pub fn track_height(&self, r: TrackRef) -> Option<f32> {
+        let v = match r.kind {
+            TrackKind::Video => &self.video_heights,
+            TrackKind::Audio => &self.audio_heights,
+        };
+        v.get(r.index).copied().filter(|h| *h > 0.0)
+    }
+
+    pub fn set_track_height(&mut self, r: TrackRef, h: f32) {
+        let v = match r.kind {
+            TrackKind::Video => &mut self.video_heights,
+            TrackKind::Audio => &mut self.audio_heights,
+        };
+        if v.len() <= r.index {
+            v.resize(r.index + 1, 0.0);
+        }
+        v[r.index] = h;
+    }
+
+    /// Every track gets the common height again.
+    pub fn reset_track_heights(&mut self) {
+        self.video_heights.clear();
+        self.audio_heights.clear();
+    }
+
     pub fn is_targeted(&self, r: TrackRef) -> bool {
         let v = match r.kind {
             TrackKind::Video => &self.video_targets,

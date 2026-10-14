@@ -82,9 +82,8 @@ fn unrotate(uv: vec2<f32>, deg: f32) -> vec2<f32> {
     return uv;
 }
 
-@fragment
-fn fs_convert(in: VOut) -> @location(0) vec4<f32> {
-    let suv = unrotate(in.uv, prm(9));
+// One output pixel at the stored uv `suv`: the planes through the color matrix, premultiplied.
+fn convert_at(suv: vec2<f32>) -> vec4<f32> {
     let size0 = vec2<f32>(textureDimensions(plane0));
     let p0 = suv * size0;
     let maxv = prm(1);
@@ -140,4 +139,32 @@ fn fs_convert(in: VOut) -> @location(0) vec4<f32> {
         return rgba;
     }
     return vec4<f32>(rgba.rgb * rgba.a, rgba.a);
+}
+
+// The working texture is smaller than the picture when the monitor shows a reduced frame (a 4K
+// clip in a small monitor, or half resolution while playing). One bilinear tap averages 2x2
+// pixels, so at less than half size it would skip pixels and alias (jagged edges, shimmering
+// detail). The taps are spread over the area an output pixel covers, one per 2 source pixels: a
+// box filter. At half size or more it is the single tap as before.
+@fragment
+fn fs_convert(in: VOut) -> @location(0) vec4<f32> {
+    let rot = prm(9);
+    let size0 = vec2<f32>(textureDimensions(plane0));
+    let sideways = (rot > 45.0 && rot < 135.0) || (rot >= 225.0 && rot < 315.0);
+    let shown = select(size0, size0.yx, sideways);
+    let foot = max(shown.x / u.out_size.x, shown.y / u.out_size.y);
+    let n = clamp(ceil(foot * 0.5 - 0.001), 1.0, 8.0);
+    if (n <= 1.0) {
+        return convert_at(unrotate(in.uv, rot));
+    }
+    var acc = vec4<f32>(0.0);
+    let taps = i32(n);
+    let step = 1.0 / u.out_size;
+    for (var j = 0; j < taps; j = j + 1) {
+        for (var i = 0; i < taps; i = i + 1) {
+            let o = (vec2<f32>(f32(i), f32(j)) + 0.5) / n - 0.5;
+            acc = acc + convert_at(unrotate(in.uv + o * step, rot));
+        }
+    }
+    return acc / (n * n);
 }

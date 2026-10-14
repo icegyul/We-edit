@@ -525,3 +525,80 @@ fn semi_planar_frames_convert_like_the_reference() {
         }
     }
 }
+
+/// A picture drawn at a quarter of its size is averaged, not sampled: stripes of 3 pixels at a 4:1
+/// reduction come out as soft grays (the box average of 4 pixels is between 1/3 and 2/3), where a
+/// single bilinear tap would give pure black and pure white by turns.
+#[test]
+fn a_reduced_picture_is_averaged_not_sampled() {
+    let Some(gpu) = gpu() else { return };
+    let mut r = Renderer::new(gpu);
+    let (w, h) = (256u32, 144u32);
+    // vertical stripes, 3 pixels black then 3 pixels white
+    let mut data = Vec::with_capacity((w * h * 4) as usize);
+    for _y in 0..h {
+        for x in 0..w {
+            let v = if (x / 3) % 2 == 0 { 0u8 } else { 255u8 };
+            data.extend_from_slice(&[v, v, v, 255]);
+        }
+    }
+    let frame = op_media::VideoFrame {
+        width: w,
+        height: h,
+        layout: op_media::PixelLayout::Rgba8,
+        planes: vec![op_media::Plane { data, width: w, height: h, bytes_per_row: w * 4 }],
+        color: ColorInfo::default(),
+        index: 0,
+    };
+    let mut p = Project::new("reduce");
+    let asset = MediaAsset {
+        id: AssetId(0),
+        path: "x.mp4".into(),
+        proxy: None,
+        kind: MediaKind::Video,
+        video: Some(VideoStream {
+            index: 0,
+            codec: "h264".into(),
+            width: w,
+            height: h,
+            pixel_aspect: (1, 1),
+            rate: Rate::FPS_25,
+            frames: 250,
+            pixel_format: "rgba".into(),
+            bit_depth: 8,
+            alpha: AlphaMode::None,
+            color: ColorInfo::default(),
+            field_order: FieldOrder::Progressive,
+            start: Dur::ZERO,
+            rotation: 0,
+            timecode: None,
+        }),
+        audio: vec![],
+        duration: Dur::from_seconds(10.0),
+        interpretation: Interpretation::default(),
+        file_size: 0,
+        modified_unix: 0,
+    };
+    let (_, item) = p.add_asset(p.root, asset);
+    let (seq, _) = p.add_sequence(
+        p.root,
+        "S",
+        SequenceSettings { width: w, height: h, rate: Rate::FPS_25, ..SequenceSettings::default() },
+    );
+    let spec = SourceClip::from_item(&p, item).unwrap();
+    let (p, _) = p
+        .transact(|p| {
+            overwrite(p, seq, &spec, SeqTime::ZERO, &Patch { video: Some(0), audio: vec![] }, EditOptions::default())
+        })
+        .unwrap();
+    let src = OneFrame(Arc::new(frame));
+    let out = r.render(&Request { project: &p, sequence: seq, time: SeqTime::from_seconds(1.0), scale: 0.25, source: &src });
+    assert_eq!((out.width, out.height), (64, 36));
+    let px = r.rgba8(&out);
+    r.recycle(out);
+    let row = 18usize;
+    let values: Vec<u8> = (4..60).map(|x| px[(row * 64 + x) * 4]).collect();
+    let (lo, hi) = (*values.iter().min().unwrap(), *values.iter().max().unwrap());
+    eprintln!("reduced stripes: {lo}..{hi}");
+    assert!(lo >= 55 && hi <= 200, "aliased: {values:?}");
+}

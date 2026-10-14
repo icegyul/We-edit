@@ -283,7 +283,7 @@ pub fn list() -> Json {
         ),
         tool(
             "copy_effects",
-            "Copies the effects of a clip to paste on other clips (like copying in Effect Controls): without `effect_index` every changed effect (Motion, Opacity, volume ... with their keyframes, and added effects), else only that one (index in the clip's component list from get_timeline detail).",
+            "Copies the effects of a clip to paste on other clips (like copying in Effect Controls): without `effect_index` every changed effect (Motion, Opacity, volume ... with their keyframes, and added effects; when nothing was changed, all the effects with their default values, which restores a changed clip when pasted), else only that one (index in the clip's component list from get_timeline detail).",
             json!({"clip_id": int("The clip to copy from"), "effect_index": int("Only this component (its index in the clip's effects)")}),
             &["clip_id"]
         ),

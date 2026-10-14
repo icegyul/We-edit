@@ -8,12 +8,17 @@ use op_timeline::{Attributes, paste_attributes};
 
 use crate::editor::Editor;
 
+/// Whether a component is an effect: Motion, Opacity and the other fixed ones, or an added
+/// effect. What a graphics clip draws (text, shape, caption) is not.
+pub fn is_effect(c: &Component) -> bool {
+    c.is_fixed() || c.def().is_none_or(|d| matches!(d.kind, EffectKind::VideoEffect | EffectKind::AudioEffect))
+}
+
 /// Whether a component differs from a fresh one: changed values or keyframes, switched off, or an
 /// added (non-fixed) effect.
 pub fn is_modified(c: &Component) -> bool {
     if !c.is_fixed() {
-        // what a graphics clip draws (text, shape, caption) is not an effect
-        return c.def().is_none_or(|d| matches!(d.kind, EffectKind::VideoEffect | EffectKind::AudioEffect));
+        return is_effect(c);
     }
     let Some(def) = c.def() else { return true };
     let fresh = Component::new(def, &mut IdGen::default());
@@ -21,21 +26,25 @@ pub fn is_modified(c: &Component) -> bool {
 }
 
 impl Editor {
-    /// Copies effects of `clip`: component `only`, or else every modified one. Returns their names.
+    /// Copies effects of `clip`: component `only`, or else every modified one; a clip with nothing
+    /// modified gives all its effects (their default values: pasted on a clip whose values were
+    /// changed they bring it back). Returns their names.
     pub fn copy_effects(&mut self, clip: ClipId, only: Option<ComponentId>) -> Result<Vec<String>, String> {
         let seq = self.active_seq().ok_or("Open a sequence first")?;
         let from = seq.clip(clip).ok_or("클립을 찾을 수 없습니다")?.clone();
+        let any_modified = from.components.iter().any(is_modified);
         let picked: Vec<Component> = from
             .components
             .iter()
             .filter(|c| match only {
                 Some(id) => c.id == id,
-                None => is_modified(c),
+                None if any_modified => is_modified(c),
+                None => is_effect(c),
             })
             .cloned()
             .collect();
         if picked.is_empty() {
-            return Err("복사할 효과가 없습니다: 효과 컨트롤에서 값을 바꾸거나 효과를 넣은 뒤 복사하세요".into());
+            return Err("복사할 효과가 없습니다: 이 클립에는 효과가 없습니다".into());
         }
         let names: Vec<String> = picked
             .iter()
@@ -55,7 +64,7 @@ impl Editor {
     /// Pastes the copied effects on the selected clips (one undo step); fixed effects take the
     /// copied values (keyframes included), added effects are added. Returns how many clips changed.
     pub fn paste_effects(&mut self) -> Result<usize, String> {
-        let from = self.fx_clipboard.clone().ok_or("복사한 효과가 없습니다")?;
+        let from = self.fx_clipboard.clone().ok_or("복사한 효과가 없습니다: 효과 컨트롤에서 효과 이름(모션 등)을 오른쪽 클릭 > 이 효과 복사 를 먼저 누르세요")?;
         let seq = self.active_seq().ok_or("Open a sequence first")?;
         let to: Vec<ClipId> = self
             .selection
@@ -110,8 +119,9 @@ mod tests {
         let a = clip_with(&mut e, 0.0);
         let b = clip_with(&mut e, 10.0);
         let c = clip_with(&mut e, 20.0);
-        // nothing changed yet: nothing to copy
-        assert!(e.copy_effects(a, None).is_err());
+        // nothing changed yet: the clip's effects are copied as they are (their default values)
+        let defaults = e.copy_effects(a, None).unwrap();
+        assert!(defaults.len() >= 2, "{defaults:?}");
         // size and opacity of the first clip are changed
         e.seq_edit("Change", |p, sid, _| {
             let clip = p.sequence_mut(sid).unwrap().clip_mut(a).unwrap();
@@ -131,6 +141,18 @@ mod tests {
         // one undo takes both back
         e.undo();
         assert_eq!(scale_of(&e, b), 100.0);
+        assert_eq!(scale_of(&e, c), 100.0);
+        // the default values copied from an unchanged clip bring a changed clip back
+        e.seq_edit("Change", |p, sid, _| {
+            let clip = p.sequence_mut(sid).unwrap().clip_mut(c).unwrap();
+            clip.component_mut(catalog::MOTION).unwrap().param_mut("scale").unwrap().value = Value::Float(60.0);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(scale_of(&e, c), 60.0);
+        e.copy_effects(b, None).unwrap();
+        e.selection = crate::session::Selection::only(vec![c]);
+        assert_eq!(e.paste_effects().unwrap(), 1);
         assert_eq!(scale_of(&e, c), 100.0);
         // pasting with nothing selected says so
         e.selection = crate::session::Selection::default();

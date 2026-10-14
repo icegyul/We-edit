@@ -57,6 +57,7 @@ pub enum Drag {
 
 enum DockAction {
     Focus(Panel),
+    Close(Panel),
     Workspace(Workspace),
     Reset,
 }
@@ -323,6 +324,16 @@ impl App {
                     self.s.focus = f;
                 }
                 self.s.focused_panel = Some(p);
+            }
+            DockAction::Close(p) => {
+                // the last panel stays (an empty window could not bring anything back but the
+                // Window menu, and that is part of what the panels hold)
+                if self.dock.iter_all_tabs().count() > 1
+                    && let Some(path) = self.dock.find_tab(&p)
+                {
+                    self.dock.remove_tab(path);
+                    self.s.ed.info(format!("{} 패널을 닫았습니다: 창 메뉴에서 다시 열 수 있습니다", t(p.title())));
+                }
             }
             DockAction::Workspace(w) => {
                 if w != self.s.workspace {
@@ -684,24 +695,30 @@ impl State {
             "cmd.timeline.show.next.screen" => timeline::page(self, 1.0),
             "cmd.timeline.show.previous.screen" => timeline::page(self, -1.0),
             "cmd.timeline.increase.video.tracks.height" => {
-                self.tl.video_height = (self.tl.video_height + 12.0).min(200.0)
+                self.tl.video_height = (self.tl.video_height + 12.0).min(200.0);
+                self.reset_track_heights();
             }
             "cmd.timeline.decrease.video.tracks.height" => {
-                self.tl.video_height = (self.tl.video_height - 12.0).max(24.0)
+                self.tl.video_height = (self.tl.video_height - 12.0).max(24.0);
+                self.reset_track_heights();
             }
             "cmd.timeline.increase.audio.tracks.height" => {
-                self.tl.audio_height = (self.tl.audio_height + 12.0).min(200.0)
+                self.tl.audio_height = (self.tl.audio_height + 12.0).min(200.0);
+                self.reset_track_heights();
             }
             "cmd.timeline.decrease.audio.tracks.height" => {
-                self.tl.audio_height = (self.tl.audio_height - 12.0).max(24.0)
+                self.tl.audio_height = (self.tl.audio_height - 12.0).max(24.0);
+                self.reset_track_heights();
             }
             "cmd.timeline.expand.all.tracks" => {
                 self.tl.video_height = 90.0;
                 self.tl.audio_height = 90.0;
+                self.reset_track_heights();
             }
             "cmd.timeline.minimize.all.tracks" => {
                 self.tl.video_height = 26.0;
                 self.tl.audio_height = 26.0;
+                self.reset_track_heights();
             }
             "cmd.window.workspace.revert" => self.dock_action = Some(DockAction::Reset),
             "cmd.history.step.backward" => self.ed.undo(),
@@ -759,6 +776,15 @@ impl State {
                     }
                 }
             }
+        }
+    }
+
+    /// The track height commands set one height for all tracks: heights set by dragging go.
+    fn reset_track_heights(&mut self) {
+        if let Some(sid) = self.ed.active {
+            let v = self.ed.view(sid);
+            v.reset_track_heights();
+            v.split = 0.0;
         }
     }
 
