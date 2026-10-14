@@ -333,7 +333,8 @@ fn run(
         .unwrap_or(0);
     let video_frames = if s.video.is_some() { total } else { 0 };
     let steps = video_frames.max(1);
-    let mut in_flight: Option<op_render::output::PendingRead> = None;
+    // the frame being read back while the next one renders, and its number
+    let mut in_flight: Option<(u64, op_render::output::PendingRead)> = None;
     for n in 0..steps {
         if pause.load(Ordering::Relaxed) {
             let since = Instant::now();
@@ -379,26 +380,10 @@ fn run(
             }
             let t1 = Instant::now();
             // the frame's planes are read back while the next frame renders
-            let pending = if (frame.width, frame.height) == (v.width, v.height) {
-                r.begin_delivery(&frame, v.codec.input())
-            } else {
-                // odd sizes: render at the exact output size
-                let fixed = r.work(v.width, v.height);
-                r.pass(
-                    "fs_copy",
-                    &[&frame.view],
-                    op_render::params::P::new(),
-                    frame.size(),
-                    &fixed,
-                );
-                let p = r.begin_delivery(&fixed, v.codec.input());
-                r.recycle(fixed);
-                p
-            };
-            r.recycle(frame);
-            let previous = in_flight.replace(pending);
-            if let Some(prev) = previous {
-                let planes = r.end_read(prev);
+            let pending = deliver(r, frame, v);
+            let previous = in_flight.replace((n, pending));
+            if let Some((prev_n, prev)) = previous {
+                let planes = read_frame(r, project, s, &frames, rate, v, prev, prev_n)?;
                 stage[1] += t1.elapsed().as_secs_f64();
                 // time blocked here means the encoder is the slowest stage
                 let t2 = Instant::now();
@@ -449,10 +434,69 @@ fn run(
             pr.remaining = Some(Duration::from_secs_f32(left));
         }
     }
-    if let (Some(r), Some(prev)) = (renderer.as_mut(), in_flight.take()) {
-        writer.send(Packet::Video(r.end_read(prev)))?;
+    if let (Some(r), Some((n, prev)), Some(v)) = (renderer.as_mut(), in_flight.take(), s.video.as_ref()) {
+        let planes = read_frame(r, project, s, &frames, rate, v, prev, n)?;
+        writer.send(Packet::Video(planes))?;
     }
     writer.finish()
+}
+
+/// Starts reading a rendered frame back as the planes the encoder takes (the frame is recycled).
+fn deliver(r: &mut Renderer, frame: op_render::Tex, v: &VideoSettings) -> op_render::output::PendingRead {
+    let pending = if (frame.width, frame.height) == (v.width, v.height) {
+        r.begin_delivery(&frame, v.codec.input())
+    } else {
+        // odd sizes: render at the exact output size
+        let fixed = r.work(v.width, v.height);
+        r.pass(
+            "fs_copy",
+            &[&frame.view],
+            op_render::params::P::new(),
+            frame.size(),
+            &fixed,
+        );
+        let p = r.begin_delivery(&fixed, v.codec.input());
+        r.recycle(fixed);
+        p
+    };
+    r.recycle(frame);
+    pending
+}
+
+/// The planes of output frame `n`. A picture that could not be read back from the graphics card
+/// is all zero, which the encoder turns into a green frame (and a buffer that failed once used to
+/// fail again on every other frame to the end of the file): such a frame is rendered and read
+/// again, and the export stops with an error rather than write one.
+fn read_frame(
+    r: &mut Renderer,
+    project: &Project,
+    s: &ExportSettings,
+    frames: &ExactFrames,
+    rate: Rate,
+    v: &VideoSettings,
+    pending: op_render::output::PendingRead,
+    n: u64,
+) -> Result<Vec<Vec<u8>>, String> {
+    if let Some(planes) = r.end_read_checked(pending) {
+        return Ok(planes);
+    }
+    let width = project.sequence(s.sequence).map_or(1, |q| q.settings.width).max(1);
+    let scale = v.width as f32 / width as f32;
+    for attempt in 1..=3 {
+        log::warn!("export frame {n}: it could not be read back from the graphics card; rendering it again ({attempt})");
+        let frame = r.render(&Request {
+            project,
+            sequence: s.sequence,
+            time: s.range.start + rate.frames_to_dur(n as i64),
+            scale,
+            source: frames,
+        });
+        let again = deliver(r, frame, v);
+        if let Some(planes) = r.end_read_checked(again) {
+            return Ok(planes);
+        }
+    }
+    Err(format!("the graphics card could not hand over frame {n} of the picture"))
 }
 
 enum Packet {

@@ -164,21 +164,59 @@ impl Renderer {
     }
 
     /// Waits for reads started with `begin_read` (only for their own submission, not for work
-    /// queued after them) and returns the pixels, tightly packed.
+    /// queued after them) and returns the pixels, tightly packed. A read that failed comes back
+    /// as zeros (logged): callers that must not use such a picture take `end_read_checked`.
     pub fn end_read(&mut self, pending: PendingRead) -> Vec<Vec<u8>> {
+        self.finish_read(pending).0
+    }
+
+    /// Like `end_read`, but None when any of the reads failed (the pixels would be all zero:
+    /// black in RGB, green when they are the planes of a video frame).
+    pub fn end_read_checked(&mut self, pending: PendingRead) -> Option<Vec<Vec<u8>>> {
+        let (planes, ok) = self.finish_read(pending);
+        ok.then_some(planes)
+    }
+
+    fn finish_read(&mut self, pending: PendingRead) -> (Vec<Vec<u8>>, bool) {
         let PendingRead {
             jobs,
             index,
             mapped,
             post,
         } = pending;
-        let _ = self.device().poll(wgpu::PollType::Wait {
-            submission_index: Some(index),
-            timeout: None,
-        });
-        let mut ok = vec![false; jobs.len()];
-        for (i, r) in mapped.try_iter() {
-            ok[i] = r;
+        // Every map callback must have come before the pixels are read. The graphics queue runs
+        // callbacks on whichever thread polls it or submits next, so while the window draws its
+        // own frames this thread can find the submission finished with a callback taken by the
+        // window's thread but not run yet: reading then would hand the encoder an empty (all
+        // zero, so green) frame.
+        let mut ok: Vec<Option<bool>> = vec![None; jobs.len()];
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            let _ = self.device().poll(wgpu::PollType::Wait {
+                submission_index: Some(index.clone()),
+                timeout: None,
+            });
+            for (i, r) in mapped.try_iter() {
+                ok[i] = Some(r);
+            }
+            if ok.iter().all(Option::is_some) || std::time::Instant::now() > deadline {
+                break;
+            }
+            if let Ok((i, r)) = mapped.recv_timeout(std::time::Duration::from_millis(2)) {
+                ok[i] = Some(r);
+            }
+        }
+        let mut ok: Vec<bool> = ok.into_iter().map(|r| r == Some(true)).collect();
+        let injected = FAIL_NEXT_READS
+            .try_update(std::sync::atomic::Ordering::Relaxed, std::sync::atomic::Ordering::Relaxed, |n| n.checked_sub(1))
+            .is_ok();
+        if injected && let Some(first) = ok.first_mut() {
+            *first = false;
+        }
+        let all_ok = ok.iter().all(|r| *r);
+        if !all_ok {
+            self.stats.readback_errors += 1;
+            log::error!("a frame could not be read back from the graphics card");
         }
         let mut out = Vec::with_capacity(jobs.len());
         for (i, (buffer, size, unpadded, padded, height)) in jobs.into_iter().enumerate() {
@@ -200,17 +238,20 @@ impl Renderer {
                     }
                 }
                 buffer.unmap();
+                let pool = self.readbacks.entry(size).or_default();
+                if pool.len() < 4 {
+                    pool.push(buffer);
+                }
             }
-            let pool = self.readbacks.entry(size).or_default();
-            if pool.len() < 4 {
-                pool.push(buffer);
-            }
+            // a buffer whose read failed may still be mapped or waiting to be: reusing it would
+            // make every later read of it fail (a frame in two), so it is dropped
             out.push(data);
         }
-        match post {
+        let planes = match post {
             Post::None => out,
             Post::Planes { bytes, alpha } => split_planes(out, bytes, alpha),
-        }
+        };
+        (planes, all_ok)
     }
 
     /// Converts a finished frame to the planes an encoder expects (tightly packed rows).
@@ -432,6 +473,10 @@ impl Renderer {
         r
     }
 }
+
+/// Test hook: this many of the next reads report a failure, as a graphics card that cannot hand a
+/// picture over would (the export must render such a frame again, not write it as zeros).
+pub static FAIL_NEXT_READS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// Reads in flight (see `Output::begin_read`).
 pub struct PendingRead {

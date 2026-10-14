@@ -45,6 +45,8 @@ pub struct Stats {
     pub passes: u32,
     pub missing_frames: u32,
     pub layers: u32,
+    /// Frames read back from the graphics card that came out empty (an export stops on one).
+    pub readback_errors: u32,
 }
 
 struct UploadedPlanes {
