@@ -11,6 +11,16 @@ use serde_json::{Value as J, json};
 
 use crate::ProjectError;
 
+/// The OTIO metadata of an item, written under "weedit". Files exported before the rename keep it
+/// under "openpremier", which is still read.
+fn our_meta(v: &J) -> &J {
+    if v.get("weedit").is_some() {
+        &v["weedit"]
+    } else {
+        &v["openpremier"]
+    }
+}
+
 fn rt(frames: f64, rate: f64) -> J {
     json!({"OTIO_SCHEMA": "RationalTime.1", "rate": rate, "value": frames})
 }
@@ -115,7 +125,7 @@ fn clip_json(p: &Project, seq: &Sequence, c: &Clip) -> J {
         "active_media_reference_key": "DEFAULT_MEDIA",
         "effects": effects,
         "markers": [],
-        "metadata": {"openpremier": {"clip_id": c.id.0, "link": c.link.map(|l| l.0), "sequence_rate": rate.as_f64()}},
+        "metadata": {"weedit": {"clip_id": c.id.0, "link": c.link.map(|l| l.0), "sequence_rate": rate.as_f64()}},
     })
 }
 
@@ -150,7 +160,7 @@ pub fn export(p: &Project, sid: SequenceId) -> Result<String, ProjectError> {
                         "transition_type": "SMPTE_Dissolve",
                         "in_offset": rt(frames(before, rate), r),
                         "out_offset": rt(frames(tr.duration - before, rate), r),
-                        "metadata": {"openpremier": {"effect": tr.effect}},
+                        "metadata": {"weedit": {"effect": tr.effect}},
                     }));
                 }
                 children.push(clip_json(p, seq, c));
@@ -188,7 +198,7 @@ pub fn export(p: &Project, sid: SequenceId) -> Result<String, ProjectError> {
         "OTIO_SCHEMA": "Timeline.1",
         "name": seq.name,
         "global_start_time": rt(frames(seq.settings.start_timecode, rate), r),
-        "metadata": {"openpremier": {"width": seq.settings.width, "height": seq.settings.height, "audio_rate": seq.settings.audio_rate}},
+        "metadata": {"weedit": {"width": seq.settings.width, "height": seq.settings.height, "audio_rate": seq.settings.audio_rate}},
         "tracks": {
             "OTIO_SCHEMA": "Stack.1",
             "name": "tracks",
@@ -286,7 +296,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
         }
     }
     let rate = Rate::from_f64(fps.unwrap_or(25.0));
-    let meta = &tl["metadata"]["openpremier"];
+    let meta = our_meta(&tl["metadata"]);
     let settings = SequenceSettings {
         rate,
         width: meta["width"].as_u64().unwrap_or(1920) as u32,
@@ -349,7 +359,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
                     .and_then(time_of)
                     .unwrap_or(Dur::ZERO)
                     .round_frames(rate);
-                let effect = item["metadata"]["openpremier"]["effect"]
+                let effect = our_meta(&item["metadata"])["effect"]
                     .as_str()
                     .map(str::to_string)
                     .unwrap_or_else(|| {
@@ -472,7 +482,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
             if hold {
                 clip.hold = Some(clip.source_in);
             }
-            if let Some(l) = item["metadata"]["openpremier"]["link"].as_u64() {
+            if let Some(l) = our_meta(&item["metadata"])["link"].as_u64() {
                 clip.link = Some(*links.entry(l).or_insert_with(|| p.ids.link()));
             }
             if let (Some((inn, out, effect)), Some(prev)) = (pending.take(), last_clip)

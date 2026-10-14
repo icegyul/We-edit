@@ -5,7 +5,7 @@ does not validate Premiere feature, project, pixel, performance, or workflow par
 
 ## Prerequisites
 
-1. `CHANGELOG.md` describes user-visible changes.
+1. `CHANGES.md` describes user-visible changes.
 2. `cargo xtask lint` and `cargo xtask test` pass.
 3. `cargo xtask dist` passes both packaged self-tests locally.
 4. `Cargo.toml` contains the intended semantic version and `Cargo.lock` is current.

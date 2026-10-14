@@ -10,7 +10,7 @@
 
 ## 소개
 
-**We edit**는 영상 18년차 PD가 OpenPremier를 바탕으로 직접 업그레이드한 영상 편집기입니다.
+**We edit**는 영상 18년차 PD가 직접 업그레이드한 영상 편집기입니다.
 Premiere Pro와 비슷한 패널 구성과 편집 방식은 그대로 두고, 한국어 사용자가 바로 쓸 수 있도록 기능을 더했습니다.
 
 ## 더한 기능
@@ -60,7 +60,7 @@ Windows 10/11 64비트를 기준으로 합니다.
    cargo xtask build --release
    ```
 
-3. 결과 `target\release\openpremier.exe`를 FFmpeg DLL(`third_party\ffmpeg\bin`의 avcodec, avformat, avutil, swresample, swscale)과
+3. 결과 `target\release\weedit.exe`를 FFmpeg DLL(`third_party\ffmpeg\bin`의 avcodec, avformat, avutil, swresample, swscale)과
    같은 폴더(`<폴더>\app`)에 두고 `We edit.exe`로 이름을 바꿔 실행합니다.
 
 ### 받아쓰기 도우미(helper) 설정
@@ -85,9 +85,9 @@ copy helper\transcribe.py <폴더>\helper\transcribe.py
 
 ## 출처와 감사
 
-- 원 프로젝트의 저작권은 OpenPremier 기여자들에게 있으며, 이 저장소는 원 프로젝트의 커밋 이력을 그대로 이어받았습니다.
+- 이 저장소는 원 프로젝트의 커밋 이력을 그대로 이어받았습니다. 원 프로젝트의 저작권 표기와 라이선스는 [NOTICE.md](NOTICE.md)와 [LICENSE](LICENSE)에 있습니다.
 - Adobe 및 Premiere Pro는 Adobe Inc.의 상표이며, We edit는 Adobe와 관계없는 독립 프로젝트입니다.
-- [OpenPremier](https://github.com/xXKuroiKenshiXx/OpenPremier) — 이 프로젝트의 바탕 (GPL-3.0-or-later). 원 README는 [docs/UPSTREAM_README.es.md](docs/UPSTREAM_README.es.md)에 있습니다.
+- 이 프로젝트의 바탕이 된 GPL-3.0-or-later 오픈소스 영상 편집기 (저작권 표기는 [NOTICE.md](NOTICE.md)).
 - [FFmpeg](https://ffmpeg.org) — 영상·소리 처리.
 - [OpenAI Whisper](https://github.com/openai/whisper), [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — 음성 인식 (MIT).
 - [PyMusicLooper](https://github.com/arkrow/PyMusicLooper) (MIT) — 음악에서 반복되는 부분을 찾는 방법. 리믹스는 이 방법을 Rust로 다시 구현했습니다(코드 복사 없음). 특징 추출은 [librosa](https://librosa.org)(ISC)의 정의를 따랐습니다.

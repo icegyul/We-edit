@@ -22,7 +22,7 @@ when a custom Cargo invocation is required.
 
 Keep each change focused. Add tests for behavior, update the relevant specification/requirement ID,
 and run lint plus the full test suite. Packaging changes must also pass the final-layout
-`--self-test`. User-facing changes belong under `Unreleased` in `CHANGELOG.md`.
+`--self-test`. User-facing changes belong in `CHANGES.md`, under the date of the change.
 
 Do not commit build output, downloaded dependencies, private media, local tool configuration,
 credentials, crash dumps, or personal notes.

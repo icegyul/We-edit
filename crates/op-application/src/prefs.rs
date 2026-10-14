@@ -143,15 +143,7 @@ pub struct Dirs {
 
 impl Dirs {
     pub fn system() -> Dirs {
-        // the folder of the program this one grew from is moved once, so nothing is lost
-        let base = |d: Option<PathBuf>| {
-            let root = d.unwrap_or_else(std::env::temp_dir);
-            let (old, new) = (root.join("OpenPremier"), root.join("We edit"));
-            if old.is_dir() && !new.exists() {
-                let _ = std::fs::rename(&old, &new);
-            }
-            new
-        };
+        let base = |d: Option<PathBuf>| d.unwrap_or_else(std::env::temp_dir).join("We edit");
         Dirs {
             config: base(dirs::config_dir()),
             cache: base(dirs::cache_dir()),

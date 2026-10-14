@@ -1,7 +1,9 @@
 # NOTICE
 
-**We edit** is a modified version of **OpenPremier** 0.9.0 (commit `cda185d`), copyright by the
-OpenPremier contributors, licensed under the GNU General Public License, version 3 or (at your
+**We edit** is a modified version of a GPL-3.0-or-later video editor, version 0.9.0 (commit `cda185d`).
+The copyright notices of the original work are kept as the license requires: the original work is
+copyright (C) the OpenPremier contributors. Our modifications are listed in CHANGES.md and in this
+repository's commit history. Licensed under the GNU General Public License, version 3 or (at your
 option) any later version. The full license text is in [LICENSE](LICENSE). The history of the
 original project is kept in this repository.
 

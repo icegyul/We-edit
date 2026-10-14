@@ -4,7 +4,7 @@
 //! is built with an RPATH of `$ORIGIN/../lib`, assembled with the FFmpeg libraries into an AppDir
 //! and packed with appimagetool and the static type2 runtime, both pinned by SHA-256.
 //!
-//! On Windows the same steps run inside the `OpenPremier-Build` WSL distribution, in a
+//! On Windows the same steps run inside the `WeEdit-Build` WSL distribution, in a
 //! manylinux_2_28 container, so the AppImage runs on distributions with glibc 2.28 or newer. The
 //! result is then started on the WSL distribution itself and in clean Ubuntu 22.04 and Fedora 42
 //! containers.
@@ -25,7 +25,7 @@ const RUNTIME: (&str, &str) = (
     "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64",
     "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
 );
-const WSL_DISTRO: &str = "OpenPremier-Build";
+const WSL_DISTRO: &str = "WeEdit-Build";
 const IMAGE: &str = "quay.io/pypa/manylinux_2_28_x86_64";
 const ICON_SIZES: [u32; 8] = [16, 32, 48, 64, 128, 256, 512, 1024];
 

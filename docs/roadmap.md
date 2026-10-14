@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-04 (version 0.9.0)<br>
 **Companion documents:** [implementation-status.md](implementation-status.md) (technical status and
-validation gaps), [CHANGELOG.md](../CHANGELOG.md) (what each release changed),
+validation gaps), [CHANGES.md](../CHANGES.md) (what changed),
 [drift-comparison.md](drift-comparison.md) (lessons from another open-source editor).
 
 This file is the user-facing plan: what an editor can already do, and what comes next, in order of
