@@ -103,8 +103,6 @@ priority. Items move from "Next" to "Done" in the release that ships them.
   besides the usual ones; pasting puts media at the pointer's place on the timeline.
 
 - Native `.opproj`, OTIO, FCP XML and EDL interchange; partial read-only `.prproj` import.
-- Windows ZIP, Linux AppImage and macOS disk images (Apple silicon and Intel), installable and
-  updatable from [OpenHub](https://github.com/xXKuroiKenshiXx/OpenHub).
 - Spanish and English interface, `.kys` keyboard shortcut import, crash recovery, log viewer.
 
 ## Next

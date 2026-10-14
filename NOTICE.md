@@ -1,6 +1,5 @@
 # NOTICE
 
-**We edit** is a modified version of a GPL-3.0-or-later video editor, version 0.9.0 (upstream: https://github.com/xXKuroiKenshiXx/OpenPremier, commit `cda185d`).
 The copyright notices of the original work are kept as the license requires: the original work is
 copyright (C) the OpenPremier contributors. This repository starts from one commit that holds the
 modified version; the commit history of the original project is not included. Our modifications are
