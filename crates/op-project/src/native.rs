@@ -1,4 +1,4 @@
-//! The native project file (`.opproj`): versioned JSON.
+//! The native project file (`.wedalur`; projects saved as `.opproj` before still open): versioned JSON.
 //!
 //! Saving is atomic (PR-SAVE-005 applied to our own format): the data goes to a sibling temporary
 //! file, is flushed and parsed back, the previous file is kept as `.bak`, and only then is the
@@ -16,7 +16,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::ProjectError;
 
-pub const EXTENSION: &str = "opproj";
+pub const EXTENSION: &str = "wedalur";
+/// The extension projects had before `.wedalur`: they still open (and save to `.wedalur`).
+pub const LEGACY_EXTENSION: &str = "opproj";
+
+/// Whether `path` names a We edit project file (either extension, any letter case).
+pub fn is_project_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION) || e.eq_ignore_ascii_case(LEGACY_EXTENSION))
+}
 const FORMAT: &str = "openpremier-project";
 
 #[derive(Serialize, Deserialize)]
@@ -256,6 +265,17 @@ mod tests {
         p.add_asset(p.root, asset);
         p.add_sequence(p.root, "Sequence 01", SequenceSettings::default());
         p
+    }
+
+    #[test]
+    fn both_extensions_name_a_project() {
+        for name in ["a.wedalur", "a.WEDALUR", "a.opproj", "dir/b.OpProj"] {
+            assert!(is_project_file(Path::new(name)), "{name}");
+        }
+        for name in ["a.xml", "a.prproj", "a", "a.wedalur.bak"] {
+            assert!(!is_project_file(Path::new(name)), "{name}");
+        }
+        assert_eq!(EXTENSION, "wedalur");
     }
 
     #[test]

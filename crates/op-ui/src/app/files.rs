@@ -20,8 +20,11 @@ impl State {
             }
             Then::Open(None) => {
                 let mut d = rfd::FileDialog::new()
-                    .add_filter(t("All Projects"), &["opproj", "prproj", "xml", "otio"])
-                    .add_filter("We edit", &[op_project::native::EXTENSION])
+                    .add_filter(
+                        t("All Projects"),
+                        &[op_project::native::EXTENSION, op_project::native::LEGACY_EXTENSION, "prproj", "xml", "otio"],
+                    )
+                    .add_filter("We edit", &[op_project::native::EXTENSION, op_project::native::LEGACY_EXTENSION])
                     .add_filter("Adobe Premiere Pro", &["prproj"])
                     .add_filter("Final Cut Pro XML", &["xml"])
                     .add_filter("OpenTimelineIO", &["otio"]);
@@ -123,12 +126,10 @@ impl State {
             return;
         }
         let is_project = |p: &PathBuf| {
-            p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-                matches!(
-                    e.to_ascii_lowercase().as_str(),
-                    "opproj" | "prproj" | "otio"
-                )
-            })
+            op_project::native::is_project_file(p)
+                || p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    matches!(e.to_ascii_lowercase().as_str(), "prproj" | "otio")
+                })
         };
         if paths.len() == 1 && is_project(&paths[0]) {
             let p = paths[0].clone();
@@ -222,7 +223,7 @@ impl State {
         let mut all: Vec<&str> = vec![
             "mp4", "mov", "mkv", "avi", "mxf", "m4v", "webm", "mts", "m2ts", "mpg", "mpeg", "wmv",
             "flv", "3gp", "ts", "wav", "mp3", "aac", "m4a", "flac", "ogg", "opus", "aif", "aiff",
-            "wma", "opproj", "prproj", "otio",
+            "wma", "wedalur", "opproj", "prproj", "otio",
         ];
         all.extend(op_media::probe::STILL_EXTENSIONS);
         let mut d = rfd::FileDialog::new()

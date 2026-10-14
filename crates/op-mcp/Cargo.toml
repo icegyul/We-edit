@@ -13,6 +13,7 @@ op-timeline.workspace = true
 op-media.workspace = true
 op-render.workspace = true
 op-application.workspace = true
+op-project.workspace = true
 op-silence.workspace = true
 serde_json.workspace = true
 log.workspace = true

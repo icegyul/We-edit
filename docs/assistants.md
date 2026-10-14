@@ -40,7 +40,7 @@ Edit > Preferences > AI Assistants has buttons that copy these commands with the
   window and show their progress there. The program listens only on 127.0.0.1, with a random key
   stored in its settings folder; the setting is off by default.
 - Otherwise (the program closed, or the setting off) the assistant works on a project of its own,
-  which it saves with `save_project`; `OpenPremier --mcp project.opproj` starts from a project.
+  which it saves with `save_project`; `OpenPremier --mcp project.wedalur` starts from a project.
 
 ## Tools
 

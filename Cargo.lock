@@ -3225,6 +3225,7 @@ dependencies = [
  "op-application",
  "op-core",
  "op-media",
+ "op-project",
  "op-render",
  "op-silence",
  "op-timeline",

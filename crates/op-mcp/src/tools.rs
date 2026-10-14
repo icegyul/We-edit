@@ -59,13 +59,13 @@ pub fn list() -> Json {
         ),
         tool(
             "open_project",
-            "Opens a We edit project (.opproj), or imports a Premiere Pro (.prproj), OTIO, FCP XML or EDL file.",
+            "Opens a We edit project (.wedalur, or an older .opproj), or imports a Premiere Pro (.prproj), OTIO, FCP XML or EDL file.",
             json!({"path": s("Path of the project file")}),
             &["path"]
         ),
         tool(
             "save_project",
-            "Saves the project, to `path` when given (.opproj).",
+            "Saves the project, to `path` when given (.wedalur).",
             json!({"path": s("Where to save; omit to save to the current file")}),
             &[]
         ),
@@ -1206,12 +1206,7 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
         }
         "open_project" => {
             let path = PathBuf::from(str_arg(a, "path").ok_or("path is required")?);
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            if ext == "opproj" {
+            if op_project::native::is_project_file(&path) {
                 ed.open(&path)?;
             } else {
                 ed.new_project("Untitled");

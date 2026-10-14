@@ -523,10 +523,17 @@ impl Editor {
     }
 
     pub fn save(&mut self) -> Result<(), String> {
-        match self.path.clone() {
-            Some(p) => self.save_as(&p),
-            None => Err("no file".into()),
+        let Some(p) = self.path.clone() else { return Err("no file".into()) };
+        // a project saved as .opproj before moves to .wedalur (the old file is left as it is), unless
+        // that name is taken by another file
+        let moved = p.with_extension(op_project::native::EXTENSION);
+        let legacy = p.extension().is_some_and(|e| e.eq_ignore_ascii_case(op_project::native::LEGACY_EXTENSION));
+        if legacy && !moved.exists() {
+            self.save_as(&moved)?;
+            self.info(format!("Saved {} (the .opproj file is left as it was)", moved.display()));
+            return Ok(());
         }
+        self.save_as(&p)
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), String> {
@@ -618,7 +625,12 @@ impl Editor {
                 .unwrap_or("")
                 .to_ascii_lowercase();
             match ext.as_str() {
-                "opproj" | "prproj" | "otio" => {
+                _ if op_project::native::is_project_file(&p) => {
+                    if let Err(e) = self.import_project(&p, bin) {
+                        self.error(format!("{}: {e}", p.display()));
+                    }
+                }
+                "prproj" | "otio" => {
                     if let Err(e) = self.import_project(&p, bin) {
                         self.error(format!("{}: {e}", p.display()));
                     }

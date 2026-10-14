@@ -1712,6 +1712,41 @@ mod tests {
     }
 
     #[test]
+    fn an_old_opproj_saves_as_wedalur_and_is_left_alone() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
+        let (mut e, d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        e.load_source(item);
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        let old = d.path().join("demo.opproj");
+        e.save_as(&old).unwrap();
+        let old_len = std::fs::metadata(&old).unwrap().len();
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        e.save().unwrap();
+        let new = d.path().join("demo.wedalur");
+        assert_eq!(e.path.as_deref(), Some(new.as_path()));
+        assert!(new.exists());
+        assert_eq!(std::fs::metadata(&old).unwrap().len(), old_len, "the .opproj file is left as it was");
+        let (mut f, _d2) = editor();
+        f.open(&new).unwrap();
+        // a later save stays on .wedalur
+        e.save().unwrap();
+        assert_eq!(e.path.as_deref(), Some(new.as_path()));
+        // when .wedalur is taken by another file, the old file is saved in place
+        let (mut g, d3) = editor();
+        let item = matte(&mut g);
+        g.new_sequence("S", SequenceSettings::default());
+        g.load_source(item);
+        let old3 = d3.path().join("p.opproj");
+        g.save_as(&old3).unwrap();
+        std::fs::write(d3.path().join("p.wedalur"), "other").unwrap();
+        g.save().unwrap();
+        assert_eq!(g.path.as_deref(), Some(old3.as_path()));
+        assert_eq!(std::fs::read_to_string(d3.path().join("p.wedalur")).unwrap(), "other");
+    }
+
+    #[test]
     fn save_and_reopen_keeps_session() {
         let _guard = crate::recovery::TEST_GUARD.lock();
         let (mut e, d) = editor();
@@ -1719,7 +1754,7 @@ mod tests {
         e.new_sequence("S", SequenceSettings::default());
         e.load_source(item);
         e.execute("cmd.clip.overlay", Focus::Timeline);
-        let path = d.path().join("demo.opproj");
+        let path = d.path().join("demo.wedalur");
         e.save_as(&path).unwrap();
         assert!(!e.history.is_dirty());
         let (mut f, _d2) = editor();

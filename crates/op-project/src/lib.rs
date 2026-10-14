@@ -1,6 +1,6 @@
 //! Project files and interchange (docs/data-model.md 9).
 //!
-//! * `native`: the `.opproj` project format (read/write, atomic save).
+//! * `native`: the `.wedalur` project format (older `.opproj` files still open) (read/write, atomic save).
 //! * `prproj`: read-only import of Premiere Pro project files. Writing that format is not
 //!   supported until round-trip conformance is validated (PR-SAVE-002).
 //! * `otio`, `fcpxml`, `edl`: timeline interchange.

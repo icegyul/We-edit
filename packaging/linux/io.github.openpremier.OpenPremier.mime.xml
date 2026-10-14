@@ -3,6 +3,7 @@
   <mime-type type="application/x-openpremierject">
     <comment>OpenPremier project</comment>
     <comment xml:lang="es">Proyecto de OpenPremier</comment>
+    <glob pattern="*.wedalur"/>
     <glob pattern="*.opproj"/>
   </mime-type>
 </mime-info>

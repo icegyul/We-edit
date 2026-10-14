@@ -155,7 +155,7 @@ mod tests {
         let _guard = TEST_GUARD.lock();
         let dir = tempfile::tempdir().unwrap();
         let file = file_for(dir.path(), "My Project");
-        assert!(file.ends_with("My_Project-recovery.opproj"));
+        assert!(file.ends_with("My_Project-recovery.wedalur"));
         remember(Arc::new(Project::new("P")), 1, file.clone());
         assert_eq!(write_in_background(), Some(1));
         let start = Instant::now();

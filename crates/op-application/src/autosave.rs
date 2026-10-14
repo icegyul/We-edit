@@ -68,7 +68,7 @@ pub fn write_project(
 ) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let name = safe_name(name);
-    let path = dir.join(format!("{name}-{}.opproj", stamp(SystemTime::now())));
+    let path = dir.join(format!("{name}-{}.{}", stamp(SystemTime::now()), op_project::native::EXTENSION));
     op_project::native::save(&path, project, &serde_json::Value::Null, GENERATOR)
         .map_err(|e| e.to_string())?;
     let keep = keep.max(1);
@@ -79,8 +79,8 @@ pub fn write_project(
         .filter(|p| {
             p.file_name()
                 .is_some_and(|n| n.to_string_lossy().starts_with(&format!("{name}-")))
-                && p.extension().is_some_and(|x| x == "opproj")
-                && !p.to_string_lossy().ends_with("-recovery.opproj")
+                && op_project::native::is_project_file(p)
+                && !p.file_stem().is_some_and(|s| s.to_string_lossy().ends_with("-recovery"))
         })
         .collect();
     mine.sort();
@@ -120,7 +120,7 @@ fn newest(dir: &Path) -> Option<PathBuf> {
     std::fs::read_dir(dir)
         .ok()?
         .flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "opproj"))
+        .filter(|e| op_project::native::is_project_file(&e.path()))
         .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
         .map(|e| e.path())
 }

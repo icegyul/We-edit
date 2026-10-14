@@ -123,7 +123,7 @@ fn info_plist(version: &str) -> String {
     <dict>
       <key>CFBundleTypeName</key><string>OpenPremier Project</string>
       <key>CFBundleTypeRole</key><string>Editor</string>
-      <key>CFBundleTypeExtensions</key><array><string>opproj</string></array>
+      <key>CFBundleTypeExtensions</key><array><string>wedalur</string><string>opproj</string></array>
     </dict>
   </array>
 </dict>
