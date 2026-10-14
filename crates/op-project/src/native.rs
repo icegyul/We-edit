@@ -27,8 +27,6 @@ pub fn is_project_file(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION) || e.eq_ignore_ascii_case(LEGACY_EXTENSION))
 }
 const FORMAT: &str = "weedit-project";
-/// The format name of the files saved before the rename: still read, never written.
-const LEGACY_FORMAT: &str = "openpremier-project";
 
 #[derive(Serialize, Deserialize)]
 struct FileData {
@@ -85,8 +83,7 @@ pub fn to_string(
 pub fn from_str(text: &str, base: Option<&Path>) -> Result<Loaded, ProjectError> {
     let head: serde_json::Value =
         serde_json::from_str(text).map_err(|e| ProjectError::Format(e.to_string()))?;
-    let format = head.get("format").and_then(|f| f.as_str());
-    if format != Some(FORMAT) && format != Some(LEGACY_FORMAT) {
+    if head.get("format").and_then(|f| f.as_str()) != Some(FORMAT) {
         return Err(ProjectError::Format("not a We edit project".into()));
     }
     let version = head.get("version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -333,15 +330,6 @@ mod tests {
             from_str(&future, None),
             Err(ProjectError::Version(999))
         ));
-    }
-
-    #[test]
-    fn a_file_saved_under_the_old_format_name_still_opens() {
-        let p = project_with_asset("a.wav");
-        let text = to_string(&p, &serde_json::json!({}), None, "test").unwrap();
-        assert!(text.contains(&format!("\"format\": \"{FORMAT}\"")));
-        let old = text.replace(FORMAT, LEGACY_FORMAT);
-        assert_eq!(from_str(&old, None).unwrap().project, p);
     }
 
     #[test]

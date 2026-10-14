@@ -11,16 +11,6 @@ use serde_json::{Value as J, json};
 
 use crate::ProjectError;
 
-/// The OTIO metadata of an item, written under "weedit". Files exported before the rename keep it
-/// under "openpremier", which is still read.
-fn our_meta(v: &J) -> &J {
-    if v.get("weedit").is_some() {
-        &v["weedit"]
-    } else {
-        &v["openpremier"]
-    }
-}
-
 fn rt(frames: f64, rate: f64) -> J {
     json!({"OTIO_SCHEMA": "RationalTime.1", "rate": rate, "value": frames})
 }
@@ -296,7 +286,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
         }
     }
     let rate = Rate::from_f64(fps.unwrap_or(25.0));
-    let meta = our_meta(&tl["metadata"]);
+    let meta = &tl["metadata"]["weedit"];
     let settings = SequenceSettings {
         rate,
         width: meta["width"].as_u64().unwrap_or(1920) as u32,
@@ -359,7 +349,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
                     .and_then(time_of)
                     .unwrap_or(Dur::ZERO)
                     .round_frames(rate);
-                let effect = our_meta(&item["metadata"])["effect"]
+                let effect = item["metadata"]["weedit"]["effect"]
                     .as_str()
                     .map(str::to_string)
                     .unwrap_or_else(|| {
@@ -482,7 +472,7 @@ pub fn import(text: &str, name: &str) -> Result<(Project, SequenceId), ProjectEr
             if hold {
                 clip.hold = Some(clip.source_in);
             }
-            if let Some(l) = our_meta(&item["metadata"])["link"].as_u64() {
+            if let Some(l) = item["metadata"]["weedit"]["link"].as_u64() {
                 clip.link = Some(*links.entry(l).or_insert_with(|| p.ids.link()));
             }
             if let (Some((inn, out, effect)), Some(prev)) = (pending.take(), last_clip)
