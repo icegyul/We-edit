@@ -439,18 +439,25 @@ pub fn show(s: &mut State, ui: &mut Ui) {
                     .stick_to_bottom(true)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        for (kind, text) in &s.ai.log {
-                            let (prefix, color) = match kind {
-                                Kind::User => ("나: ", theme::TEXT_BRIGHT),
-                                Kind::Ai => ("AI: ", theme::TEXT),
-                                Kind::Tool => ("  ▸ ", theme::TEXT_DIM),
-                                Kind::Warn => ("  ⚠ ", theme::WARN),
-                                Kind::Info => ("", theme::TEXT_DIM),
-                            };
-                            let text = format!("{prefix}{text}");
-                            let color: Color32 = color;
-                            ui.add(egui::Label::new(RichText::new(text).color(color)).wrap());
-                        }
+                        // The scroll area inherits the bottom-up layout of the chat as a whole;
+                        // lines laid bottom-up inside a scroll area that sticks to the bottom end
+                        // up out of view once there are more than fit (the whole chat, the user's
+                        // question and the answer included, showed as an empty box). The lines go
+                        // top-down.
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                            for (kind, text) in &s.ai.log {
+                                let (prefix, color) = match kind {
+                                    Kind::User => ("나: ", theme::TEXT_BRIGHT),
+                                    Kind::Ai => ("AI: ", theme::TEXT),
+                                    Kind::Tool => ("  ▸ ", theme::TEXT_DIM),
+                                    Kind::Warn => ("  ⚠ ", theme::WARN),
+                                    Kind::Info => ("", theme::TEXT_DIM),
+                                };
+                                let text = format!("{prefix}{text}");
+                                let color: Color32 = color;
+                                ui.add(egui::Label::new(RichText::new(text).color(color)).wrap());
+                            }
+                        });
                     });
             });
         });
