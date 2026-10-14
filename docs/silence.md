@@ -67,7 +67,7 @@ result to an output folder, with a suffix added to the name (the originals are n
 The dialog shows the state of every file (waiting, working, cuts and seconds removed, or why it
 failed) and a Stop button; it works in the background, so the project stays usable. The same
 settings panel as the single dialog is used, including presets. From the command line,
-`OpenPremier --remove-silence a.mp4 b.mp4 --out-dir cut --suffix _cut` does the same.
+`We edit --remove-silence a.mp4 b.mp4 --out-dir cut --suffix _cut` does the same.
 
 ## What happens to each stretch
 
@@ -88,7 +88,7 @@ Remove and close the gaps (ripple), remove and leave gaps, **speed up** (silence
 
 - **Assistants**: `detect_silence` previews and `remove_silence` applies (see
   [assistants.md](assistants.md)); every setting above is a parameter.
-- **Command line**: `OpenPremier --remove-silence input.mp4 output.mp4 --preset podcast`
+- **Command line**: `We edit --remove-silence input.mp4 output.mp4 --preset podcast`
   cuts the silences and writes the file; `--remove-silence --help` lists the options.
 
 ## What it builds on

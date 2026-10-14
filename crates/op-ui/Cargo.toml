@@ -1,6 +1,6 @@
 [package]
 name = "op-ui"
-description = "OpenPremier user interface: dockable panels, monitors, timeline, effect controls (egui)"
+description = "We edit user interface: dockable panels, monitors, timeline, effect controls (egui)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

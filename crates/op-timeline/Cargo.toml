@@ -1,6 +1,6 @@
 [package]
 name = "op-timeline"
-description = "OpenPremier editing policy: insert, overwrite, trims, ripple, links, snapping"
+description = "We edit editing policy: insert, overwrite, trims, ripple, links, snapping"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -62,7 +62,7 @@ impl SentenceJob {
 }
 
 /// The helper's Python and script: `WEEDIT_HELPER` names the folder, else it is the
-/// `helper` folder beside the program's own (`<folder>\app\OpenPremier.exe`).
+/// `helper` folder beside the program's own (`<folder>\app\We edit.exe`).
 pub fn helper_dir() -> Option<PathBuf> {
     std::env::var_os("WEEDIT_HELPER")
         .map(PathBuf::from)

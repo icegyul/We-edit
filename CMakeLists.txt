@@ -1,29 +1,29 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(OpenPremier VERSION 0.1.0 LANGUAGES NONE)
+project(WeEdit VERSION 0.1.0 LANGUAGES NONE)
 
-find_program(OPENPREMIER_CARGO_EXECUTABLE cargo)
+find_program(WEEDIT_CARGO_EXECUTABLE cargo)
 
 add_custom_target(
   project-status
-  COMMAND ${CMAKE_COMMAND} -E echo "OpenPremier 0.1.0 technical alpha: Rust implementation exists."
+  COMMAND ${CMAKE_COMMAND} -E echo "We edit 0.1.0 technical alpha: Rust implementation exists."
   COMMAND ${CMAKE_COMMAND} -E echo "Compatibility status: see docs/implementation-status.md."
   VERBATIM
 )
 
-if(OPENPREMIER_CARGO_EXECUTABLE)
+if(WEEDIT_CARGO_EXECUTABLE)
   add_custom_target(
-    openpremier-build
-    COMMAND ${OPENPREMIER_CARGO_EXECUTABLE} xtask build --release
+    weedit-build
+    COMMAND ${WEEDIT_CARGO_EXECUTABLE} xtask build --release
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Build OpenPremier through the configured Rust task runner"
+    COMMENT "Build We edit through the configured Rust task runner"
     VERBATIM
   )
   add_custom_target(
-    openpremier-test
-    COMMAND ${OPENPREMIER_CARGO_EXECUTABLE} xtask test
+    weedit-test
+    COMMAND ${WEEDIT_CARGO_EXECUTABLE} xtask test
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Run the OpenPremier test suite"
+    COMMENT "Run the We edit test suite"
     VERBATIM
   )
 else()

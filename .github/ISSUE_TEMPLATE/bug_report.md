@@ -7,12 +7,12 @@ labels: bug
 
 ## Version and platform
 
-- OpenPremier version/commit:
+- We edit version/commit:
 - OS and version:
 - GPU and driver:
 - Installation type: Windows ZIP / AppImage / source build
 
-Attach the output of `OpenPremier --self-test` where possible.
+Attach the output of `We edit --self-test` where possible.
 
 ## Reproduction
 

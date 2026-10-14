@@ -1285,7 +1285,7 @@ impl Editor {
         self.proxies.add(jobs);
     }
 
-    /// Detaches proxies from `assets` and deletes the files OpenPremier made.
+    /// Detaches proxies from `assets` and deletes the files We edit made.
     pub fn remove_proxies(&mut self, assets: &[AssetId]) {
         let folder = self.dirs.data.join("Proxies");
         let with: Vec<(AssetId, String)> = assets

@@ -1,6 +1,6 @@
-# Contributing to OpenPremier
+# Contributing to We edit
 
-OpenPremier accepts implementation, tests, documentation, original assets, and clean-room
+We edit accepts implementation, tests, documentation, original assets, and clean-room
 compatibility evidence. Version 0.1.x is a technical alpha: contributions must describe what is
 implemented without claiming unverified Premiere parity.
 

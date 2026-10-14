@@ -1,4 +1,4 @@
-//! macOS package: `dist/OpenPremier-<version>-macos-<arch>.dmg` with `OpenPremier.app`, the
+//! macOS package: `dist/We-edit-<version>-macos-<arch>.dmg` with `We edit.app`, the
 //! FFmpeg libraries it links inside `Contents/Frameworks`, the licenses and the third-party
 //! notices. Built on a Mac with Homebrew's FFmpeg (`brew install ffmpeg dylibbundler`). The app
 //! is signed ad hoc (Apple silicon does not run unsigned code) and started with `--self-test`
@@ -19,7 +19,7 @@ pub fn package() -> Result<PathBuf> {
         "aarch64" => "arm64",
         other => other,
     };
-    let name = format!("{}-{version}-macos-{arch}", util::APP_NAME);
+    let name = format!("{}-{version}-macos-{arch}", util::FILE_NAME);
     let stage = util::dist_dir().join(&name);
     if stage.exists() {
         fs::remove_dir_all(&stage)?;
@@ -50,7 +50,7 @@ pub fn package() -> Result<PathBuf> {
         ("512x512@2x", 1024),
     ] {
         fs::copy(
-            icons.join(format!("openpremier-{src}.png")),
+            icons.join(format!("we-edit-{src}.png")),
             iconset.join(format!("icon_{size}.png")),
         )?;
     }
@@ -110,7 +110,7 @@ fn info_plist(version: &str) -> String {
   <key>CFBundleName</key><string>{name}</string>
   <key>CFBundleDisplayName</key><string>{name}</string>
   <key>CFBundleExecutable</key><string>{name}</string>
-  <key>CFBundleIdentifier</key><string>io.github.openpremier.OpenPremier</string>
+  <key>CFBundleIdentifier</key><string>io.github.icegyul.WeEdit</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>{version}</string>
@@ -121,7 +121,7 @@ fn info_plist(version: &str) -> String {
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
-      <key>CFBundleTypeName</key><string>OpenPremier Project</string>
+      <key>CFBundleTypeName</key><string>We edit Project</string>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>CFBundleTypeExtensions</key><array><string>wedalur</string><string>opproj</string></array>
     </dict>

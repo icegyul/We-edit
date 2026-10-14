@@ -1,6 +1,6 @@
 [package]
 name = "op-core"
-description = "OpenPremier canonical project model: exact time, entities, parameters, transactions and history"
+description = "We edit canonical project model: exact time, entities, parameters, transactions and history"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,8 +1,8 @@
-//! OpenPremier for AI assistants. `OpenPremier --mcp` speaks the Model Context Protocol over
+//! We edit for AI assistants. `We edit --mcp` speaks the Model Context Protocol over
 //! standard input and output, so Claude Code, Codex, Cursor or any MCP client can edit with it:
 //! import media, cut, add effects, titles and captions, look at frames and export.
 //!
-//! When OpenPremier is open and Preferences > AI Assistants allows it, the tools act on the open
+//! When We edit is open and Preferences > AI Assistants allows it, the tools act on the open
 //! project and the user sees every edit as it happens (and can undo it). Otherwise they act on a
 //! project of their own, saved with `save_project`.
 

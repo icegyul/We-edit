@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-02 (version 0.7.0)
 
-OpenPremier's components are original implementations: their names follow the vocabulary editors
+We edit's components are original implementations: their names follow the vocabulary editors
 know, but the parameters and processing are our own and no output is copied from another product.
 Video effects and transitions run on the GPU (WGSL shaders through wgpu); audio effects run in
 the floating-point mixer. Importers map components found in other applications' projects to the

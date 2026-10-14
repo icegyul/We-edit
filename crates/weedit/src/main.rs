@@ -1,4 +1,4 @@
-//! OpenPremier: command line, logging, portable mode and the self-test used by packaging.
+//! We edit: command line, logging, portable mode and the self-test used by packaging.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 

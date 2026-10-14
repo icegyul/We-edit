@@ -19,8 +19,8 @@ pub fn release(args: &[String]) -> Result {
     let tag = format!("v{version}");
     let dist = util::dist_dir();
     let files = [
-        dist.join(format!("{}-{version}-windows-x64.zip", util::APP_NAME)),
-        dist.join(format!("{}-{version}-x86_64.AppImage", util::APP_NAME)),
+        dist.join(format!("{}-{version}-windows-x64.zip", util::FILE_NAME)),
+        dist.join(format!("{}-{version}-x86_64.AppImage", util::FILE_NAME)),
         dist.join("SHA256SUMS.txt"),
     ];
     for f in &files {
@@ -67,7 +67,7 @@ pub fn release(args: &[String]) -> Result {
             "-a",
             &tag,
             "-m",
-            &format!("OpenPremier {version}"),
+            &format!("We edit {version}"),
         ]))?;
     }
     util::run(
@@ -82,7 +82,7 @@ pub fn release(args: &[String]) -> Result {
             "create",
             &tag,
             "--title",
-            &format!("OpenPremier {version}"),
+            &format!("We edit {version}"),
             "--notes-file",
         ])
         .arg(&notes);

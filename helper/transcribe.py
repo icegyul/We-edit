@@ -1,7 +1,7 @@
-"""OpenPremier 받아쓰기 도우미: Whisper large-v3 (faster-whisper, GPU) 로 말을 문장 단위로 받아 적는다.
+"""We edit 받아쓰기 도우미: Whisper large-v3 (faster-whisper, GPU) 로 말을 문장 단위로 받아 적는다.
 
 사용: transcribe.py --pcm 소리.f32 [--language ko]
-  --pcm      OpenPremier 가 만들어 준 16 kHz 모노 float32 소리 파일
+  --pcm      We edit 가 만들어 준 16 kHz 모노 float32 소리 파일
   --verbatim  말버릇(음, 어)도 적는다 (무음·군더더기 제거용)
   --translate 영어로 번역해서 적는다
   --check    소리 없이 GPU(CUDA) 사용 가능 여부만 JSON 으로 알린다

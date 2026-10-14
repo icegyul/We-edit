@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.openpremier.OpenPremier</id>
+  <id>io.github.icegyul.WeEdit</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>OpenPremier</name>
+  <name>We edit</name>
   <summary>Edit video with a professional timeline</summary>
   <summary xml:lang="es">Edita vídeo con una línea de tiempo profesional</summary>
   <description>
     <p>
-      OpenPremier is a free and open source non-linear video editor with the workflow editors
+      We edit is a free and open source non-linear video editor with the workflow editors
       already know: Source and Program monitors, a multi-track timeline with ripple, roll, slip,
       slide and rate stretch tools, three-point editing, keyframed effects, transitions, color
       correction, titles, an audio mixer and GPU rendering.
@@ -19,9 +19,9 @@
       import of .kys shortcut files help editors migrate workflows.
     </p>
   </description>
-  <launchable type="desktop-id">io.github.openpremier.OpenPremier.desktop</launchable>
+  <launchable type="desktop-id">io.github.icegyul.WeEdit.desktop</launchable>
   <provides>
-    <binary>openpremier</binary>
+    <binary>weedit</binary>
   </provides>
   <categories>
     <category>AudioVideo</category>

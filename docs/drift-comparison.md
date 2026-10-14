@@ -2,7 +2,7 @@
 
 **Reviewed:** 2026-10-02, [CutWire-Studios/Drift](https://github.com/CutWire-Studios/Drift) at
 commit `809bbaf` (last release 0.6.0)<br>
-**License:** GPL-3.0, like OpenPremier. Nothing below was copied; this is a description of
+**License:** GPL-3.0, like We edit. Nothing below was copied; this is a description of
 approaches and features, used to plan our own work ([roadmap.md](roadmap.md)).
 
 Drift is a free desktop editor aimed at short-form creators (Reels, Shorts, game clips, school
@@ -12,7 +12,7 @@ image) and Android.
 
 ## How Drift renders
 
-| Area | Drift | OpenPremier |
+| Area | Drift | We edit |
 |---|---|---|
 | GPU API | OpenGL through Qt (`QOpenGLContext` on an offscreen surface, one GL thread, framebuffer pool) | wgpu: Direct3D 12, Vulkan, Metal or OpenGL, chosen in Preferences |
 | Compositor | One compositor (`GpuCompositor`) for preview and export, so the preview matches the file | Same principle: one renderer for the monitors and export |
@@ -66,7 +66,7 @@ roadmap).
 - A signed add-on market for effect packages and an MCP server so AI agents can edit projects.
 - Android build.
 
-## Where OpenPremier differs
+## Where We edit differs
 
 - Premiere-like organization, panels, shortcuts (`.kys` import) and project interchange
   (`.prproj`, FCP XML, OTIO, EDL); Drift has its own simpler, creator-oriented interface.

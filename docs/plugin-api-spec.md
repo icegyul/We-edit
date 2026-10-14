@@ -4,7 +4,7 @@
 
 ## 1. Goals and non-goals
 
-OpenPremier needs three distinct extension surfaces:
+We edit needs three distinct extension surfaces:
 
 1. **OpenFX image-effect host** for industry-standard compiled video effects.
 2. **Audio plugin host** for a separately licensed/validated standard such as VST3 and platform-specific formats where permitted.

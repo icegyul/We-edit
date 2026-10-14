@@ -2,22 +2,22 @@
 
 **Updated:** 2026-10-04 (version 0.9.0)
 
-OpenPremier speaks the [Model Context Protocol](https://modelcontextprotocol.io) (MCP), so an AI
+We edit speaks the [Model Context Protocol](https://modelcontextprotocol.io) (MCP), so an AI
 assistant such as Claude Code, Codex, Cursor or any other MCP client can edit video with it:
 import media, cut, move and speed up clips, add effects, transitions, titles and captions, look
 at frames and export.
 
 ## Connecting
 
-The program itself is the server: `OpenPremier --mcp` reads requests from standard input and
+The program itself is the server: `We edit --mcp` reads requests from standard input and
 answers on standard output.
 
 ```bash
-claude mcp add openpremier -- "C:\path\to\OpenPremier.exe" --mcp
+claude mcp add weedit -- "C:\path\to\We edit.exe" --mcp
 ```
 
 ```bash
-codex mcp add openpremier -- "C:\path\to\OpenPremier.exe" --mcp
+codex mcp add weedit -- "C:\path\to\We edit.exe" --mcp
 ```
 
 Other clients take the same command in their MCP settings, for example:
@@ -25,7 +25,7 @@ Other clients take the same command in their MCP settings, for example:
 ```json
 {
   "mcpServers": {
-    "openpremier": { "command": "C:\\path\\to\\OpenPremier.exe", "args": ["--mcp"] }
+    "weedit": { "command": "C:\\path\\to\\We edit.exe", "args": ["--mcp"] }
   }
 }
 ```
@@ -40,7 +40,7 @@ Edit > Preferences > AI Assistants has buttons that copy these commands with the
   window and show their progress there. The program listens only on 127.0.0.1, with a random key
   stored in its settings folder; the setting is off by default.
 - Otherwise (the program closed, or the setting off) the assistant works on a project of its own,
-  which it saves with `save_project`; `OpenPremier --mcp project.wedalur` starts from a project.
+  which it saves with `save_project`; `We edit --mcp project.wedalur` starts from a project.
 
 ## Tools
 

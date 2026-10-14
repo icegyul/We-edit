@@ -1,6 +1,6 @@
 //! Release packages.
 //!
-//! * Windows: `dist/OpenPremier-<version>-windows-x64.zip`, a folder with the program, the
+//! * Windows: `dist/We-edit-<version>-windows-x64.zip`, a folder with the program, the
 //!   FFmpeg libraries it links, the licenses and the third-party notices. It runs from any
 //!   folder; a `portable.txt` file next to the program keeps settings in that folder.
 //! * Linux: the AppImage (see `linux.rs`).
@@ -53,7 +53,7 @@ pub fn release_build() -> Result {
 fn windows_zip() -> Result<PathBuf> {
     release_build()?;
     let version = util::version()?;
-    let name = format!("{}-{version}-windows-x64", util::APP_NAME);
+    let name = format!("{}-{version}-windows-x64", util::FILE_NAME);
     let dist = util::dist_dir();
     let stage = dist.join(&name);
     if stage.exists() {
@@ -107,14 +107,14 @@ pub fn write_docs(dir: &Path, platform: &str) -> Result {
         "Make the AppImage executable (chmod +x) and start it. Integrate it with your desktop using your AppImage launcher of choice.".to_string()
     };
     let readme = format!(
-        "OpenPremier {version}\r\n\
+        "We edit {version}\r\n\
          A free and open source video editor for Windows and Linux.\r\n\r\n\
          {start}\r\n\r\n\
          Supported structures from Adobe Premiere Pro (.prproj) import read-only; Final Cut Pro XML and OpenTimelineIO interchange open through File > Open Project.\r\n\
          The keyboard shortcuts match the Premiere Pro defaults; your own .kys file can be imported in Edit > Keyboard Shortcuts.\r\n\r\n\
          License: GNU General Public License version 3 or later (LICENSE.txt).\r\n\
          Third-party components and their licenses: THIRD-PARTY-NOTICES.txt.\r\n\r\n\
-         Adobe and Premiere Pro are trademarks of Adobe Inc. OpenPremier is an independent project and is not affiliated with Adobe.\r\n"
+         Adobe and Premiere Pro are trademarks of Adobe Inc. We edit is an independent project and is not affiliated with Adobe.\r\n"
     );
     fs::write(dir.join("README.txt"), readme)?;
     fs::write(dir.join("THIRD-PARTY-NOTICES.txt"), third_party_notices()?)?;
@@ -161,7 +161,7 @@ fn third_party_notices() -> Result<String> {
     rows.sort();
     rows.dedup();
     let mut text = String::new();
-    text.push_str("OpenPremier includes or links the following third-party software.\r\n\r\n");
+    text.push_str("We edit includes or links the following third-party software.\r\n\r\n");
     text.push_str("FFmpeg 8.1 (https://ffmpeg.org), shared libraries built by https://github.com/BtbN/FFmpeg-Builds with GPL components.\r\n");
     text.push_str(
         "License: GNU General Public License version 3 or later (licenses/FFmpeg-LICENSE.txt).\r\n",

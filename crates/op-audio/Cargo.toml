@@ -1,6 +1,6 @@
 [package]
 name = "op-audio"
-description = "OpenPremier audio: sample-accurate mixer, effects, transitions, meters and device output"
+description = "We edit audio: sample-accurate mixer, effects, transitions, meters and device output"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

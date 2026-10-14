@@ -40,12 +40,12 @@ pub fn appimage_task() -> Result {
 fn appimage_name() -> Result<String> {
     Ok(format!(
         "{}-{}-x86_64.AppImage",
-        util::APP_NAME,
+        util::FILE_NAME,
         util::version()?
     ))
 }
 
-/// "C:\OpenPremier" -> "/mnt/c/OpenPremier"
+/// "C:\We edit" -> "/mnt/c/We edit"
 fn wsl_path(p: &Path) -> String {
     let s = p.to_string_lossy().replace('\\', "/");
     match s.split_once(":/") {
@@ -151,7 +151,7 @@ pub fn inside(_args: &[String]) -> Result {
         "share/applications",
         "share/metainfo",
         "share/mime/packages",
-        "share/doc/openpremier",
+        "share/doc/weedit",
     ] {
         fs::create_dir_all(usr.join(d))?;
     }
@@ -193,21 +193,21 @@ pub fn inside(_args: &[String]) -> Result {
         let dir = usr.join(format!("share/icons/hicolor/{size}x{size}/apps"));
         fs::create_dir_all(&dir)?;
         fs::copy(
-            root.join(format!("assets/icons/openpremier-{size}.png")),
+            root.join(format!("assets/icons/we-edit-{size}.png")),
             dir.join(format!("{id}.png")),
         )?;
     }
     fs::copy(
-        root.join("assets/icons/openpremier-256.png"),
+        root.join("assets/icons/we-edit-256.png"),
         appdir.join(format!("{id}.png")),
     )?;
     fs::copy(
-        root.join("assets/icons/openpremier-256.png"),
+        root.join("assets/icons/we-edit-256.png"),
         appdir.join(".DirIcon"),
     )?;
     fs::copy(pkg.join("AppRun"), appdir.join("AppRun"))?;
     util::make_executable(&appdir.join("AppRun"))?;
-    dist::write_docs(&usr.join("share/doc/openpremier"), "linux")?;
+    dist::write_docs(&usr.join("share/doc/weedit"), "linux")?;
 
     // every library must resolve from the AppDir or the system
     let ldd = util::output(Command::new("ldd").arg(&app_bin))?;

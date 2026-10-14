@@ -1,4 +1,4 @@
-//! OpenPremier canonical model.
+//! We edit canonical model.
 //!
 //! Pure, deterministic Rust with no filesystem, codec, GPU, audio-device or GUI dependency
 //! (docs/architecture.md 2). Everything that changes a project goes through

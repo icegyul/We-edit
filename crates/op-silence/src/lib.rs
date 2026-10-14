@@ -1,4 +1,4 @@
-//! Silence, filler words and repeated takes for OpenPremier, in pure Rust.
+//! Silence, filler words and repeated takes for We edit, in pure Rust.
 //!
 //! Detection comes in two families that can be combined:
 //!

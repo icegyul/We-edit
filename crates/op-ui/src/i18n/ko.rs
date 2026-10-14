@@ -1725,7 +1725,6 @@ pub static KO: &[(&str, &str)] = &[
     ("Hop", "홉"),
     ("Highlighter", "형광펜"),
     ("Glow Pulse", "글로우 펄스"),
-    ("Based on OpenPremier, free software.", "무료 소프트웨어 OpenPremier를 기반으로 합니다."),
     ("Synchronize...", "동기화..."),
     ("Synchronize Clips", "클립 동기화"),
     ("Clip Start", "시작 클립"),

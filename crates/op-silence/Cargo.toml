@@ -1,6 +1,6 @@
 [package]
 name = "op-silence"
-description = "OpenPremier silence, filler-word and repeated-take detection (pure Rust)"
+description = "We edit silence, filler-word and repeated-take detection (pure Rust)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

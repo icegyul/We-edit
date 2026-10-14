@@ -1,6 +1,6 @@
 [package]
 name = "op-speech"
-description = "OpenPremier speech recognition for captions: local Whisper models through candle"
+description = "We edit speech recognition for captions: local Whisper models through candle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,6 +1,6 @@
 # Clean-room interoperability policy
 
-OpenPremier documents and reimplements observable behavior and interoperability formats without using Adobe source code or protected implementation assets. This policy is not legal advice.
+We edit documents and reimplements observable behavior and interoperability formats without using Adobe source code or protected implementation assets. This policy is not legal advice.
 
 ## Allowed research
 

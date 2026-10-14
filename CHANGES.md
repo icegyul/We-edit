@@ -52,5 +52,5 @@ We edit는 **OpenPremier 0.9.0**(커밋 `cda185d`)을 바탕으로 합니다. �
 - **ComfyUI** 패널 (`comfy.rs`, `comfy_panel.rs`, `comfy_packs.rs`): 시작/중지, Z-Image Turbo·Krea 2 Turbo·MiniMax H3 생성, Krea 2 모델 설치.
 
 ### 문서·기타
-- README를 한국어로 다시 썼고, 원본 README는 `docs/OPENPREMIER_README.es.md`로 옮겼습니다.
+- README를 한국어로 다시 썼고, 원본 README는 `docs/UPSTREAM_README.es.md`로 옮겼습니다.
 - `helper/transcribe.py`: faster-whisper 받아쓰기 도우미.

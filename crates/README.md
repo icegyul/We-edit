@@ -11,7 +11,7 @@ editing policy toward application services and UI:
 - `op-audio`: mixer, DSP, meters, and device output;
 - `op-application`: editor state, commands, playback, autosave, and export;
 - `op-ui`: egui panels, docking, monitors, timeline, dialogs, and localization;
-- `openpremier`: executable, diagnostics, portable mode, and packaged self-test.
+- `weedit`: executable, diagnostics, portable mode, and packaged self-test.
 
 Use the root `cargo xtask` commands so native FFmpeg and libclang paths are configured correctly.
 All workspace crates are currently private implementation units and cannot be published to

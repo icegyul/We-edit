@@ -70,7 +70,7 @@ priority. Items move from "Next" to "Done" in the release that ships them.
 
 ### AI assistants (0.8)
 
-- `OpenPremier --mcp`: the Model Context Protocol for Claude Code, Codex and other clients, with
+- `We edit --mcp`: the Model Context Protocol for Claude Code, Codex and other clients, with
   28 tools for media, editing, effects, titles, captions, frames and export; live in the open
   window when the user allows it. See [assistants.md](assistants.md).
 

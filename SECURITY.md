@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-OpenPremier is currently a technical alpha. Security fixes target the latest commit and most
+We edit is currently a technical alpha. Security fixes target the latest commit and most
 recent 0.1.x prerelease; older snapshots are not maintained.
 
 ## Reporting a vulnerability

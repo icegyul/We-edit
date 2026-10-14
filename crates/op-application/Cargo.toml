@@ -1,6 +1,6 @@
 [package]
 name = "op-application"
-description = "OpenPremier application services: editor state, commands, media service, playback, export, autosave, preferences"
+description = "We edit application services: editor state, commands, media service, playback, export, autosave, preferences"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

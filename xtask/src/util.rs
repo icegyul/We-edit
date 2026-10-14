@@ -10,9 +10,10 @@ use sha2::{Digest, Sha256};
 
 pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub const APP_NAME: &str = "OpenPremier";
-pub const APP_ID: &str = "io.github.openpremier.OpenPremier";
-pub const BIN: &str = "openpremier";
+pub const APP_NAME: &str = "We edit";
+pub const FILE_NAME: &str = "We-edit";
+pub const APP_ID: &str = "io.github.icegyul.WeEdit";
+pub const BIN: &str = "weedit";
 
 /// Repository root.
 pub fn root() -> PathBuf {

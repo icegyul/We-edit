@@ -1,6 +1,6 @@
 # Technical documentation
 
-OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the plan, the implemented architecture and how it is tested.
+We edit 0.7.0 is an early alpha with working builds for Windows, Linux and macOS. This documentation records the plan, the implemented architecture and how it is tested.
 
 ## Project documentation
 
@@ -23,6 +23,6 @@ OpenPremier 0.7.0 is an early alpha with working builds for Windows, Linux and m
 
 ## Clean-room policy
 
-OpenPremier is developed independently and contains no code, assets or data taken from Adobe
+We edit is developed independently and contains no code, assets or data taken from Adobe
 products; see [legal/clean-room.md](legal/clean-room.md). Notes from studying other products are
 kept outside this repository.

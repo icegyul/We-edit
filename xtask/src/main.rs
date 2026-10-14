@@ -15,14 +15,14 @@ const HELP: &str = "\
 cargo xtask <task>
 
   deps              download FFmpeg 8.1 (and libclang on Windows) into third_party/
-  build [--release] build OpenPremier
-  run [args]        build and start OpenPremier (release profile)
+  build [--release] build We edit
+  run [args]        build and start We edit (release profile)
   test              run every test
   lint              rustfmt check and clippy with warnings as errors
   cargo <args>      run cargo with the native dependencies configured
   dist              release build and packages in dist/:
-                      Windows: OpenPremier-<version>-windows-x64.zip
-                      Linux:   OpenPremier-<version>-x86_64.AppImage
+                      Windows: We-edit-<version>-windows-x64.zip
+                      Linux:   We-edit-<version>-x86_64.AppImage
   appimage          the Linux AppImage (on Windows, through the WSL build distro)
   release <version> check, tag and publish a GitHub release with the packages (asks first)
 ";

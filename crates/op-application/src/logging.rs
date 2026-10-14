@@ -118,7 +118,7 @@ impl log::Log for Logger {
         // other libraries only report problems: at the most detailed levels the windowing and
         // graphics libraries write thousands of lines a second (gigabytes in minutes);
         // WEEDIT_LOG_LIBRARIES=1 lets them through for debugging those libraries
-        let ours = m.target().starts_with("op_") || m.target().starts_with("openpremier");
+        let ours = m.target().starts_with("op_") || m.target().starts_with("weedit");
         if ours || *ALL_LIBRARIES {
             return true;
         }

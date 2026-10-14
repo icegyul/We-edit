@@ -1,6 +1,6 @@
 [package]
 name = "op-render"
-description = "OpenPremier GPU compositor: color conversion, effects, blend modes, transitions, graphics and scopes (wgpu)"
+description = "We edit GPU compositor: color conversion, effects, blend modes, transitions, graphics and scopes (wgpu)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

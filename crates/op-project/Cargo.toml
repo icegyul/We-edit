@@ -1,6 +1,6 @@
 [package]
 name = "op-project"
-description = "OpenPremier project files: native format, read-only .prproj import, OTIO, FCP 7 XML and EDL interchange"
+description = "We edit project files: native format, read-only .prproj import, OTIO, FCP 7 XML and EDL interchange"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

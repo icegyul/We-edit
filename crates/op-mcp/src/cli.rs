@@ -1,4 +1,4 @@
-//! `OpenPremier --remove-silence input output [options]`: cuts the silences (and optionally
+//! `We edit --remove-silence input output [options]`: cuts the silences (and optionally
 //! fillers, repeated words and repeated takes) out of a video or audio file and writes the
 //! result, without opening a window. It runs the same tools assistants use.
 
@@ -9,7 +9,7 @@ use crate::tools;
 
 pub const USAGE: &str = "\
 Usage: We edit --remove-silence <input> <output> [options]
-       openpremier --remove-silence <input>... --out-dir <folder> [options]
+       weedit --remove-silence <input>... --out-dir <folder> [options]
 
   --out-dir <folder>     process every input file (video or audio) into this folder
   --suffix <text>        added to each output's name with --out-dir (default _cut)
