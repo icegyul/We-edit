@@ -1,14 +1,13 @@
 # NOTICE
 
-**We edit** is a modified version of a GPL-3.0-or-later video editor, version 0.9.0 (commit `cda185d`).
+**We edit** is a modified version of a GPL-3.0-or-later video editor, version 0.9.0 (upstream: https://github.com/xXKuroiKenshiXx/OpenPremier, commit `cda185d`).
 The copyright notices of the original work are kept as the license requires: the original work is
-copyright (C) the OpenPremier contributors. Our modifications are listed in CHANGES.md and in this
-repository's commit history. Licensed under the GNU General Public License, version 3 or (at your
-option) any later version. The full license text is in [LICENSE](LICENSE). The history of the
-original project is kept in this repository.
+copyright (C) the OpenPremier contributors. This repository starts from one commit that holds the
+modified version; the commit history of the original project is not included. Our modifications are
+listed in CHANGES.md. Licensed under the GNU General Public License, version 3 or (at your option)
+any later version. The full license text is in [LICENSE](LICENSE).
 
-We edit adds and changes files as listed in [CHANGES.md](CHANGES.md); every changed file is
-marked by the commit history. This program is free software: you can redistribute it and/or modify
+We edit adds and changes files as listed in [CHANGES.md](CHANGES.md). This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by the Free Software Foundation,
 either version 3 of the License, or (at your option) any later version. It is distributed in the
 hope that it will be useful, but WITHOUT ANY WARRANTY.

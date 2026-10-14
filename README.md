@@ -87,7 +87,7 @@ copy helper\transcribe.py <폴더>\helper\transcribe.py
 
 ## 출처와 감사
 
-- 이 저장소는 원 프로젝트의 커밋 이력을 그대로 이어받았습니다. 원 프로젝트의 저작권 표기와 라이선스는 [NOTICE.md](NOTICE.md)와 [LICENSE](LICENSE)에 있습니다.
+- 원 프로젝트의 커밋 기록은 이 저장소에 포함하지 않았습니다. 원 프로젝트의 저작권 표기와 라이선스는 [NOTICE.md](NOTICE.md)와 [LICENSE](LICENSE)에 있습니다.
 - Adobe 및 Premiere Pro는 Adobe Inc.의 상표이며, We edit는 Adobe와 관계없는 독립 프로젝트입니다.
 - 이 프로젝트의 바탕이 된 GPL-3.0-or-later 오픈소스 영상 편집기 (저작권 표기는 [NOTICE.md](NOTICE.md)).
 - [FFmpeg](https://ffmpeg.org) — 영상·소리 처리.
