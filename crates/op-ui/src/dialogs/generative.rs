@@ -23,6 +23,9 @@ pub struct GenForm {
     checks: [Option<Check>; 2],
     /// Last answer of a key check: (ok, text).
     notes: [Option<(bool, String)>; 2],
+    /// Keys typed into the video service boxes, and the last answer for each.
+    video_keys: [String; 2],
+    video_notes: [Option<(bool, String)>; 2],
     provider: usize,
     aspect: usize,
     prompt: String,
@@ -38,6 +41,8 @@ impl Default for GenForm {
             keys: [String::new(), String::new()],
             checks: [None, None],
             notes: [None, None],
+            video_keys: [String::new(), String::new()],
+            video_notes: [None, None],
             provider: 0,
             aspect: 0,
             prompt: String::new(),
@@ -104,6 +109,7 @@ pub(super) fn generative_dialog(s: &mut State, ctx: &egui::Context, f: &mut GenF
                 gpu_use(s, ui, f);
                 local_models(s, ui, f);
                 cloud_keys(s, ui, f);
+                video_keys(ui, f);
                 cloud_make(s, ui, f);
             });
         });
@@ -249,6 +255,52 @@ fn local_models(s: &mut State, ui: &mut Ui, f: &mut GenForm) {
             }
         }
         None => {}
+    }
+}
+
+fn video_keys(ui: &mut Ui, f: &mut GenForm) {
+    heading(ui, "동영상 AI (내 API 키)");
+    ui.label(
+        RichText::new("키는 Windows 자격 증명 관리자에만 저장됩니다. 이 키로 동영상을 만드는 기능은 아직 없습니다.")
+            .size(11.0)
+            .color(theme::TEXT_DIM),
+    );
+    for (i, svc) in secrets::VIDEO_SERVICES.iter().enumerate() {
+        ui.add_space(4.0);
+        let saved = secrets::get(svc.secret).is_some();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(svc.label).strong());
+            if saved {
+                ui.label(RichText::new("● 키 저장됨").color(GOOD));
+            } else {
+                ui.label(RichText::new("키 없음").color(theme::WARN));
+            }
+            if !svc.page.is_empty() {
+                ui.hyperlink_to("키 만드는 곳", svc.page);
+            }
+        });
+        ui.label(RichText::new(svc.note).size(11.0).color(theme::TEXT_DIM));
+        ui.horizontal_wrapped(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut f.video_keys[i]).password(true).hint_text("API 키를 붙여넣기").desired_width(260.0));
+            if ui.add_enabled(!f.video_keys[i].trim().is_empty(), egui::Button::new("저장")).clicked() {
+                match secrets::set(svc.secret, &f.video_keys[i]) {
+                    Ok(()) => {
+                        f.video_keys[i].clear();
+                        f.video_notes[i] = Some((true, "저장했습니다".into()));
+                    }
+                    Err(e) => f.video_notes[i] = Some((false, e)),
+                }
+            }
+            if ui.add_enabled(saved, egui::Button::new("삭제")).clicked() {
+                match secrets::delete(svc.secret) {
+                    Ok(()) => f.video_notes[i] = Some((true, "키를 지웠습니다".into())),
+                    Err(e) => f.video_notes[i] = Some((false, e)),
+                }
+            }
+        });
+        if let Some((ok, text)) = &f.video_notes[i] {
+            ui.label(RichText::new(text).color(if *ok { GOOD } else { theme::ERROR }));
+        }
     }
 }
 
