@@ -7,6 +7,7 @@ mod app;
 mod captions_panel;
 mod sounds_panel;
 mod essential_sound;
+mod export_queue_panel;
 mod templates_panel;
 mod color;
 mod comfy_panel;

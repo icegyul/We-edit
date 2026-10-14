@@ -7,13 +7,13 @@ pub const PANEL: Color32 = Color32::from_rgb(0x24, 0x24, 0x28);
 pub const PANEL_DARK: Color32 = Color32::from_rgb(0x19, 0x19, 0x1c);
 pub const RAISED: Color32 = Color32::from_rgb(0x2e, 0x2e, 0x33);
 pub const LINE: Color32 = Color32::from_rgb(0x3a, 0x3a, 0x40);
-pub const TEXT: Color32 = Color32::from_rgb(0xc9, 0xc9, 0xcf);
-pub const TEXT_DIM: Color32 = Color32::from_rgb(0x8a, 0x8a, 0x92);
-pub const TEXT_BRIGHT: Color32 = Color32::from_rgb(0xee, 0xee, 0xf2);
-pub const ACCENT: Color32 = Color32::from_rgb(0x4a, 0x9c, 0xff);
-pub const ACCENT_DIM: Color32 = Color32::from_rgb(0x2a, 0x5a, 0x96);
-pub const VALUE: Color32 = Color32::from_rgb(0x5d, 0xa8, 0xff);
-pub const PLAYHEAD: Color32 = Color32::from_rgb(0x4a, 0x9c, 0xff);
+pub const TEXT: Color32 = Color32::from_rgb(0xdc, 0xdc, 0xe2);
+pub const TEXT_DIM: Color32 = Color32::from_rgb(0x9a, 0x9a, 0xa4);
+pub const TEXT_BRIGHT: Color32 = Color32::from_rgb(0xf8, 0xf8, 0xfc);
+pub const ACCENT: Color32 = Color32::from_rgb(0x2a, 0x8a, 0xff);
+pub const ACCENT_DIM: Color32 = Color32::from_rgb(0x1c, 0x5e, 0xc0);
+pub const VALUE: Color32 = Color32::from_rgb(0x4c, 0xa6, 0xff);
+pub const PLAYHEAD: Color32 = Color32::from_rgb(0x2a, 0x8a, 0xff);
 pub const KEYFRAME: Color32 = Color32::from_rgb(0xd8, 0xd8, 0xdd);
 pub const WARN: Color32 = Color32::from_rgb(0xff, 0xb4, 0x40);
 pub const ERROR: Color32 = Color32::from_rgb(0xff, 0x5a, 0x5a);
@@ -24,7 +24,8 @@ pub const SNAP: Color32 = Color32::from_rgb(0xff, 0xe0, 0x50);
 
 pub fn label_color(l: op_core::Label, dim: bool) -> Color32 {
     let [r, g, b] = if l == op_core::Label::None {
-        [96, 116, 170]
+        // strong blue-violet like a video clip of a media editor: easy to see at a glance
+        [86, 112, 236]
     } else {
         l.rgb()
     };
@@ -37,7 +38,7 @@ pub fn label_color(l: op_core::Label, dim: bool) -> Color32 {
 
 pub fn audio_clip_color(l: op_core::Label) -> Color32 {
     if l == op_core::Label::None {
-        Color32::from_rgb(58, 122, 96)
+        Color32::from_rgb(44, 148, 70)
     } else {
         label_color(l, false)
     }

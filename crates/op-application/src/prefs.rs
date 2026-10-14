@@ -49,6 +49,8 @@ pub struct Preferences {
     pub ui_font: String,
     pub audio_scrubbing: bool,
     pub hardware_encoding: bool,
+    /// Show a picture of the frame while exporting (off by default: reading it back slows the export).
+    pub export_preview: bool,
     pub last_export_dir: Option<PathBuf>,
     pub last_import_dir: Option<PathBuf>,
     /// Write the program log to a file (errors are always kept in memory).
@@ -111,6 +113,7 @@ impl Default for Preferences {
             comfy_port: 8288,
             audio_scrubbing: true,
             hardware_encoding: true,
+            export_preview: false,
             last_export_dir: None,
             last_import_dir: None,
             logging_enabled: true,

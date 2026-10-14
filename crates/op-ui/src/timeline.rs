@@ -87,6 +87,17 @@ enum TlDrag {
         from: Pos2,
         to: Pos2,
     },
+    /// A point of the volume line of an audio clip (or the whole line when it has no points).
+    Volume {
+        clip: ClipId,
+        /// The time of the point being moved; None for a point that is added.
+        from: Option<SrcTime>,
+        time: SrcTime,
+        level: f64,
+        /// A point (true) or the one level of the whole clip (false).
+        point: bool,
+        moved: bool,
+    },
     Hand {
         from: Pos2,
         scroll: f64,
@@ -133,6 +144,10 @@ pub struct TimelineView {
     context: Option<Hit>,
     rename_track: Option<(TrackRef, String)>,
     area_w: f32,
+    /// How the tracks were laid out in the last frame (where a file dropped from outside lands).
+    geo: Option<Geo>,
+    /// The volume point under the last right click (the menu can delete it).
+    context_volume: Option<(ClipId, SrcTime)>,
     /// The time and track under the pointer over the tracks, with the frame it was seen in
     /// (pasting puts media there).
     pointer: Option<(u64, SeqTime, Option<TrackRef>)>,
@@ -141,14 +156,16 @@ pub struct TimelineView {
 impl Default for TimelineView {
     fn default() -> Self {
         TimelineView {
-            video_height: 46.0,
-            audio_height: 46.0,
+            video_height: 54.0,
+            audio_height: 62.0,
             drag: None,
             preview: None,
             snap_at: None,
             context: None,
             rename_track: None,
             area_w: 800.0,
+            geo: None,
+            context_volume: None,
             pointer: None,
         }
     }
@@ -172,6 +189,16 @@ impl TimelineView {
             .map(|(_, t, r)| (t, r))
     }
 
+    /// The time and track (an empty one above or below the others when media dropped there makes
+    /// a new track) at `p`, a point of the window, if it is over the tracks.
+    pub fn drop_target(&self, p: Pos2) -> Option<(SeqTime, Option<TrackRef>)> {
+        let g = self.geo.as_ref()?;
+        if !g.body.contains(p) {
+            return None;
+        }
+        Some((g.t(p.x).max(SeqTime::ZERO), g.row_at(p.y).map(|r| r.r)))
+    }
+
     /// Cancels a drag in progress (Escape). Returns whether there was one.
     pub fn cancel(&mut self) -> bool {
         let had = self.drag.is_some() && !matches!(self.drag, Some(TlDrag::Scrub));
@@ -182,6 +209,7 @@ impl TimelineView {
     }
 }
 
+#[derive(Clone)]
 struct Row {
     r: TrackRef,
     top: f32,
@@ -214,6 +242,7 @@ impl Panes {
     }
 }
 
+#[derive(Clone)]
 struct Geo {
     body: Rect,
     zoom: f64,
@@ -262,9 +291,12 @@ fn track_h(view: &SeqView, tl: &TimelineView, r: TrackRef) -> f32 {
 /// How the height from `top` to `bottom` is shared by the video and the audio tracks. Without a
 /// height set by the bar, everything shows when it fits, else the parts share the room by what
 /// their tracks need.
-fn pane_sizes(seq: &Sequence, tl: &TimelineView, view: &SeqView, top: f32, bottom: f32) -> Panes {
-    let video_content: f32 = (0..seq.video.len()).map(|i| track_h(view, tl, TrackRef::video(i))).sum();
-    let audio_content: f32 = (0..seq.audio.len()).map(|i| track_h(view, tl, TrackRef::audio(i))).sum();
+fn pane_sizes(seq: &Sequence, tl: &TimelineView, view: &SeqView, top: f32, bottom: f32, ghost: bool) -> Panes {
+    // while media is dragged over the timeline, an empty track shows above the video tracks and
+    // below the audio tracks: dropping on it makes the track
+    let (nv, na) = (seq.video.len() + usize::from(ghost), seq.audio.len() + usize::from(ghost));
+    let video_content: f32 = (0..nv).map(|i| track_h(view, tl, TrackRef::video(i))).sum();
+    let audio_content: f32 = (0..na).map(|i| track_h(view, tl, TrackRef::audio(i))).sum();
     let room = (bottom - top - DIVIDER_H).max(0.0);
     let least = MIN_PANE.min(room / 2.0);
     let video_h = if view.split > 0.0 {
@@ -286,14 +318,14 @@ fn pane_sizes(seq: &Sequence, tl: &TimelineView, view: &SeqView, top: f32, botto
     }
 }
 
-fn layout_rows(seq: &Sequence, tl: &TimelineView, view: &SeqView, panes: &Panes) -> Vec<Row> {
+fn layout_rows(seq: &Sequence, tl: &TimelineView, view: &SeqView, panes: &Panes, ghost: bool) -> Vec<Row> {
     let mut out = Vec::new();
     let (vlo, vhi) = (panes.top, panes.top + panes.video_h);
     // the video tracks hang from the bar between video and audio (V1 next to it): when the bar
     // moves down they move down with it. The scroll is how far the tracks were pulled down from
     // there to show the higher ones.
     let mut y = vhi - panes.video_content + view.video_scroll;
-    for i in (0..seq.video.len()).rev() {
+    for i in (0..seq.video.len() + usize::from(ghost)).rev() {
         let r = TrackRef::video(i);
         let h = track_h(view, tl, r);
         out.push(Row { r, top: y, h, lo: vlo, hi: vhi });
@@ -301,7 +333,7 @@ fn layout_rows(seq: &Sequence, tl: &TimelineView, view: &SeqView, panes: &Panes)
     }
     let (alo, ahi) = (panes.audio_top(), panes.audio_top() + panes.audio_h);
     let mut y = alo - view.scroll_y;
-    for i in 0..seq.audio.len() {
+    for i in 0..seq.audio.len() + usize::from(ghost) {
         let r = TrackRef::audio(i);
         let h = track_h(view, tl, r);
         out.push(Row { r, top: y, h, lo: alo, hi: ahi });
@@ -425,6 +457,9 @@ fn apply(
         TlDrag::Roll {
             track, cut, delta, ..
         } => tl::roll(p, sid, *track, *cut, *delta, opts).map(|_| None),
+        TlDrag::Volume { clip, from, time, level, point, .. } => {
+            volume_set(p, sid, *clip, *from, *time, *level, *point).map(|_| None)
+        }
         TlDrag::Slip { clip, delta, .. } => tl::slip(p, sid, *clip, *delta, opts).map(|_| None),
         TlDrag::Slide { clip, delta, .. } => tl::slide(p, sid, *clip, *delta, opts).map(|_| None),
         TlDrag::Transition {
@@ -432,6 +467,164 @@ fn apply(
         } => tl::set_transition_timing(p, sid, *id, Some(*start + *delta), None).map(|_| None),
         _ => Err(EditError::Nothing),
     }
+}
+
+// ------------------------------------------------------------------------ volume line
+
+const VOL_MIN_DB: f64 = -60.0;
+const VOL_MAX_DB: f64 = 15.0;
+/// Tracks shorter than this do not show the volume line.
+const VOL_MIN_ROW: f32 = 40.0;
+
+fn volume_param(c: &Clip) -> Option<&Param> {
+    c.component(catalog::VOLUME)?.param("level")
+}
+
+/// Whether a clip shows its volume line: audio at normal speed on a track tall enough.
+fn shows_volume(row: &Row, c: &Clip) -> bool {
+    c.kind == TrackKind::Audio && row.h >= VOL_MIN_ROW && c.speed.is_normal() && !c.reverse && c.hold.is_none() && volume_param(c).is_some()
+}
+
+/// Where the line can run: the clip, below its name.
+fn volume_band(row: &Row, c: &Clip, g: &Geo) -> Rect {
+    Rect::from_min_max(pos2(g.x(c.start), row.top + 16.0), pos2(g.x(c.end()), row.top + row.h - 4.0))
+}
+
+fn db_to_y(db: f64, band: Rect) -> f32 {
+    let f = ((db - VOL_MIN_DB) / (VOL_MAX_DB - VOL_MIN_DB)).clamp(0.0, 1.0) as f32;
+    band.max.y - f * band.height()
+}
+
+fn y_to_db(y: f32, band: Rect) -> f64 {
+    let f = ((band.max.y - y) / band.height().max(1.0)).clamp(0.0, 1.0) as f64;
+    let db = VOL_MIN_DB + f * (VOL_MAX_DB - VOL_MIN_DB);
+    // close to unity gain it sticks to 0 dB
+    if db.abs() < 1.0 { 0.0 } else { db }
+}
+
+fn vol_x(c: &Clip, g: &Geo, t: SrcTime) -> f32 {
+    g.x(c.start + (t - c.source_in))
+}
+
+fn vol_time(c: &Clip, g: &Geo, x: f32) -> SrcTime {
+    let at = g.t(x).clamp(c.start, c.end());
+    c.source_in + (at - c.start)
+}
+
+/// The line and its points on an audio clip.
+fn draw_volume(painter: &egui::Painter, g: &Geo, row: &Row, c: &Clip) {
+    if !shows_volume(row, c) {
+        return;
+    }
+    let Some(prm) = volume_param(c) else { return };
+    let band = volume_band(row, c, g);
+    let (xa, xb) = (band.min.x.max(g.body.min.x), band.max.x.min(g.body.max.x));
+    if xb <= xa {
+        return;
+    }
+    let mut pts = Vec::new();
+    let mut x = xa;
+    while x < xb {
+        pts.push(pos2(x, db_to_y(prm.value_at(vol_time(c, g, x)).as_f64(), band)));
+        x += 3.0;
+    }
+    pts.push(pos2(xb, db_to_y(prm.value_at(vol_time(c, g, xb)).as_f64(), band)));
+    painter.add(egui::Shape::line(pts, Stroke::new(1.5, Color32::from_rgb(0xf2, 0xf2, 0xf6))));
+    if prm.is_animated() {
+        for k in &prm.keys {
+            let q = pos2(vol_x(c, g, k.time), db_to_y(k.value.as_f64(), band));
+            if q.x >= xa - 4.0 && q.x <= xb + 4.0 {
+                painter.circle_filled(q, 3.5, Color32::from_rgb(0xf2, 0xf2, 0xf6));
+                painter.circle_stroke(q, 3.5, Stroke::new(1.0, Color32::from_black_alpha(160)));
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum VolHit {
+    Point(usize),
+    Line,
+}
+
+fn volume_hit(row: &Row, c: &Clip, g: &Geo, pos: Pos2) -> Option<VolHit> {
+    if !shows_volume(row, c) || pos.x < g.x(c.start) || pos.x > g.x(c.end()) {
+        return None;
+    }
+    let prm = volume_param(c)?;
+    let band = volume_band(row, c, g);
+    if prm.is_animated() {
+        for (i, k) in prm.keys.iter().enumerate() {
+            let q = pos2(vol_x(c, g, k.time), db_to_y(k.value.as_f64(), band));
+            if q.distance(pos) <= 7.0 {
+                return Some(VolHit::Point(i));
+            }
+        }
+    }
+    let y = db_to_y(prm.value_at(vol_time(c, g, pos.x)).as_f64(), band);
+    ((pos.y - y).abs() <= 5.0).then_some(VolHit::Line)
+}
+
+/// Pressing on the volume line or one of its points: a point moves in time and level, the line of
+/// a clip without points moves in level (with Ctrl it adds a point), and on a line with points a
+/// press adds one and drags it.
+fn volume_drag(seq: &Sequence, g: &Geo, h: Hit, p: Pos2, m: Modifiers) -> Option<TlDrag> {
+    let Hit::Clip { id, track, zone: Zone::Body } = h else { return None };
+    let row = g.row_of(track)?;
+    let c = seq.clip(id)?;
+    let hit = volume_hit(row, c, g, p)?;
+    let prm = volume_param(c)?;
+    let t = vol_time(c, g, p.x);
+    let level = prm.value_at(t).as_f64();
+    Some(match hit {
+        VolHit::Point(i) => TlDrag::Volume {
+            clip: id,
+            from: Some(prm.keys[i].time),
+            time: prm.keys[i].time,
+            level: prm.keys[i].value.as_f64(),
+            point: true,
+            moved: false,
+        },
+        VolHit::Line => TlDrag::Volume { clip: id, from: None, time: t, level, point: prm.is_animated() || m.command, moved: false },
+    })
+}
+
+/// Sets the volume of a clip: its one level, or a point (moving the one at `from` when given).
+/// A clip with one level gets a point at each end first, so the line keeps its level elsewhere.
+fn volume_set(p: &mut Project, sid: SequenceId, clip: ClipId, from: Option<SrcTime>, time: SrcTime, level: f64, point: bool) -> EditResult<()> {
+    let c = p.sequence_mut(sid).and_then(|q| q.clip_mut(clip)).ok_or(EditError::Nothing)?;
+    let (start, end) = (c.source_in, c.source_in + c.duration);
+    let prm = c.component_mut(catalog::VOLUME).and_then(|x| x.param_mut("level")).ok_or(EditError::Nothing)?;
+    let level = level.clamp(-96.0, VOL_MAX_DB);
+    if !point && !prm.is_animated() {
+        prm.value = Value::Float(level);
+        return Ok(());
+    }
+    if !prm.is_animated() {
+        let v = prm.value.clone();
+        prm.animated = true;
+        prm.keys = vec![Keyframe::new(start, v.clone(), Interp::Linear), Keyframe::new(end, v, Interp::Linear)];
+    }
+    if let Some(t0) = from {
+        prm.keys.retain(|k| k.time != t0);
+    }
+    prm.set_at(time, Value::Float(level), Interp::Linear);
+    prm.sort_keys();
+    Ok(())
+}
+
+fn volume_delete(p: &mut Project, sid: SequenceId, clip: ClipId, time: SrcTime) -> EditResult<()> {
+    let c = p.sequence_mut(sid).and_then(|q| q.clip_mut(clip)).ok_or(EditError::Nothing)?;
+    let prm = c.component_mut(catalog::VOLUME).and_then(|x| x.param_mut("level")).ok_or(EditError::Nothing)?;
+    let before = prm.keys.len();
+    prm.keys.retain(|k| k.time != time);
+    if prm.keys.len() == before {
+        return Err(EditError::Nothing);
+    }
+    if prm.keys.is_empty() {
+        prm.animated = false;
+    }
+    Ok(())
 }
 
 fn changed(d: &TlDrag) -> bool {
@@ -444,6 +637,7 @@ fn changed(d: &TlDrag) -> bool {
         | TlDrag::Slip { delta, .. }
         | TlDrag::Slide { delta, .. }
         | TlDrag::Transition { delta, .. } => delta.0 != 0,
+        TlDrag::Volume { moved, .. } => *moved,
         _ => false,
     }
 }
@@ -471,6 +665,7 @@ fn label(d: &TlDrag) -> &'static str {
         TlDrag::Slip { .. } => "Slip",
         TlDrag::Slide { .. } => "Slide",
         TlDrag::Transition { .. } => "Transition Duration",
+        TlDrag::Volume { .. } => "Audio Gain",
         _ => "",
     }
 }
@@ -542,14 +737,15 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         Some(q) => q.clone(),
         None => s.ed.project.sequence(sid).unwrap().clone(),
     };
-    let panes = pane_sizes(&shown, &s.tl, &view, area.min.y, area.max.y);
+    let ghost = matches!(s.drag, Some(Drag::Items(_))) || ui.ctx().input(|i| !i.raw.hovered_files.is_empty());
+    let panes = pane_sizes(&shown, &s.tl, &view, area.min.y, area.max.y, ghost);
     view.video_scroll = view
         .video_scroll
         .clamp(0.0, (panes.video_content - panes.video_h).max(0.0));
     view.scroll_y = view
         .scroll_y
         .clamp(0.0, (panes.audio_content - panes.audio_h).max(0.0));
-    let rows = layout_rows(&shown, &s.tl, &view, &panes);
+    let rows = layout_rows(&shown, &s.tl, &view, &panes, ghost);
     let g = Geo {
         body: area,
         zoom: view.zoom.max(0.01),
@@ -611,6 +807,7 @@ pub fn show(s: &mut State, ui: &mut Ui) {
         }
     }
     *s.ed.view(sid) = view;
+    s.tl.geo = Some(g);
 }
 
 // ------------------------------------------------------------------------------- sections
@@ -1191,9 +1388,32 @@ fn headers(
         });
     }
     ui.set_clip_rect(saved_clip);
+    // the empty track shown while media is dragged over the timeline
+    for row in &g.rows {
+        if seq.track(row.r).is_some() {
+            continue;
+        }
+        let r = Rect::from_min_size(pos2(area.min.x, row.top), vec2(area.width(), row.h));
+        let clip = row_clip(area, row);
+        if !r.intersects(clip) {
+            continue;
+        }
+        let painter = painter.with_clip_rect(clip);
+        painter.rect_filled(r.shrink2(vec2(0.0, 0.5)), 0.0, Color32::from_rgba_unmultiplied(74, 156, 255, 26));
+        painter.text(
+            pos2(r.min.x + 12.0, r.center().y),
+            Align2::LEFT_CENTER,
+            format!("＋ {}", track_label(row.r)),
+            FontId::proportional(12.0),
+            theme::ACCENT,
+        );
+    }
     // the lower edge of a track header: drag it down and the track above it grows (the waveform
     // of an audio track grows with it)
     for row in &g.rows {
+        if seq.track(row.r).is_none() {
+            continue;
+        }
         let clip = row_clip(area, row);
         let y = row.top + row.h;
         if y < clip.min.y || y > clip.max.y {
@@ -1234,12 +1454,15 @@ fn clip_colors(c: &Clip, selected: bool) -> (Color32, Color32) {
     let fill = if !c.enabled {
         Color32::from_gray(70)
     } else if selected {
-        base.linear_multiply(1.15)
+        // lighter and clearly outlined
+        let lift = |v: u8| (v as f32 + (255.0 - v as f32) * 0.28) as u8;
+        Color32::from_rgb(lift(base.r()), lift(base.g()), lift(base.b()))
     } else {
+        // the label colour almost as it is: strong colours are easy to read
         Color32::from_rgb(
-            (base.r() as f32 * 0.72) as u8,
-            (base.g() as f32 * 0.72) as u8,
-            (base.b() as f32 * 0.72) as u8,
+            (base.r() as f32 * 0.9) as u8,
+            (base.g() as f32 * 0.9) as u8,
+            (base.b() as f32 * 0.9) as u8,
         )
     };
     let stroke = if selected {
@@ -1302,8 +1525,11 @@ fn draw_clip(
                 );
             }
         }
-    } else if profile.waveforms && row.h >= 24.0 {
-        waveform(s, &inner, g, r, c);
+    } else {
+        if profile.waveforms && row.h >= 24.0 {
+            waveform(s, &inner, g, r, c);
+        }
+        draw_volume(&inner, g, row, c);
     }
     let mut name = c.name.clone();
     if !c.speed.is_normal() || c.reverse {
@@ -1351,7 +1577,7 @@ fn draw_clip(
     painter.rect_stroke(
         r,
         2.0,
-        Stroke::new(if selected { 1.5 } else { 1.0 }, stroke),
+        Stroke::new(if selected { 2.0 } else { 1.0 }, stroke),
         StrokeKind::Inside,
     );
 }
@@ -1373,7 +1599,7 @@ fn waveform(s: &State, painter: &egui::Painter, g: &Geo, r: Rect, c: &Clip) {
     let gain = 10f32.powf(c.gain_db as f32 / 20.0);
     let x0 = r.min.x.max(g.body.min.x).floor() as i32;
     let x1 = r.max.x.min(g.body.max.x).ceil() as i32;
-    let color = Color32::from_rgba_unmultiplied(230, 250, 240, 170);
+    let color = Color32::from_rgba_unmultiplied(196, 246, 160, 235);
     let mut shapes = Vec::with_capacity((x1 - x0).max(0) as usize);
     for x in x0..x1 {
         let (ta, tb) = (g.t(x as f32), g.t(x as f32 + 1.0));
@@ -1491,7 +1717,22 @@ fn body(s: &mut State, ui: &mut Ui, g: &Geo, sid: SequenceId, seq: &Sequence, vi
         if row.top > clip.max.y || row.top + row.h < clip.min.y {
             continue;
         }
-        let Some(tr) = seq.track(row.r) else { continue };
+        let Some(tr) = seq.track(row.r) else {
+            // the empty track to drop on: a dashed outline and what it does
+            let r = Rect::from_min_max(pos2(area.min.x + 2.0, row.top + 2.0), pos2(area.max.x - 2.0, row.top + row.h - 2.0));
+            let p = painter.with_clip_rect(clip);
+            p.rect_filled(r, 3.0, Color32::from_rgba_unmultiplied(74, 156, 255, 18));
+            let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+            p.add(egui::Shape::dashed_line(&pts, Stroke::new(1.0, theme::ACCENT_DIM), 6.0, 4.0));
+            p.text(
+                pos2(r.min.x + 14.0, r.center().y),
+                Align2::LEFT_CENTER,
+                format!("여기에 놓으면 새 트랙 {}이(가) 만들어집니다", track_label(row.r)),
+                FontId::proportional(12.0),
+                theme::ACCENT,
+            );
+            continue;
+        };
         let painter = painter.with_clip_rect(clip);
         for c in &tr.clips {
             draw_clip(s, ui, &painter, g, row, c, selection.clips.contains(&c.id));
@@ -1662,6 +1903,11 @@ fn input(
             (Tool::Razor, _) => Some(CursorIcon::None),
             (Tool::Slip | Tool::Slide, Hit::Clip { .. }) => Some(CursorIcon::ResizeColumn),
             (_, Hit::Clip { zone: Zone::Cut, .. }) => Some(CursorIcon::ResizeColumn),
+            (Tool::Selection, Hit::Clip { id, track, zone: Zone::Body })
+                if seq.clip(id).zip(g.row_of(track)).is_some_and(|(c, row)| volume_hit(row, c, g, p).is_some()) =>
+            {
+                Some(CursorIcon::PointingHand)
+            }
             (
                 _,
                 Hit::Clip {
@@ -1690,7 +1936,9 @@ fn input(
         let h = hit(&seq, g, p);
         let tt = g.t(p.x);
         let clip_of = |id: ClipId| seq.clip(id).cloned();
+        let volume = if tool == Tool::Selection { volume_drag(&seq, g, h, p, m) } else { None };
         s.tl.drag = match (tool, h) {
+            _ if volume.is_some() => volume,
             (Tool::Hand, _) => Some(TlDrag::Hand {
                 from: p,
                 scroll: view.scroll,
@@ -1874,6 +2122,17 @@ fn input(
                     view.scroll_y = (*scroll_y - (p.y - from.y)).clamp(0.0, (pn.audio_content - pn.audio_h).max(0.0));
                 }
             }
+            TlDrag::Volume { clip, time, level, point, moved, .. } => {
+                if let Some((r, c)) = seq.find_clip(*clip)
+                    && let Some(row) = g.row_of(r)
+                {
+                    *level = y_to_db(p.y, volume_band(row, c, g));
+                    if *point {
+                        *time = vol_time(c, g, p.x);
+                    }
+                    *moved = true;
+                }
+            }
             TlDrag::Marquee { to, .. } => *to = p,
             TlDrag::Move {
                 clips,
@@ -2016,6 +2275,25 @@ fn input(
     {
         let h = hit(&seq, g, p);
         let tt = g.t(p.x);
+        if tool == Tool::Selection
+            && let Hit::Clip { id, track, zone: Zone::Body } = h
+            && let Some((c, row)) = seq.clip(id).zip(g.row_of(track))
+            && let Some(vh) = volume_hit(row, c, g, p)
+        {
+            match vh {
+                VolHit::Point(i) if m.alt => {
+                    if let Some(t0) = volume_param(c).map(|x| x.keys[i].time) {
+                        s.ed.seq_edit("Audio Gain", |pr, sid, _| volume_delete(pr, sid, id, t0));
+                    }
+                }
+                VolHit::Line if m.command => {
+                    let (t, level) = (vol_time(c, g, p.x), y_to_db(p.y, volume_band(row, c, g)));
+                    s.ed.seq_edit("Audio Gain", |pr, sid, _| volume_set(pr, sid, id, None, t, level, true));
+                }
+                _ => {}
+            }
+            return;
+        }
         match (tool, h) {
             (Tool::Razor, Hit::Clip { id, .. }) => {
                 let at = razor_time(s, &seq, g, p.x);
@@ -2079,6 +2357,10 @@ fn input(
         && let Some(p) = resp.interact_pointer_pos()
     {
         match hit(&seq, g, p) {
+            Hit::Clip { id, zone: Zone::Cut, .. } => {
+                // double-click on the cut: a dissolve on it, and a crossfade on its sound
+                s.ed.add_dissolve_at_cut(id, true, None);
+            }
             Hit::Clip { id, .. } => {
                 if let Some(c) = seq.clip(id).cloned() {
                     match c.source {
@@ -2122,6 +2404,13 @@ fn input(
             s.ed.selection.gap = Some((r, at));
         }
         s.tl.context = Some(h);
+        s.tl.context_volume = match h {
+            Hit::Clip { id, track, zone: Zone::Body } => seq.clip(id).zip(g.row_of(track)).and_then(|(c, row)| match volume_hit(row, c, g, p) {
+                Some(VolHit::Point(i)) => volume_param(c).map(|x| (id, x.keys[i].time)),
+                _ => None,
+            }),
+            _ => None,
+        };
     }
     let ctx_hit = s.tl.context;
     resp.context_menu(|ui| context_menu(s, ui, ctx_hit));
@@ -2140,7 +2429,31 @@ fn context_menu(s: &mut State, ui: &mut Ui, h: Option<Hit>) {
         }
     };
     match h {
-        Some(Hit::Clip { id, .. }) => {
+        Some(Hit::Clip { id, zone, .. }) => {
+            // the cut between two clips: the dissolve (video) and crossfade (sound) on it
+            if zone == Zone::Cut {
+                if ui.button("컷에 디졸브 넣기 (영상과 소리 모두)").clicked() {
+                    s.ed.add_dissolve_at_cut(id, true, None);
+                    ui.close();
+                }
+                if ui.button("영상 디졸브만").clicked() {
+                    s.ed.add_dissolve_at_cut(id, true, Some(TrackKind::Video));
+                    ui.close();
+                }
+                if ui.button("소리 크로스페이드만").clicked() {
+                    s.ed.add_dissolve_at_cut(id, true, Some(TrackKind::Audio));
+                    ui.close();
+                }
+                ui.separator();
+            }
+            // a point of the volume line
+            if let Some((vclip, vtime)) = s.tl.context_volume
+                && ui.button("볼륨 점 삭제").clicked()
+            {
+                s.ed.seq_edit("Audio Gain", |pr, sid, _| volume_delete(pr, sid, vclip, vtime));
+                s.tl.context_volume = None;
+                ui.close();
+            }
             run(s, ui, "Cut", "cmd.edit.cut");
             run(s, ui, "Copy", "cmd.edit.copy");
             run(s, ui, "Paste Attributes...", "cmd.edit.pasteattributes");
@@ -2726,8 +3039,8 @@ mod layout_tests {
 
     fn geo(seq: &Sequence, view: &SeqView, top: f32, bottom: f32) -> Geo {
         let tl = TimelineView::default();
-        let panes = pane_sizes(seq, &tl, view, top, bottom);
-        let rows = layout_rows(seq, &tl, view, &panes);
+        let panes = pane_sizes(seq, &tl, view, top, bottom, false);
+        let rows = layout_rows(seq, &tl, view, &panes, false);
         Geo { body: Rect::from_min_max(pos2(100.0, top), pos2(900.0, bottom)), zoom: 40.0, scroll: 0.0, rows, panes }
     }
 
@@ -2738,9 +3051,9 @@ mod layout_tests {
         let (nv, na) = (seq.video.len() as f32, seq.audio.len() as f32);
         let g = geo(seq, &SeqView::default(), 0.0, 1000.0);
         // video part exactly as tall as its tracks, the bar, then the audio part
-        assert_eq!(g.panes.video_h, nv * 46.0);
-        assert_eq!(g.panes.audio_top(), nv * 46.0 + DIVIDER_H);
-        assert!(g.panes.audio_h >= na * 46.0);
+        assert_eq!(g.panes.video_h, nv * TimelineView::default().video_height);
+        assert_eq!(g.panes.audio_top(), nv * TimelineView::default().video_height + DIVIDER_H);
+        assert!(g.panes.audio_h >= na * TimelineView::default().audio_height);
         // the highest video track is at the top
         assert_eq!(g.rows[0].r, TrackRef::video(seq.video.len() - 1));
         assert_eq!(g.rows[0].top, 0.0);
@@ -2761,7 +3074,7 @@ mod layout_tests {
         let nv = seq.video.len() as f32;
         // the bar dragged down: more room than the tracks need
         let mut view = SeqView::default();
-        view.split = nv * 46.0 + 100.0;
+        view.split = nv * TimelineView::default().video_height + 100.0;
         let g = geo(seq, &view, 0.0, 1000.0);
         let v1 = g.rows.iter().find(|r| r.r == TrackRef::video(0)).unwrap();
         assert!((v1.top + v1.h - g.panes.video_h).abs() < 0.01, "V1 sits against the bar");
@@ -2800,6 +3113,74 @@ mod layout_tests {
         }
         // a click in the video part finds a video track
         assert_eq!(g.row_at(10.0).map(|r| r.r.kind), Some(TrackKind::Video));
+    }
+
+    #[test]
+    fn the_volume_line_takes_a_level_points_and_deletes_them() {
+        let mut p = Project::new("t");
+        let root = p.root;
+        let tone = p.add_item(
+            root,
+            "Tone",
+            ItemKind::Synthetic { generator: Generator::BarsAndTone, duration: Dur::from_seconds(60.0) },
+        );
+        let (sid, _) = p.add_sequence(root, "S", SequenceSettings::default());
+        let mut spec = SourceClip::from_item(&p, tone).unwrap();
+        spec.range = SrcRange::new(SrcTime::ZERO, SrcTime::from_seconds(10.0));
+        let (mut p, ids) = p
+            .transact(|p| overwrite(p, sid, &spec, SeqTime::ZERO, &Patch { video: None, audio: vec![Some(0)] }, EditOptions::default()))
+            .unwrap();
+        let clip = ids[0];
+        let level = |p: &Project, t: f64| {
+            let c = p.sequence(sid).unwrap().clip(clip).unwrap();
+            volume_param(c).unwrap().value_at(SrcTime::from_seconds(t)).as_f64()
+        };
+        // the one level of the whole clip
+        volume_set(&mut p, sid, clip, None, SrcTime::ZERO, -6.0, false).unwrap();
+        assert_eq!(level(&p, 3.0), -6.0);
+        // a point in the middle: the ends keep the level, the point is where it was put
+        volume_set(&mut p, sid, clip, None, SrcTime::from_seconds(5.0), -30.0, true).unwrap();
+        let prm = |p: &Project| volume_param(p.sequence(sid).unwrap().clip(clip).unwrap()).unwrap().clone();
+        assert!(prm(&p).is_animated());
+        assert_eq!(prm(&p).keys.len(), 3);
+        assert_eq!(level(&p, 0.0), -6.0);
+        assert_eq!(level(&p, 10.0), -6.0);
+        assert_eq!(level(&p, 5.0), -30.0);
+        assert!(level(&p, 2.5) < -6.0 && level(&p, 2.5) > -30.0, "linear between the points");
+        // the point moved in time and level
+        volume_set(&mut p, sid, clip, Some(SrcTime::from_seconds(5.0)), SrcTime::from_seconds(6.0), -20.0, true).unwrap();
+        assert_eq!(prm(&p).keys.len(), 3);
+        assert_eq!(level(&p, 6.0), -20.0);
+        // deleted again: the points go, the clip is a flat line again at the end
+        volume_delete(&mut p, sid, clip, SrcTime::from_seconds(6.0)).unwrap();
+        assert_eq!(prm(&p).keys.len(), 2);
+        assert!(volume_delete(&mut p, sid, clip, SrcTime::from_seconds(6.0)).is_err());
+    }
+
+    #[test]
+    fn an_empty_track_shows_while_media_is_dragged_over_the_timeline() {
+        let (p, sid) = sequence_with_two_clips();
+        let seq = p.sequence(sid).unwrap();
+        let (nv, na) = (seq.video.len(), seq.audio.len());
+        let tl = TimelineView::default();
+        let view = SeqView::default();
+        let panes = pane_sizes(seq, &tl, &view, 0.0, 1000.0, true);
+        let rows = layout_rows(seq, &tl, &view, &panes, true);
+        assert_eq!(rows.len(), nv + na + 2);
+        // the empty video track is the first row (above V-top), the empty audio one the last
+        assert_eq!(rows[0].r, TrackRef::video(nv));
+        assert!(seq.track(rows[0].r).is_none());
+        assert_eq!(rows.last().unwrap().r, TrackRef::audio(na));
+        assert!(seq.track(rows.last().unwrap().r).is_none());
+        // a drop there names the track that does not exist yet
+        let g = Geo { body: Rect::from_min_max(pos2(100.0, 0.0), pos2(900.0, 1000.0)), zoom: 40.0, scroll: 0.0, rows, panes };
+        assert_eq!(g.row_at(5.0).map(|r| r.r), Some(TrackRef::video(nv)));
+        let mut view = TimelineView::default();
+        view.geo = Some(g);
+        let (t, track) = view.drop_target(pos2(500.0, 5.0)).unwrap();
+        assert_eq!(track, Some(TrackRef::video(nv)));
+        assert!((t.seconds() - 10.0).abs() < 0.01, "{}", t.seconds());
+        assert!(view.drop_target(pos2(50.0, 5.0)).is_none(), "outside the tracks");
     }
 
     #[test]

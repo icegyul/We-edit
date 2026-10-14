@@ -26,6 +26,22 @@ pub struct ExportSettings {
     pub audio: Option<AudioSettings>,
 }
 
+/// How an export runs, besides what it makes.
+#[derive(Clone, Copy, Debug)]
+pub struct ExportOptions {
+    /// Show a small picture of the frame being rendered (a few times per second: reading it back
+    /// from the graphics card stops the rendering for that moment, so exports run faster without).
+    pub preview: bool,
+    /// The layout of H.264/HEVC streams (`Tuning::YOUTUBE` for uploads to YouTube).
+    pub tuning: op_media::Tuning,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        ExportOptions { preview: true, tuning: op_media::Tuning::DELIVERY }
+    }
+}
+
 /// A reduced copy of the frame an export is rendering (RGBA8, straight alpha).
 #[derive(Clone, Debug)]
 pub struct PreviewImage {
@@ -83,6 +99,16 @@ impl ExportJob {
         gpu: Arc<Gpu>,
         media: Arc<MediaService>,
     ) -> ExportJob {
+        Self::start_with(project, settings, ExportOptions::default(), gpu, media)
+    }
+
+    pub fn start_with(
+        project: Arc<Project>,
+        settings: ExportSettings,
+        options: ExportOptions,
+        gpu: Arc<Gpu>,
+        media: Arc<MediaService>,
+    ) -> ExportJob {
         let progress = Arc::new(Mutex::new(Progress::default()));
         let cancel = Arc::new(AtomicBool::new(false));
         let pause = Arc::new(AtomicBool::new(false));
@@ -104,7 +130,7 @@ impl ExportJob {
                 let started = Instant::now();
                 let attempt = |s: &ExportSettings| {
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        run(&project, s, gpu.clone(), media.clone(), &p, &c, &pa)
+                        run(&project, s, options, gpu.clone(), media.clone(), &p, &c, &pa)
                     }))
                     .unwrap_or_else(|panic| {
                         let what = panic
@@ -250,6 +276,7 @@ fn audio_streams(p: &Project, sid: SequenceId, out: &mut Vec<(AssetId, usize)>, 
 fn run(
     project: &Project,
     s: &ExportSettings,
+    options: ExportOptions,
     gpu: Arc<Gpu>,
     media: Arc<MediaService>,
     progress: &Mutex<Progress>,
@@ -280,7 +307,7 @@ fn run(
     // when Windows Controlled folder access blocks it); check it first for a clear message
     std::fs::File::create(&s.path)
         .map_err(|e| format!("cannot write {}: {e}", s.path.display()))?;
-    let (mut writer, encoder) = Writer::start(s)?;
+    let (mut writer, encoder) = Writer::start(s, options.tuning)?;
     log::info!("export encoder: {encoder}");
     progress.lock().encoder = encoder;
     progress.lock().total = total;
@@ -331,7 +358,7 @@ fn run(
             });
             stage[0] += t0.elapsed().as_secs_f64();
             // a small copy of the frame a few times per second, for the progress preview
-            if preview_at.is_none_or(|p| p.elapsed() >= Duration::from_millis(200)) {
+            if options.preview && preview_at.is_none_or(|p| p.elapsed() >= Duration::from_millis(200)) {
                 preview_at = Some(Instant::now());
                 let k = (480.0 / frame.width as f32)
                     .min(270.0 / frame.height as f32)
@@ -442,14 +469,14 @@ struct Writer {
 impl Writer {
     /// Opens the output on the writer thread (FFmpeg contexts stay on one thread). Returns the
     /// writer and the video encoder's name.
-    fn start(s: &ExportSettings) -> Result<(Writer, String), String> {
+    fn start(s: &ExportSettings, tuning: op_media::Tuning) -> Result<(Writer, String), String> {
         let (tx, rx) = crossbeam_channel::bounded::<Packet>(3);
         let (ready_tx, ready_rx) = crossbeam_channel::bounded::<Result<String, String>>(1);
         let (path, video, audio) = (s.path.clone(), s.video.clone(), s.audio.clone());
         let thread = std::thread::Builder::new()
             .name("export-writer".into())
             .spawn(move || {
-                let mut muxer = match Muxer::create(&path, video.as_ref(), audio.as_ref()) {
+                let mut muxer = match Muxer::create_tuned(&path, video.as_ref(), audio.as_ref(), tuning) {
                     Ok(m) => {
                         let name = m.video_encoder().unwrap_or("audio").to_string();
                         let _ = ready_tx.send(Ok(name));

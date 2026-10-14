@@ -1094,7 +1094,18 @@ impl State {
             Panel::Sounds => crate::sounds_panel::show(self, ui),
             Panel::Templates => crate::templates_panel::show(self, ui),
             Panel::EssentialSound => crate::essential_sound::show(self, ui),
+            Panel::ExportQueue => crate::export_queue_panel::show(self, ui),
         }));
+        // the panel that has the focus is outlined in the accent colour, so it is clear which
+        // one the keys and menus act on
+        if self.focused_panel == Some(p) && !matches!(p, Panel::Tools | Panel::Meters) {
+            ui.painter().rect_stroke(
+                rect.shrink(0.5),
+                0.0,
+                egui::Stroke::new(1.5, theme::ACCENT),
+                egui::StrokeKind::Inside,
+            );
+        }
         if drawn.is_err() {
             log::error!("the {:?} panel failed and was restored", p);
             self.tl.cancel();
@@ -1215,6 +1226,17 @@ impl State {
         {
             ctx.request_repaint_after(Duration::from_millis(500));
         }
+        // the export queue: notes what finished and starts the next export
+        for (error, message) in self.ed.export_queue.update(&self.gpu, &self.ed.media) {
+            if error {
+                self.ed.error(message);
+            } else {
+                self.ed.info(message);
+            }
+        }
+        if self.ed.export_queue.busy() {
+            ctx.request_repaint_after(Duration::from_millis(300));
+        }
         let title = self.ed.title();
         if title != self.title {
             ctx.send_viewport_cmd(ViewportCommand::Title(title.clone()));
@@ -1229,6 +1251,23 @@ impl State {
                 .collect()
         });
         if !dropped.is_empty() {
+            // files dropped on the tracks go on the timeline too, where they were dropped (on the
+            // empty track above or below the others: on a new track), not only into the project
+            // panel. The pointer is asked of the system: nothing moves it while files are dragged
+            // in from another program.
+            if let Some(pos) = cursor_in_window(ctx)
+                && let Some((at, track)) = self.tl.drop_target(pos)
+            {
+                for f in dropped.iter().filter(|f| {
+                    f.is_file()
+                        && !op_project::native::is_project_file(f)
+                        && !f.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                            matches!(e.to_ascii_lowercase().as_str(), "prproj" | "otio" | "xml")
+                        })
+                }) {
+                    self.ed.place_after_import.push(op_application::Placement { path: f.clone(), at: Some(at), track });
+                }
+            }
             self.open_or_import(dropped);
         }
         self.meters.update(&self.ed);
@@ -1239,7 +1278,7 @@ impl State {
             self.ui_scale = self.ed.prefs.ui_scale;
             theme::apply(ctx, self.ui_scale);
         }
-        let exporting = self.ed.exports.iter().any(|j| !j.finished());
+        let exporting = self.ed.exports.iter().any(|j| !j.finished()) || self.ed.export_queue.busy();
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close && exporting {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             if !self
@@ -1396,6 +1435,7 @@ impl eframe::App for App {
     fn on_exit(&mut self) {
         log::info!("closing");
         self.s.ed.stop();
+        self.s.ed.export_queue.stop();
         for job in &self.s.ed.exports {
             if !job.finished() {
                 job.cancel();
@@ -1406,4 +1446,25 @@ impl eframe::App for App {
         op_application::recovery::forget();
         autosave::end_session(&self.s.ed.dirs);
     }
+}
+
+
+/// Where the mouse pointer is in the window, in egui points (None where it cannot be asked).
+#[cfg(windows)]
+fn cursor_in_window(ctx: &egui::Context) -> Option<egui::Pos2> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let mut p = POINT { x: 0, y: 0 };
+    // SAFETY: a plain query into a struct of ours
+    if unsafe { GetCursorPos(&mut p) } == 0 {
+        return None;
+    }
+    let inner = ctx.input(|i| i.viewport().inner_rect)?;
+    let ppp = ctx.pixels_per_point();
+    Some(egui::pos2(p.x as f32 / ppp - inner.min.x, p.y as f32 / ppp - inner.min.y))
+}
+
+#[cfg(not(windows))]
+fn cursor_in_window(_ctx: &egui::Context) -> Option<egui::Pos2> {
+    None
 }

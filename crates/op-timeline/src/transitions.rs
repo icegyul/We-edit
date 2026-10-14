@@ -217,6 +217,43 @@ pub fn apply_default_to_clips(
     }
 }
 
+/// The default transition at the cut that ends `clip`: on its own track and, with `linked`, on
+/// the tracks of the clips linked to it or to the clip that follows (so a video cut and the cut
+/// of its sound get their dissolve and crossfade together); `only` keeps one kind of track.
+pub fn apply_default_at_cut(
+    p: &mut Project,
+    sid: SequenceId,
+    clip: ClipId,
+    linked: bool,
+    only: Option<TrackKind>,
+    opts: EditOptions,
+) -> EditResult<Vec<TransitionId>> {
+    let seq = p.sequence(sid).ok_or(EditError::Nothing)?;
+    let (track, c) = seq.find_clip(clip).map(|(r, c)| (r, c.clone())).ok_or(EditError::Nothing)?;
+    let cut = c.end();
+    let mut tracks = vec![track];
+    if linked {
+        let next = seq.track(track).and_then(|t| t.clips.iter().find(|x| x.start == cut)).map(|x| x.id);
+        let partners = seq.linked(clip).into_iter().chain(next.map(|n| seq.linked(n)).unwrap_or_default());
+        for id in partners {
+            if let Some((r, _)) = seq.find_clip(id)
+                && !tracks.contains(&r)
+            {
+                tracks.push(r);
+            }
+        }
+    }
+    tracks.retain(|r| only.is_none_or(|k| r.kind == k));
+    let mut out = Vec::new();
+    for r in tracks {
+        let (effect, dur) = default_for(p, r.kind);
+        if let Ok(id) = add_transition(p, sid, r, cut, &effect, dur, None, opts) {
+            out.push(id);
+        }
+    }
+    if out.is_empty() { Err(EditError::Nothing) } else { Ok(out) }
+}
+
 fn default_for(p: &Project, kind: TrackKind) -> (String, Dur) {
     match kind {
         TrackKind::Video => (

@@ -148,6 +148,13 @@ impl Tuning {
         b_frames: 2,
         preset: "medium",
     };
+    /// What YouTube recommends for uploads: closed GOPs of half the frame rate (a keyframe every
+    /// half second), two B-frames, High profile.
+    pub const YOUTUBE: Tuning = Tuning {
+        gop_seconds: 0.5,
+        b_frames: 2,
+        preset: "medium",
+    };
     /// Editing proxies: a keyframe every half second and no reordered frames, so any frame is
     /// reached by decoding a handful of others.
     pub const PROXY: Tuning = Tuning {

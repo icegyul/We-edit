@@ -1204,10 +1204,11 @@ impl Editor {
         let range = SeqRange::with_duration(t, spec.duration());
         let free = |tr: &Track| tr.clips_in(range).next().is_none() && !tr.locked;
         let video = spec.video.as_ref().map(|_| {
+            // a track that is free there, or the empty one past the last (dropped on it: made)
             let wanted = track
                 .filter(|r| r.kind == TrackKind::Video)
                 .map(|r| r.index)
-                .filter(|i| seq.video.get(*i).is_some_and(|tr| free(tr)));
+                .filter(|i| seq.video.get(*i).is_none_or(|tr| free(tr)));
             wanted.unwrap_or_else(|| {
                 let occupied_top = seq
                     .video
@@ -1228,7 +1229,14 @@ impl Editor {
             .map(|r| r.index)
             .unwrap_or(0);
         let mut next_new = seq.audio.len();
+        // dropped on the empty audio track below the others: the audio gets new tracks from there
+        let on_new_audio = track.is_some_and(|r| r.kind == TrackKind::Audio && r.index >= seq.audio.len());
         for _ in &spec.audio {
+            if on_new_audio {
+                audio.push(Some(next_new));
+                next_new += 1;
+                continue;
+            }
             let found = (first_audio..seq.audio.len())
                 .chain(0..first_audio)
                 .find(|i| !audio.contains(&Some(*i)) && free(&seq.audio[*i]));
@@ -1667,6 +1675,58 @@ mod tests {
         assert_eq!(placed.start, SeqTime::from_seconds(1.0));
         assert_eq!(e.selection.clips, vec![placed.id]);
         assert!(e.place_after_import.is_empty());
+    }
+
+    #[test]
+    fn a_dissolve_goes_on_the_cut_between_two_clips() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
+        let (mut e, _d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        e.load_source(item);
+        e.execute("cmd.clip.overlay", Focus::Timeline);
+        e.set_playhead(SeqTime::from_seconds(4.0));
+        e.execute("cmd.sequence.razorateditline", Focus::Timeline);
+        let first = e.active_seq().unwrap().video[0].clips[0].id;
+        assert_eq!(e.add_dissolve_at_cut(first, true, None), 1);
+        assert_eq!(e.active_seq().unwrap().video[0].transitions.len(), 1);
+        // the end of the last clip takes one too (a fade out), and nothing is made where there
+        // is no clip
+        let last = e.active_seq().unwrap().video[0].clips.last().unwrap().id;
+        assert_eq!(e.add_dissolve_at_cut(last, true, None), 1);
+        assert_eq!(e.add_dissolve_at_cut(ClipId(9999), true, None), 0);
+    }
+
+    #[test]
+    fn media_dropped_on_the_empty_track_makes_a_new_track() {
+        let _guard = crate::recovery::TEST_GUARD.lock();
+        let (mut e, _d) = editor();
+        let item = matte(&mut e);
+        e.new_sequence("S", SequenceSettings::default());
+        let (nv, na) = {
+            let q = e.active_seq().unwrap();
+            (q.video.len(), q.audio.len())
+        };
+        // above the top video track
+        let id = e.place_item(item, Some(SeqTime::from_seconds(2.0)), Some(TrackRef::video(nv))).unwrap();
+        let q = e.active_seq().unwrap();
+        assert_eq!(q.video.len(), nv + 1, "a new video track");
+        assert_eq!(q.find_clip(id).map(|(r, _)| r), Some(TrackRef::video(nv)));
+        // bars and tone have sound: dropped on the empty track below the audio tracks
+        let root = e.project.root;
+        let tone = e
+            .edit("Tone", |p| {
+                Ok(p.add_item(
+                    root,
+                    "Tone",
+                    ItemKind::Synthetic { generator: Generator::BarsAndTone, duration: Dur::from_seconds(5.0) },
+                ))
+            })
+            .unwrap();
+        e.place_item(tone, Some(SeqTime::from_seconds(20.0)), Some(TrackRef::audio(na))).unwrap();
+        let q = e.active_seq().unwrap();
+        assert_eq!(q.audio.len(), na + 1, "a new audio track");
+        assert_eq!(q.audio[na].clips.len(), 1);
     }
 
     #[test]

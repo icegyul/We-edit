@@ -16,6 +16,7 @@ pub mod commands;
 pub mod editor;
 pub mod effect_preview;
 pub mod effects_clipboard;
+pub mod export_queue;
 pub mod export;
 pub mod keymap;
 pub mod logging;
@@ -37,7 +38,8 @@ pub mod silence;
 pub mod speech;
 
 pub use editor::{APP_NAME, Editor, LoadedProject, Placement, Status, Transport};
-pub use export::{ExportJob, ExportSettings, PreviewImage, Progress};
+pub use export::{ExportJob, ExportOptions, ExportSettings, PreviewImage, Progress};
+pub use export_queue::{ExportQueue, QueueItem, QueueState};
 pub use keymap::{Binding, Chord, Keymap};
 pub use media::MediaService;
 pub use prefs::{Dirs, Preferences};

@@ -9,9 +9,9 @@ use op_application::captions::ModelSize;
 use op_application::keymap::{self, Binding, Chord, Keymap};
 use op_application::shorts::ShortsLayout;
 use op_application::performance::{Hardware, Profile};
-use op_application::{ExportJob, ExportSettings};
+use op_application::{ExportJob, ExportOptions, ExportSettings};
 use op_core::*;
-use op_media::{AudioCodec, AudioSettings, VideoCodec, VideoSettings};
+use op_media::{AudioCodec, AudioSettings, Tuning, VideoCodec, VideoSettings};
 use op_project::prproj::ImportReport;
 use op_timeline::Attributes;
 
@@ -74,6 +74,12 @@ pub struct ExportForm {
     audio_rate: u32,
     channels: u16,
     audio_bitrate: u32,
+    /// A YouTube preset: its bitrate follows the frame size and rate (YouTube's table) until the
+    /// bitrate is typed in, and the stream layout is the one YouTube recommends.
+    youtube: bool,
+    auto_bitrate: bool,
+    /// A picture of the frame being exported (slows the export).
+    preview: bool,
     in_out: bool,
     has_in_out: bool,
     seq_size: (u32, u32),
@@ -256,6 +262,9 @@ impl Dialog {
             audio_rate: seq.settings.audio_rate,
             channels: seq.settings.master.channels().min(2) as u16,
             audio_bitrate: 320,
+            youtube: false,
+            auto_bitrate: false,
+            preview: s.ed.prefs.export_preview,
             in_out: seq.mark_in.is_some() && seq.mark_out.is_some(),
             has_in_out: seq.mark_in.is_some() || seq.mark_out.is_some(),
             seq_rate: seq.rate(),

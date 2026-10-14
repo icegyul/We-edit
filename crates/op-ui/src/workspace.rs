@@ -29,10 +29,11 @@ pub enum Panel {
     Sounds,
     Templates,
     EssentialSound,
+    ExportQueue,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 23] = [
+    pub const ALL: [Panel; 24] = [
         Panel::Project,
         Panel::Source,
         Panel::Program,
@@ -56,6 +57,7 @@ impl Panel {
         Panel::Sounds,
         Panel::Templates,
         Panel::EssentialSound,
+        Panel::ExportQueue,
     ];
 
     pub fn title(self) -> &'static str {
@@ -83,6 +85,7 @@ impl Panel {
             Panel::Sounds => "효과음·배경음",
             Panel::Templates => "모션 템플릿",
             Panel::EssentialSound => "기본 사운드",
+            Panel::ExportQueue => "내보내기 대기열",
         }
     }
 
@@ -91,6 +94,7 @@ impl Panel {
     pub fn anchor(self) -> Option<Panel> {
         match self {
             Panel::EssentialSound => Some(Panel::EffectControls),
+            Panel::ExportQueue => Some(Panel::Project),
             _ => None,
         }
     }
@@ -105,6 +109,7 @@ impl Panel {
             "uif.window.Effect Controls" => Panel::EffectControls,
             "uif.window.Audio Mixers" => Panel::AudioMixer,
             "uif.window.Effects" => Panel::Effects,
+            "uif.window.Export Queue" => Panel::ExportQueue,
             "uif.window.Audio Clip Mixer" => Panel::AudioMixer,
             _ => return None,
         })

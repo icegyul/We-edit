@@ -89,6 +89,8 @@ pub struct Editor {
     /// Files being imported that go onto the timeline as soon as they are ready (pasted media).
     pub place_after_import: Vec<Placement>,
     pub exports: Vec<crate::export::ExportJob>,
+    /// Exports waiting for their turn (File > Export > Add to Queue).
+    pub export_queue: crate::export_queue::ExportQueue,
     pub proxies: crate::proxies::ProxyQueue,
     /// Automatic captions being transcribed.
     pub captioning: Option<crate::captions::CaptionJob>,
@@ -193,6 +195,7 @@ impl Editor {
             imports: Vec::new(),
             importing: 0,
             place_after_import: Vec::new(),
+            export_queue: Default::default(),
             exports: Vec::new(),
             proxies: Default::default(),
             captioning: None,

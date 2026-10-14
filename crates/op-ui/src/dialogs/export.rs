@@ -12,6 +12,8 @@ pub(super) struct ExportPreset {
     width: Option<u32>,
     audio: AudioCodec,
     video: bool,
+    /// YouTube's recommendations: the bitrate by frame size and rate, audio AAC 384 kbps, 48 kHz.
+    youtube: bool,
 }
 
 pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
@@ -23,6 +25,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "YouTube 1080p (H.264)",
@@ -32,6 +35,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: true,
     },
     ExportPreset {
         name: "YouTube 2160p 4K (H.264)",
@@ -41,6 +45,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: true,
     },
     ExportPreset {
         name: "YouTube 1440p 2K (H.264)",
@@ -50,6 +55,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: true,
     },
     ExportPreset {
         name: "YouTube 720p (H.264)",
@@ -59,6 +65,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: true,
     },
     ExportPreset {
         name: "YouTube Shorts / Reels 1080x1920 (H.264)",
@@ -68,6 +75,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: Some(1080),
         audio: AudioCodec::Aac,
         video: true,
+        youtube: true,
     },
     ExportPreset {
         name: "Social Media 1080p (H.264)",
@@ -77,6 +85,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Match Source - High Quality (HEVC)",
@@ -86,6 +95,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Aac,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 422 Proxy",
@@ -95,6 +105,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 422 LT",
@@ -104,6 +115,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 422",
@@ -113,6 +125,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 422 HQ",
@@ -122,6 +135,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 4444 (with alpha)",
@@ -131,6 +145,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Apple ProRes 4444 XQ (with alpha)",
@@ -140,6 +155,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "DNxHR HQ",
@@ -149,6 +165,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Sony XDCAM HD422 50 (MXF, compatible)",
@@ -158,6 +175,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: Some(1920),
         audio: AudioCodec::Pcm24,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "PNG (QuickTime, with alpha)",
@@ -167,6 +185,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm16,
         video: true,
+        youtube: false,
     },
     ExportPreset {
         name: "Audio only - WAV",
@@ -176,6 +195,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Pcm24,
         video: false,
+        youtube: false,
     },
     ExportPreset {
         name: "Audio only - MP3",
@@ -185,6 +205,7 @@ pub(super) const EXPORT_PRESETS: &[ExportPreset] = &[
         width: None,
         audio: AudioCodec::Mp3,
         video: false,
+        youtube: false,
     },
 ];
 
@@ -204,6 +225,20 @@ pub(super) fn dirs_video() -> Option<PathBuf> {
         .or_else(dirs::home_dir)
 }
 
+/// YouTube's recommended video bitrate (Mbps, SDR) for a picture of `short` pixels on its
+/// shorter side at `fps` frames per second: 4K 35-45 (53-68 above 30 fps), 1440p 16 (24),
+/// 1080p 8 (12), 720p 5 (7.5), smaller 2.5 (4).
+pub(super) fn youtube_mbps(short: u32, fps: f64) -> u32 {
+    let fast = fps > 30.5;
+    match short {
+        2000.. => if fast { 68 } else { 45 },
+        1300.. => if fast { 24 } else { 16 },
+        1000.. => if fast { 12 } else { 8 },
+        650.. => if fast { 8 } else { 5 },
+        _ => if fast { 4 } else { 3 },
+    }
+}
+
 pub(super) fn apply_preset(f: &mut ExportForm, i: usize) {
     let Some(p) = EXPORT_PRESETS.get(i) else {
         return;
@@ -215,6 +250,14 @@ pub(super) fn apply_preset(f: &mut ExportForm, i: usize) {
     f.use_bitrate = p.mbps > 0;
     if p.mbps > 0 {
         f.bitrate = p.mbps;
+    }
+    f.youtube = p.youtube;
+    f.auto_bitrate = p.youtube;
+    if p.youtube {
+        // what YouTube recommends for the sound: AAC at 384 kbps, 48 kHz, stereo
+        f.audio_bitrate = 384;
+        f.audio_rate = 48000;
+        f.channels = 2;
     }
     let (sw, sh) = f.seq_size;
     match p.height {
@@ -231,6 +274,9 @@ pub(super) fn apply_preset(f: &mut ExportForm, i: usize) {
             f.height = sh;
         }
     }
+    if f.youtube {
+        f.bitrate = youtube_mbps(f.width.min(f.height), f.rate.as_f64());
+    }
     let ext = if p.video {
         p.codec.extension()
     } else {
@@ -242,6 +288,7 @@ pub(super) fn apply_preset(f: &mut ExportForm, i: usize) {
 pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportForm) -> bool {
     let mut open = true;
     let mut start = false;
+    let mut queue = false;
     window(ctx, t("Export Settings"))
         .open(&mut open)
         .collapsible(false)
@@ -360,11 +407,32 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
                             ui.end_row();
                             if f.use_bitrate {
                                 ui.label("");
-                                ui.add(
-                                    egui::DragValue::new(&mut f.bitrate)
-                                        .range(1..=800)
-                                        .suffix(" Mbps"),
-                                );
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .add(
+                                            egui::DragValue::new(&mut f.bitrate)
+                                                .range(1..=800)
+                                                .suffix(" Mbps"),
+                                        )
+                                        .changed()
+                                    {
+                                        f.auto_bitrate = false;
+                                    }
+                                    if f.youtube {
+                                        ui.label(
+                                            RichText::new(if f.auto_bitrate {
+                                                "YouTube 권장값(프레임 크기와 속도에 맞춤) · 숫자를 바꾸면 직접 정한 값"
+                                            } else {
+                                                "직접 정한 값"
+                                            })
+                                            .size(11.0)
+                                            .color(theme::TEXT_DIM),
+                                        );
+                                        if !f.auto_bitrate && ui.small_button("권장값").clicked() {
+                                            f.auto_bitrate = true;
+                                        }
+                                    }
+                                });
                             } else {
                                 ui.label("");
                                 ui.add(
@@ -375,6 +443,9 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
                             ui.end_row();
                             ui.label(t("Hardware Encoding"));
                             ui.checkbox(&mut f.hardware, t("Use the GPU encoder when available"));
+                            ui.end_row();
+                            ui.label("");
+                            ui.checkbox(&mut f.preview, "내보내는 동안 화면 미리보기 (끄면 더 빠릅니다)");
                             ui.end_row();
                         }
                     });
@@ -429,7 +500,7 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
                             egui::ComboBox::from_id_salt("exp-abr")
                                 .selected_text(format!("{} kbps", f.audio_bitrate))
                                 .show_ui(ui, |ui| {
-                                    for b in [128u32, 160, 192, 256, 320] {
+                                    for b in [128u32, 160, 192, 256, 320, 384, 512] {
                                         ui.selectable_value(
                                             &mut f.audio_bitrate,
                                             b,
@@ -474,10 +545,20 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
                     {
                         start = true;
                     }
+                    if ui
+                        .add_enabled(valid, egui::Button::new("대기열에 추가"))
+                        .on_hover_text("지금 시작하지 않고 내보내기 대기열에 쌓아 두었다가 한꺼번에 내보냅니다 (지금의 편집 상태로 저장됩니다)")
+                        .clicked()
+                    {
+                        queue = true;
+                    }
                 });
             });
         });
-    if start {
+    if f.youtube && f.auto_bitrate {
+        f.bitrate = youtube_mbps(f.width.min(f.height), f.rate.as_f64());
+    }
+    if start || queue {
         let Some(seq) = s.ed.project.sequence(f.sequence) else {
             return false;
         };
@@ -521,8 +602,24 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
             video,
             audio,
         };
+        s.ed.prefs.export_preview = f.preview;
+        let options = ExportOptions {
+            preview: f.preview,
+            tuning: if f.youtube && matches!(f.codec, VideoCodec::H264 | VideoCodec::Hevc) {
+                Tuning::YOUTUBE
+            } else {
+                Tuning::DELIVERY
+            },
+        };
+        let title = s.ed.project.sequence(f.sequence).map(|q| q.name.clone()).unwrap_or_default();
         let snap = s.ed.snapshot();
-        let job = ExportJob::start(snap, settings, s.gpu.clone(), s.ed.media.clone());
+        if queue {
+            s.ed.export_queue.add(title, t(EXPORT_PRESETS[f.preset].name).to_string(), snap, settings, options);
+            s.ed.info("내보내기 대기열에 추가했습니다: 내보내기 대기열 패널에서 시작하세요");
+            s.command("uif.window.Export Queue");
+            return false;
+        }
+        let job = ExportJob::start_with(snap, settings, options, s.gpu.clone(), s.ed.media.clone());
         s.ed.exports.push(job);
         s.ed.info(tf("Exporting {}", &[&path.display()]));
         return false;
@@ -531,3 +628,70 @@ pub(super) fn export_dialog(s: &mut State, ctx: &egui::Context, f: &mut ExportFo
 }
 
 // ------------------------------------------------------------------------ keyboard shortcuts
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn form(w: u32, h: u32, rate: Rate) -> ExportForm {
+        ExportForm {
+            sequence: SequenceId(1),
+            path: PathBuf::from("x.mp4"),
+            preset: 0,
+            video: true,
+            codec: VideoCodec::H264,
+            width: w,
+            height: h,
+            rate,
+            use_bitrate: false,
+            bitrate: 20,
+            quality: 18,
+            hardware: true,
+            audio: true,
+            audio_codec: AudioCodec::Aac,
+            audio_rate: 44100,
+            channels: 1,
+            audio_bitrate: 192,
+            youtube: false,
+            auto_bitrate: false,
+            preview: false,
+            in_out: false,
+            has_in_out: false,
+            seq_size: (w, h),
+            seq_rate: rate,
+        }
+    }
+
+    fn preset(name: &str) -> usize {
+        EXPORT_PRESETS.iter().position(|p| p.name == name).unwrap()
+    }
+
+    #[test]
+    fn the_youtube_presets_set_what_youtube_recommends() {
+        // 4K at 29.97 fps: 45 Mbps, sound AAC 384 kbps 48 kHz stereo
+        let mut f = form(3840, 2160, Rate::new(30000, 1001));
+        apply_preset(&mut f, preset("YouTube 2160p 4K (H.264)"));
+        assert!(f.use_bitrate && f.youtube && f.auto_bitrate);
+        assert_eq!((f.width, f.height, f.bitrate), (3840, 2160, 45));
+        assert_eq!((f.audio_bitrate, f.audio_rate, f.channels), (384, 48000, 2));
+        assert_eq!(f.audio_codec, AudioCodec::Aac);
+        // the table by size and rate
+        assert_eq!(youtube_mbps(2160, 60.0), 68);
+        assert_eq!(youtube_mbps(1440, 30.0), 16);
+        assert_eq!(youtube_mbps(1080, 25.0), 8);
+        assert_eq!(youtube_mbps(1080, 59.94), 12);
+        assert_eq!(youtube_mbps(720, 30.0), 5);
+        // 1080p of a 4K sequence
+        let mut f = form(3840, 2160, Rate::FPS_25);
+        apply_preset(&mut f, preset("YouTube 1080p (H.264)"));
+        assert_eq!((f.width, f.height, f.bitrate), (1920, 1080, 8));
+        // shorts: a vertical 1080 picture counts as 1080p
+        let mut f = form(1920, 1080, Rate::FPS_25);
+        apply_preset(&mut f, preset("YouTube Shorts / Reels 1080x1920 (H.264)"));
+        assert_eq!((f.width, f.height, f.bitrate), (1080, 1920, 8));
+        // a preset that is not YouTube's leaves the sound alone
+        let mut f = form(1920, 1080, Rate::FPS_25);
+        apply_preset(&mut f, preset("Social Media 1080p (H.264)"));
+        assert!(!f.youtube && f.audio_bitrate == 192);
+    }
+}

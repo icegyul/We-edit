@@ -57,6 +57,7 @@ pub(crate) fn panel_icon(p: Panel) -> Icon {
         Panel::Sounds => Icon::Music,
         Panel::Templates => Icon::Fx,
         Panel::EssentialSound => Icon::Music,
+        Panel::ExportQueue => Icon::Film,
     }
 }
 

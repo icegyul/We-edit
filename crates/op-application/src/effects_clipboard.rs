@@ -136,6 +136,20 @@ impl Editor {
         done
     }
 
+    /// Puts the default transition (a dissolve, an audio crossfade) on the cut that ends `clip`
+    /// and, with `linked`, on the cuts of the clips linked to it. Returns how many were added.
+    pub fn add_dissolve_at_cut(&mut self, clip: ClipId, linked: bool, only: Option<TrackKind>) -> usize {
+        let made = self
+            .seq_edit("Add Transition", |p, sid, opts| op_timeline::apply_default_at_cut(p, sid, clip, linked, only, opts))
+            .map_or(0, |v| v.len());
+        if made == 0 {
+            self.error("이 컷에는 전환을 넣을 수 없습니다: 두 클립이 붙어 있어야 하고 앞뒤 클립에 여분 프레임이 있어야 합니다");
+        } else {
+            self.info(format!("컷에 전환 {made}개를 넣었습니다"));
+        }
+        made
+    }
+
     /// Whether effects were copied.
     pub fn has_copied_effects(&self) -> bool {
         self.fx_clipboard.is_some()
