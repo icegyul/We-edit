@@ -807,6 +807,20 @@ fn headers(
 ) {
     let painter = ui.painter().with_clip_rect(area);
     painter.rect_filled(area, 0.0, theme::PANEL);
+    // the menu of the empty header space. It is registered BEFORE the buttons: where widgets
+    // overlap the one added last gets the click, so a whole-area widget added after them would
+    // take every click from the patch, target, lock, eye, mute and solo buttons.
+    let resp = ui.interact(area, ui.id().with("hdr-empty"), Sense::click());
+    resp.context_menu(|ui| {
+        if ui.button(t("Add Tracks...")).clicked() {
+            s.command("op.sequence.addtracks");
+            ui.close();
+        }
+        if ui.button(t("Delete Empty Tracks")).clicked() {
+            s.command("op.sequence.deleteemptytracks");
+            ui.close();
+        }
+    });
     for row in &g.rows {
         let r = Rect::from_min_size(pos2(area.min.x, row.top), vec2(area.width(), row.h));
         if !r.intersects(area) {
@@ -1068,18 +1082,6 @@ fn headers(
             }
         });
     }
-    // add a track below the last one with a double-click on empty header space
-    let resp = ui.interact(area, ui.id().with("hdr-empty"), Sense::click());
-    resp.context_menu(|ui| {
-        if ui.button(t("Add Tracks...")).clicked() {
-            s.command("op.sequence.addtracks");
-            ui.close();
-        }
-        if ui.button(t("Delete Empty Tracks")).clicked() {
-            s.command("op.sequence.deleteemptytracks");
-            ui.close();
-        }
-    });
 }
 
 // ------------------------------------------------------------------------------------ body
