@@ -289,7 +289,10 @@ fn pane_sizes(seq: &Sequence, tl: &TimelineView, view: &SeqView, top: f32, botto
 fn layout_rows(seq: &Sequence, tl: &TimelineView, view: &SeqView, panes: &Panes) -> Vec<Row> {
     let mut out = Vec::new();
     let (vlo, vhi) = (panes.top, panes.top + panes.video_h);
-    let mut y = vlo - view.video_scroll;
+    // the video tracks hang from the bar between video and audio (V1 next to it): when the bar
+    // moves down they move down with it. The scroll is how far the tracks were pulled down from
+    // there to show the higher ones.
+    let mut y = vhi - panes.video_content + view.video_scroll;
     for i in (0..seq.video.len()).rev() {
         let r = TrackRef::video(i);
         let h = track_h(view, tl, r);
@@ -1208,8 +1211,14 @@ fn headers(
             ui.ctx().set_cursor_icon(CursorIcon::ResizeVertical);
         }
         if resp.dragged() {
-            let h = track_h(view, &s.tl, row.r) + resp.drag_delta().y;
-            view.set_track_height(row.r, h.clamp(MIN_TRACK_H, MAX_TRACK_H));
+            let was = track_h(view, &s.tl, row.r);
+            let h = (was + resp.drag_delta().y).clamp(MIN_TRACK_H, MAX_TRACK_H);
+            view.set_track_height(row.r, h);
+            if video {
+                // the video part grows by as much, so what hangs from the bar below this track
+                // moves down by the same amount
+                view.split = (g.panes.video_h + (h - was)).max(MIN_PANE);
+            }
         }
     }
 }
@@ -1860,7 +1869,7 @@ fn input(
                 view.scroll = (*scroll - (p.x - from.x) as f64 / g.zoom).max(0.0);
                 let pn = g.panes;
                 if *video {
-                    view.video_scroll = (*video_scroll - (p.y - from.y)).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
+                    view.video_scroll = (*video_scroll + (p.y - from.y)).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
                 } else {
                     view.scroll_y = (*scroll_y - (p.y - from.y)).clamp(0.0, (pn.audio_content - pn.audio_h).max(0.0));
                 }
@@ -2484,14 +2493,18 @@ fn vertical_bars(ui: &mut Ui, g: &Geo, view: &mut SeqView) {
         let max = content - height;
         let thumb_h = (height * height / content).clamp(24.0, height);
         let room = (height - thumb_h).max(1.0);
+        // the video scroll is counted from the bottom (0 = V1 at the bar), the audio one from the top
+        let sign = if video { -1.0 } else { 1.0 };
         if resp.dragged() {
-            *scroll = (*scroll + resp.drag_delta().y * max / room).clamp(0.0, max);
+            *scroll = (*scroll + sign * resp.drag_delta().y * max / room).clamp(0.0, max);
         } else if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
         {
-            *scroll = ((p.y - top - thumb_h / 2.0) / room * max).clamp(0.0, max);
+            let at = ((p.y - top - thumb_h / 2.0) / room).clamp(0.0, 1.0);
+            *scroll = (if video { 1.0 - at } else { at } * max).clamp(0.0, max);
         }
-        let y = top + (*scroll / max) * room;
+        let frac = *scroll / max;
+        let y = top + (if video { 1.0 - frac } else { frac }) * room;
         let thumb = Rect::from_min_max(pos2(track.min.x + 1.0, y), pos2(track.max.x - 1.0, y + thumb_h));
         let p = ui.painter().with_clip_rect(track);
         p.rect_filled(track, 0.0, Color32::from_black_alpha(70));
@@ -2627,7 +2640,7 @@ fn wheel(ui: &Ui, g: &Geo, panel: Rect, view: &mut SeqView) {
         let video = pointer.is_none_or(|p| g.panes.is_video(p.y));
         let pn = g.panes;
         if video {
-            view.video_scroll = (view.video_scroll - dy).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
+            view.video_scroll = (view.video_scroll + dy).clamp(0.0, (pn.video_content - pn.video_h).max(0.0));
         } else {
             view.scroll_y = (view.scroll_y - dy).clamp(0.0, (pn.audio_content - pn.audio_h).max(0.0));
         }
@@ -2742,6 +2755,24 @@ mod layout_tests {
     }
 
     #[test]
+    fn video_tracks_hang_from_the_bar_and_follow_it_down() {
+        let (p, sid) = sequence_with_two_clips();
+        let seq = p.sequence(sid).unwrap();
+        let nv = seq.video.len() as f32;
+        // the bar dragged down: more room than the tracks need
+        let mut view = SeqView::default();
+        view.split = nv * 46.0 + 100.0;
+        let g = geo(seq, &view, 0.0, 1000.0);
+        let v1 = g.rows.iter().find(|r| r.r == TrackRef::video(0)).unwrap();
+        assert!((v1.top + v1.h - g.panes.video_h).abs() < 0.01, "V1 sits against the bar");
+        // the bar dragged further down: the tracks moved down by as much
+        view.split += 60.0;
+        let g2 = geo(seq, &view, 0.0, 1000.0);
+        let v1b = g2.rows.iter().find(|r| r.r == TrackRef::video(0)).unwrap();
+        assert!((v1b.top - v1.top - 60.0).abs() < 0.01, "{} -> {}", v1.top, v1b.top);
+    }
+
+    #[test]
     fn a_part_that_does_not_fit_scrolls_by_itself_and_never_takes_clicks_outside_it() {
         let (p, sid) = sequence_with_two_clips();
         let seq = p.sequence(sid).unwrap();
@@ -2753,14 +2784,15 @@ mod layout_tests {
         let g = geo(seq, &view, 0.0, 300.0);
         assert!(g.panes.video_content > g.panes.video_h);
         let bar_end = g.panes.audio_top();
-        view.video_scroll = g.panes.video_content - g.panes.video_h;
-        let g = geo(seq, &view, 0.0, 300.0);
-        // the lowest video track now ends at the bottom of the video part ...
+        // not scrolled: the lowest video track is against the bar ...
         let v0 = g.rows.iter().find(|r| r.r == TrackRef::video(0)).unwrap();
         assert!((v0.top + v0.h - g.panes.video_h).abs() < 0.01);
-        // ... and a track scrolled partly below that never answers a click in the audio part
-        view.video_scroll = 0.0;
+        // ... scrolled to the end: the highest one is at the top
+        view.video_scroll = g.panes.video_content - g.panes.video_h;
         let g = geo(seq, &view, 0.0, 300.0);
+        let top = g.rows.iter().find(|r| r.r == TrackRef::video(seq.video.len() - 1)).unwrap();
+        assert!(top.top.abs() < 0.01, "{}", top.top);
+        // a track scrolled partly below the part never answers a click in the audio part
         for y in [bar_end + 2.0, bar_end + 10.0, 299.0] {
             if let Some(row) = g.row_at(y) {
                 assert_eq!(row.r.kind, TrackKind::Audio, "y {y}");

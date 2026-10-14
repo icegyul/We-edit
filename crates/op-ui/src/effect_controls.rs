@@ -397,6 +397,21 @@ fn lane_ruler(s: &mut State, ui: &mut Ui, lane: &Lane, r: Rect) {
     );
 }
 
+/// The clips an effect command applies to: this one and the other selected clips of the same
+/// kind (video or audio), so that removing, resetting or switching off an effect works on all the
+/// clips picked in the timeline at once.
+fn effect_targets(s: &State, sid: SequenceId, clip: ClipId) -> Vec<ClipId> {
+    let Some(seq) = s.ed.project.sequence(sid) else { return vec![clip] };
+    let kind = seq.clip(clip).map(|c| c.kind);
+    let mut v = vec![clip];
+    for id in &s.ed.selection.clips {
+        if *id != clip && seq.clip(*id).is_some_and(|c| Some(c.kind) == kind) {
+            v.push(*id);
+        }
+    }
+    v
+}
+
 /// Right-click menu of an effect (its header or any of its parameter rows): copy it, and paste
 /// what was copied on every clip selected in the timeline.
 fn copy_paste_menu(s: &mut State, ui: &mut Ui, cx: &ClipCtx, comp: &Component) {
@@ -475,12 +490,9 @@ fn component_ui(
         .clicked()
     {
         let (sid, clip, id) = (cx.sid, cx.clip.id, comp.id);
-        s.ed.edit("Toggle Effect", |p| {
-            with_component(p, sid, clip, id, |c| {
-                c.enabled = !c.enabled;
-                Ok(())
-            })
-        });
+        // on or off on every selected clip that has the effect, to the state this one gets
+        let targets = effect_targets(s, sid, clip);
+        s.ed.set_effect_enabled(clip, id, &targets, !comp.enabled);
     }
     icons::draw(
         ui.painter(),
@@ -558,16 +570,17 @@ fn component_ui(
         copy_paste_menu(s, ui, cx, comp);
         ui.separator();
         if !comp.is_fixed() {
-            if ui.button(t("Remove Effect")).clicked() {
-                s.ed.seq_edit("Remove Effect", |p, _, _| {
-                    let c = p
-                        .sequence_mut(sid)
-                        .unwrap()
-                        .clip_mut(clip)
-                        .ok_or(EditError::Nothing)?;
-                    c.components.retain(|x| x.id != id);
-                    Ok(())
-                });
+            let targets = effect_targets(s, sid, clip);
+            let label = if targets.len() > 1 {
+                format!("{} (선택한 클립 {}개 모두)", t("Remove Effect"), targets.len())
+            } else {
+                t("Remove Effect").to_string()
+            };
+            if ui.button(label).clicked() {
+                let removed = s.ed.remove_effect(clip, id, &targets);
+                if removed > 0 {
+                    s.ed.info(format!("효과를 클립 {removed}개에서 지웠습니다"));
+                }
                 ui.close();
             }
             let fixed = cx
@@ -593,20 +606,17 @@ fn component_ui(
                 }
             }
         }
-        if ui.button(t("Reset")).clicked() {
-            s.ed.edit("Reset Effect", |p| {
-                with_component(p, sid, clip, id, |c| {
-                    let Some(d) = c.def() else {
-                        return Err(EditError::Nothing);
-                    };
-                    c.params = d
-                        .params
-                        .iter()
-                        .map(|sp| Param::new(sp.key, sp.default_value()))
-                        .collect();
-                    Ok(())
-                })
-            });
+        let targets = effect_targets(s, sid, clip);
+        let label = if targets.len() > 1 {
+            format!("{} (선택한 클립 {}개 모두)", t("Reset"), targets.len())
+        } else {
+            t("Reset").to_string()
+        };
+        if ui.button(label).clicked() {
+            let done = s.ed.reset_effect(clip, id, &targets);
+            if done > 1 {
+                s.ed.info(format!("효과를 클립 {done}개에서 처음 값으로 되돌렸습니다"));
+            }
             ui.close();
         }
     });

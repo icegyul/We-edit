@@ -414,27 +414,59 @@ unsafe extern "C" fn pick_hw_format(
     }
 }
 
-/// Whether the hardware decoders (NVDEC, DXVA, VideoToolbox, VAAPI) can take a stream: 4:2:0
-/// only, and H.264 only in 8 bits. NVIDIA's engine cannot decode the 4:2:2 10-bit H.264 that many
-/// cameras record. A stream they cannot take is decoded by the processor on all its cores; if the
-/// card were attached to it anyway, FFmpeg would still end up decoding in software, but on one
-/// thread (a 4K 4:2:2 10-bit clip: 10 frames per second instead of 57).
-fn hardware_can_decode(codec: ff::ffi::AVCodecID, fmt: ff::ffi::AVPixelFormat) -> bool {
+/// What the hardware decoders (NVDEC, DXVA, VideoToolbox, VAAPI) can take of a stream.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum HwSupport {
+    /// What every card decodes: 4:2:0, H.264 in 8 bits, the others up to 10.
+    Yes,
+    /// What only some cards decode (NVIDIA's RTX 50 do 4:2:2 and 10-bit H.264, the older ones
+    /// do not): found out by decoding the first frame, once per kind of stream.
+    Maybe,
+    No,
+}
+
+fn hardware_support(codec: ff::ffi::AVCodecID, fmt: ff::ffi::AVPixelFormat) -> HwSupport {
     use ff::ffi;
     if fmt == ffi::AVPixelFormat::AV_PIX_FMT_NONE {
         // not known before decoding: let the decoder decide
-        return true;
+        return HwSupport::Yes;
     }
     // SAFETY: the descriptor table is static; a null result means an unknown format
     let desc = unsafe { ffi::av_pix_fmt_desc_get(fmt) };
     if desc.is_null() {
-        return false;
+        return HwSupport::No;
     }
     // SAFETY: checked for null above
     let d = unsafe { &*desc };
-    let is_420 = d.nb_components >= 3 && d.log2_chroma_w == 1 && d.log2_chroma_h == 1;
+    let chroma_420 = d.nb_components >= 3 && d.log2_chroma_w == 1 && d.log2_chroma_h == 1;
+    let chroma_422 = d.nb_components >= 3 && d.log2_chroma_w == 1 && d.log2_chroma_h == 0;
+    let depth = d.comp[0].depth;
     let limit = if codec == ffi::AVCodecID::AV_CODEC_ID_H264 { 8 } else { 10 };
-    is_420 && d.comp[0].depth <= limit
+    if chroma_420 && depth <= limit {
+        HwSupport::Yes
+    } else if (chroma_420 || chroma_422) && depth <= 10 {
+        HwSupport::Maybe
+    } else {
+        HwSupport::No
+    }
+}
+
+/// Streams of a kind the cards may or may not decode: whether the card here did (the first
+/// frame came out of it). A card that cannot is not asked again, because FFmpeg then decodes in
+/// software on a single thread, several times slower than the processor on all its cores (a 4K
+/// 4:2:2 10-bit clip: 10 frames per second instead of 59).
+static HW_TRIED: std::sync::Mutex<Vec<((i32, i32), bool)>> = std::sync::Mutex::new(Vec::new());
+
+fn hw_tried(key: (i32, i32)) -> Option<bool> {
+    HW_TRIED.lock().ok()?.iter().find(|(k, _)| *k == key).map(|(_, ok)| *ok)
+}
+
+fn hw_note(key: (i32, i32), ok: bool) {
+    if let Ok(mut v) = HW_TRIED.lock()
+        && !v.iter().any(|(k, _)| *k == key)
+    {
+        v.push((key, ok));
+    }
 }
 
 /// Sets up hardware decoding on a codec context that is not open yet. Returns the device name,
@@ -442,6 +474,16 @@ fn hardware_can_decode(codec: ff::ffi::AVCodecID, fmt: ff::ffi::AVPixelFormat) -
 pub(crate) fn attach_hardware(
     ctx: &mut ff::codec::context::Context,
     id: ff::codec::Id,
+) -> Option<&'static str> {
+    attach_hardware_for(ctx, id, false)
+}
+
+/// `probing`: streams only some cards decode are tried too (the caller checks the first frame
+/// came out of the card, see `VideoDecoder::open_with`).
+fn attach_hardware_for(
+    ctx: &mut ff::codec::context::Context,
+    id: ff::codec::Id,
+    probing: bool,
 ) -> Option<&'static str> {
     use ff::ffi;
     // SAFETY: the context is not open; FFmpeg owns the device reference we hand over.
@@ -451,8 +493,11 @@ pub(crate) fn attach_hardware(
             return None;
         }
         let raw = ctx.as_ptr();
-        if !hardware_can_decode((*raw).codec_id, (*raw).pix_fmt) {
-            return None;
+        let key = ((*raw).codec_id as i32, (*raw).pix_fmt as i32);
+        match hardware_support((*raw).codec_id, (*raw).pix_fmt) {
+            HwSupport::No => return None,
+            HwSupport::Maybe if !probing || hw_tried(key) == Some(false) => return None,
+            _ => {}
         }
         for &kind in hw_device_types() {
             let mut fmt = None;
@@ -594,8 +639,20 @@ impl VideoDecoder {
         let frames = st.frames();
         let _ = codec_params(&st);
         let mut ctx = ff::codec::context::Context::from_parameters(st.parameters())?;
+        // streams only some cards decode are tried once on this one (below)
+        let key = {
+            // SAFETY: reading two fields of a context that is not open
+            let raw = unsafe { ctx.as_ptr() };
+            unsafe { ((*raw).codec_id as i32, (*raw).pix_fmt as i32) }
+        };
+        let maybe = {
+            // SAFETY: as above
+            let raw = unsafe { ctx.as_ptr() };
+            unsafe { hardware_support((*raw).codec_id, (*raw).pix_fmt) == HwSupport::Maybe }
+        };
+        let to_probe = hardware && !is_still && maybe && hw_tried(key).is_none();
         let hw = if hardware && !is_still {
-            attach_hardware(&mut ctx, st.parameters().id())
+            attach_hardware_for(&mut ctx, st.parameters().id(), true)
         } else {
             None
         };
@@ -605,7 +662,7 @@ impl VideoDecoder {
             count: if hw.is_some() { 1 } else { 0 },
         });
         let decoder = ctx.decoder().video()?;
-        Ok(VideoDecoder {
+        let mut opened = VideoDecoder {
             hardware: hw,
             input,
             decoder,
@@ -623,7 +680,22 @@ impl VideoDecoder {
             eof: false,
             seeks: 0,
             frames,
-        })
+        };
+        if to_probe && opened.hardware.is_some() {
+            // does this card take the stream? its first frame says (decode_next drops the
+            // hardware flag when the frame came out of the processor instead)
+            let ok = matches!(opened.decode_next(), Ok(Some(_))) && opened.hardware.is_some();
+            log::info!(
+                "hardware decoding of this kind of stream ({}): {}",
+                if ok { "supported" } else { "not supported, the processor decodes it" },
+                path.display()
+            );
+            hw_note(key, ok);
+            drop(opened);
+            // a fresh decoder, with or without the card as the answer says
+            return Self::open_with(path, stream, rate, color, is_still, hardware);
+        }
+        Ok(opened)
     }
 
     pub fn rate(&self) -> Rate {
@@ -893,19 +965,21 @@ mod tests {
     }
 
     #[test]
-    fn the_card_is_only_given_streams_it_can_decode() {
+    fn the_card_is_given_what_it_decodes_and_tried_on_what_only_some_cards_do() {
         use ff::ffi::AVCodecID::*;
         use ff::ffi::AVPixelFormat::*;
-        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P));
-        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUVJ420P));
-        assert!(hardware_can_decode(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV420P10LE));
-        // what cameras such as the Sony FX3 record: NVDEC cannot decode it
-        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV422P10LE));
-        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P10LE));
-        assert!(!hardware_can_decode(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV422P10LE));
-        assert!(!hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_YUV444P));
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P), HwSupport::Yes);
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_YUVJ420P), HwSupport::Yes);
+        assert_eq!(hardware_support(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV420P10LE), HwSupport::Yes);
+        // what cameras such as the Sony FX3 record: NVIDIA's RTX 50 decode it, the older cards
+        // (the RTX 30 and 40 series) do not: the first frame says which this is
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_YUV422P10LE), HwSupport::Maybe);
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P10LE), HwSupport::Maybe);
+        assert_eq!(hardware_support(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV422P10LE), HwSupport::Maybe);
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_YUV444P), HwSupport::No);
+        assert_eq!(hardware_support(AV_CODEC_ID_HEVC, AV_PIX_FMT_YUV420P12LE), HwSupport::No);
         // unknown before decoding: tried
-        assert!(hardware_can_decode(AV_CODEC_ID_H264, AV_PIX_FMT_NONE));
+        assert_eq!(hardware_support(AV_CODEC_ID_H264, AV_PIX_FMT_NONE), HwSupport::Yes);
     }
 
     #[test]

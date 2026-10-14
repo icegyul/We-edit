@@ -119,7 +119,8 @@ pub struct SeqView {
     pub scroll: f64,
     /// Vertical scroll of the audio tracks (pixels from their top).
     pub scroll_y: f32,
-    /// Vertical scroll of the video tracks (pixels from their top).
+    /// Vertical scroll of the video tracks, pixels pulled down from the bar between video and
+    /// audio (V1 sits against the bar at 0).
     #[serde(default)]
     pub video_scroll: f32,
     /// Height of the video part of the timeline in pixels; 0 lets the program choose. The bar

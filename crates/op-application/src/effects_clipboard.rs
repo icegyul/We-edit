@@ -56,6 +56,86 @@ impl Editor {
         Ok(names)
     }
 
+    /// The component of `c` that is the effect `comp` of the clip `shown`: that very one on the
+    /// shown clip, the first of the same effect on the others.
+    fn same_effect<'a>(c: &'a mut Clip, shown: ClipId, comp: ComponentId, effect: &str) -> Option<&'a mut Component> {
+        if c.id == shown {
+            c.components.iter_mut().find(|x| x.id == comp)
+        } else {
+            c.components.iter_mut().find(|x| x.effect == effect)
+        }
+    }
+
+    /// Removes an added effect from the clip it is shown on and from the same effect of the other
+    /// `clips` (one undo step). Returns how many clips lost it.
+    pub fn remove_effect(&mut self, shown: ClipId, comp: ComponentId, clips: &[ClipId]) -> usize {
+        let Some(effect) = self.active_seq().and_then(|q| q.clip(shown)).and_then(|c| c.components.iter().find(|x| x.id == comp)).map(|x| x.effect.clone()) else {
+            return 0;
+        };
+        let clips = clips.to_vec();
+        let mut removed = 0;
+        self.seq_edit("Remove Effect", |p, sid, _| {
+            for id in &clips {
+                let Some(c) = p.sequence_mut(sid).and_then(|q| q.clip_mut(*id)) else { continue };
+                let at = if c.id == shown {
+                    c.components.iter().position(|x| x.id == comp)
+                } else {
+                    c.components.iter().position(|x| x.effect == effect && !x.is_fixed())
+                };
+                if let Some(i) = at.filter(|i| !c.components[*i].is_fixed()) {
+                    c.components.remove(i);
+                    removed += 1;
+                }
+            }
+            if removed == 0 { Err(EditError::Nothing) } else { Ok(()) }
+        });
+        removed
+    }
+
+    /// Gives the effect its starting values on the clip it is shown on and on the same effect of
+    /// the other `clips` (one undo step). Returns how many clips changed.
+    pub fn reset_effect(&mut self, shown: ClipId, comp: ComponentId, clips: &[ClipId]) -> usize {
+        let Some(effect) = self.active_seq().and_then(|q| q.clip(shown)).and_then(|c| c.components.iter().find(|x| x.id == comp)).map(|x| x.effect.clone()) else {
+            return 0;
+        };
+        let clips = clips.to_vec();
+        let mut done = 0;
+        self.seq_edit("Reset Effect", |p, sid, _| {
+            for id in &clips {
+                let Some(c) = p.sequence_mut(sid).and_then(|q| q.clip_mut(*id)) else { continue };
+                let Some(x) = Self::same_effect(c, shown, comp, &effect) else { continue };
+                let Some(params) = x.def().map(|d| d.params.iter().map(|sp| Param::new(sp.key, sp.default_value())).collect::<Vec<_>>()) else {
+                    continue;
+                };
+                x.params = params;
+                done += 1;
+            }
+            if done == 0 { Err(EditError::Nothing) } else { Ok(()) }
+        });
+        done
+    }
+
+    /// Switches the effect on or off on the clip it is shown on and on the same effect of the
+    /// other `clips` (one undo step). Returns how many clips changed.
+    pub fn set_effect_enabled(&mut self, shown: ClipId, comp: ComponentId, clips: &[ClipId], on: bool) -> usize {
+        let Some(effect) = self.active_seq().and_then(|q| q.clip(shown)).and_then(|c| c.components.iter().find(|x| x.id == comp)).map(|x| x.effect.clone()) else {
+            return 0;
+        };
+        let clips = clips.to_vec();
+        let mut done = 0;
+        self.seq_edit("Toggle Effect", |p, sid, _| {
+            for id in &clips {
+                let Some(c) = p.sequence_mut(sid).and_then(|q| q.clip_mut(*id)) else { continue };
+                if let Some(x) = Self::same_effect(c, shown, comp, &effect) {
+                    x.enabled = on;
+                    done += 1;
+                }
+            }
+            if done == 0 { Err(EditError::Nothing) } else { Ok(()) }
+        });
+        done
+    }
+
     /// Whether effects were copied.
     pub fn has_copied_effects(&self) -> bool {
         self.fx_clipboard.is_some()
@@ -154,6 +234,32 @@ mod tests {
         e.selection = crate::session::Selection::only(vec![c]);
         assert_eq!(e.paste_effects().unwrap(), 1);
         assert_eq!(scale_of(&e, c), 100.0);
+        // an added effect is removed from every selected clip at once (one undo step)
+        let blur = catalog::CATALOG.iter().find(|d| d.kind == catalog::EffectKind::VideoEffect).unwrap();
+        e.seq_edit("Add", |p, sid, _| {
+            let mut ids = p.ids.clone();
+            for id in [a, b, c] {
+                let clip = p.sequence_mut(sid).unwrap().clip_mut(id).unwrap();
+                clip.components.push(Component::new(blur, &mut ids));
+            }
+            p.ids = ids;
+            Ok(())
+        })
+        .unwrap();
+        let comp_of = |e: &Editor, id: ClipId| e.active_seq().unwrap().clip(id).unwrap().components.iter().find(|x| x.effect == blur.id).map(|x| x.id);
+        let shown = comp_of(&e, a).unwrap();
+        assert_eq!(e.remove_effect(a, shown, &[a, b, c]), 3);
+        for id in [a, b, c] {
+            assert!(comp_of(&e, id).is_none(), "{id:?}");
+        }
+        e.undo();
+        for id in [a, b, c] {
+            assert!(comp_of(&e, id).is_some(), "{id:?}");
+        }
+        // the same for reset (the values go back) and on / off
+        let shown = comp_of(&e, a).unwrap();
+        assert_eq!(e.set_effect_enabled(a, shown, &[a, b, c], false), 3);
+        assert!(e.active_seq().unwrap().clip(c).unwrap().components.iter().all(|x| x.effect != blur.id || !x.enabled));
         // pasting with nothing selected says so
         e.selection = crate::session::Selection::default();
         assert!(e.paste_effects().is_err());
