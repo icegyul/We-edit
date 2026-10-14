@@ -16,11 +16,11 @@ use crate::app::State;
 use crate::theme;
 
 const PROMPT: &str = "너는 영상 편집기 We edit 안에 들어 있는 편집 도우미다. 사용자의 대화 지시를 mcp__we-edit 도구로 열린 프로젝트에 직접 실행한다.
-- 편집 전에 get_project / get_timeline 으로 현재 상태를 확인한다. 시간은 시퀀스 기준 초, 트랙은 V1·V2(영상) A1·A2(오디오).
+- 편집 전에 get_project / get_timeline 으로 현재 상태를 확인한다. 시간은 시퀀스 기준 초, 트랙은 V1·V2(영상) A1·A2(오디오). 클립이 많은 프로젝트에서 get_timeline 은 트랙별 요약을 주므로, 클립은 track·from·to(초)로 필요한 곳만 받는다(limit 개씩, next_offset 으로 이어 받기).
 - 결과가 눈에 보여야 하는 편집 뒤에는 render_frame 으로 화면을 확인한 다음 보고한다.
 - 모든 편집은 Edit > Undo 한 번으로 되돌릴 수 있다. 내보내기(export)와 여러 클립을 한꺼번에 지우는 작업만 실행 전에 한 줄로 확인받는다.
 - 영상 여러 개를 소리로 맞추기: get_project 로 media_id 를 얻어 sync_by_audio(media_ids)를 부르고, 나온 timeline_start 초에 add_clip(at=...)로 각각 다른 트랙(V1, V2, V3)에 올린다. 확신도 경고가 나오면 그 결과를 쓰지 말고 사용자에게 알린다.
-- 문장 편집: transcribe_sentences 로 시퀀스의 말을 문장별로 받아 적는다(오래 걸리면 get_sentences 로 state 가 ready 가 될 때까지 확인). 문장 시간은 타임라인 시간 그대로다. 사용자가 번호나 말로 고른 문장은 delete_sentences(sentence_ids)로 지운다. 지우기 전에 어떤 문장(번호와 본문)을 지우는지 한 줄로 알린다. 문장 번호는 지워도 바뀌지 않는다. 다른 편집을 하면 받아쓴 결과가 낡아(stale) 다시 받아써야 한다.
+- 문장 편집: transcribe_sentences 로 시퀀스의 말을 문장별로 받아 적는다(오래 걸린다. get_sentences 는 끝날 때까지 기다렸다 답하므로 한 번 부르고, 그래도 running 이라고 할 때만 다시 부른다. 연달아 부르지 않는다). 문장 시간은 타임라인 시간 그대로다. 사용자가 번호나 말로 고른 문장은 delete_sentences(sentence_ids)로 지운다. 지우기 전에 어떤 문장(번호와 본문)을 지우는지 한 줄로 알린다. 문장 번호는 지워도 바뀌지 않는다. 다른 편집을 하면 받아쓴 결과가 낡아(stale) 다시 받아써야 한다.
 - 효과음·배경음: search_sounds(query, kind=sfx|bgm)로 라이브러리에서 찾고 add_sound(sound_id, at)로 타임라인에 넣는다. 전부 CC0라 저작권 걱정이 없다. 어떤 소리를 어디에 넣었는지 한 줄로 알린다.
 - 음악 길이 조절(리믹스): remix_music(clip_id, seconds)로 음악 클립이 반복되는 부분을 찾아 그 부분만 한 번 더 반복하거나 건너뛰어 길이를 자연스럽게 바꾼다. 길이는 곡마다 반복 구간(예: 8초, 16초) 단위로 바뀌고, seconds를 빼면 분석만 하고 단위를 알려 준다. 원래대로는 revert=true. 영상과 연결된 오디오는 먼저 연결을 해제해야 한다.
 - 움직이는 제목·강조 그래픽: list_motion_templates 로 고르고 add_motion_template(template, text, sub, color, at)로 넣는다(여러 클립이 한 묶음으로 들어간다).
@@ -66,6 +66,8 @@ pub struct AiChat {
     greeted: bool,
     thread: String,
     used: Option<Provider>,
+    /// The tool line at the end of the chat and how many times in a row it was called.
+    last_tool: (String, u32),
 }
 
 /// One stream-json line of `claude -p` as events for the panel.
@@ -146,6 +148,44 @@ fn codex_events(line: &str, seen: &mut HashSet<String>) -> Vec<Event> {
     }
 }
 
+/// Adds a tool call to the chat. The same call again right after the last one (an assistant asking
+/// again and again) counts up that line instead of adding a new one: `▸ get_sentences {}  ×75`.
+fn push_tool(log: &mut Vec<(Kind, String)>, last: &mut (String, u32), t: String) {
+    if last.0 == t && last.1 > 0 && matches!(log.last(), Some((Kind::Tool, _))) {
+        last.1 += 1;
+        if let Some((_, line)) = log.last_mut() {
+            *line = format!("{t}  ×{}", last.1);
+        }
+    } else {
+        *last = (t.clone(), 1);
+        log.push((Kind::Tool, t));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_same_tool_asked_again_counts_up_one_line() {
+        let mut log = vec![(Kind::User, "question".to_string())];
+        let mut last = (String::new(), 0);
+        for _ in 0..75 {
+            push_tool(&mut log, &mut last, "get_sentences {}".into());
+        }
+        assert_eq!(log.len(), 2, "75 calls are one line");
+        assert_eq!(log[1].1, "get_sentences {}  ×75");
+        // another tool, then the first again: separate lines
+        push_tool(&mut log, &mut last, "get_timeline {}".into());
+        push_tool(&mut log, &mut last, "get_sentences {}".into());
+        assert_eq!(log.len(), 4);
+        // text from the assistant between two calls keeps them apart
+        log.push((Kind::Ai, "a moment".into()));
+        push_tool(&mut log, &mut last, "get_sentences {}".into());
+        assert_eq!(log.len(), 6);
+    }
+}
+
 /// A fresh session id (random enough, not a secret).
 fn new_session() -> String {
     use std::collections::hash_map::RandomState;
@@ -180,6 +220,7 @@ impl AiChat {
         self.started = false;
         self.session.clear();
         self.thread.clear();
+        self.last_tool = (String::new(), 0);
         self.say(Kind::Info, "새 대화를 시작했습니다.");
     }
 
@@ -353,7 +394,7 @@ impl AiChat {
                         _ => self.say(Kind::Ai, t),
                     }
                 }
-                Event::Tool(t) => self.say(Kind::Tool, t),
+                Event::Tool(t) => push_tool(&mut self.log, &mut self.last_tool, t),
                 Event::Warn(t) => self.say(Kind::Warn, t),
                 Event::Done(t) => {
                     if !self.streamed && !t.is_empty() {

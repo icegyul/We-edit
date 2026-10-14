@@ -208,3 +208,59 @@ fn an_assistant_previews_and_removes_silence() {
             .is_err()
     );
 }
+
+/// A 400-clip project answered `get_timeline` with 585,748 characters, more than an assistant can
+/// read, so it could not see its own timeline. A big sequence now answers with a summary, and clips
+/// come by track and time range, a page at a time.
+#[test]
+fn a_big_timeline_is_summarised_and_pages_through_a_track() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut t = op_mcp::Local(editor(dir.path()));
+    let project = call(&mut t, "get_project", json!({}));
+    let media = project["media"][0]["media_id"].as_u64().unwrap();
+    call(&mut t, "create_sequence", json!({"name": "Big", "fps": 30}));
+    for i in 0..120 {
+        let track = if i % 2 == 0 { "V1" } else { "V2" };
+        call(&mut t, "add_clip", json!({"media_id": media, "at": (i / 2) as f64, "track": track, "source_out": 1}));
+    }
+    let raw = |t: &mut op_mcp::Local, args: Json| match &t.call("get_timeline", &args).unwrap()[0] {
+        Content::Text(s) => s.clone(),
+        _ => String::new(),
+    };
+
+    // no track or range asked for: a summary, small
+    let text = raw(&mut t, json!({}));
+    assert!(text.len() < 8_000, "{} characters", text.len());
+    let tl: Json = serde_json::from_str(&text).unwrap();
+    assert_eq!(tl["mode"], "summary");
+    assert_eq!(tl["clips_total"], 120);
+    let v1 = tl["tracks"].as_array().unwrap().iter().find(|t| t["track"] == "V1").unwrap();
+    assert_eq!(v1["clip_count"], 60);
+    assert_eq!(v1["sources"][0]["clips"], 60);
+    assert!(v1.get("clips").is_none(), "a summary holds no clip list");
+    assert!(tl["note"].as_str().unwrap().contains("from/to"));
+
+    // a track and a time range: its clips, without the fixed Motion and Opacity of every clip
+    let tl: Json = serde_json::from_str(&raw(&mut t, json!({"track": "V1", "from": 10, "to": 20}))).unwrap();
+    assert_eq!(tl["mode"], "list");
+    assert_eq!((tl["clips_total"].clone(), tl["returned"].clone(), tl["next_offset"].clone()), (json!(10), json!(10), Json::Null));
+    let tracks = tl["tracks"].as_array().unwrap();
+    assert_eq!(tracks.len(), 1, "only the asked track");
+    let first = &tracks[0]["clips"][0];
+    assert_eq!(first["start"], 10.0);
+    assert!(first["effects"].as_array().unwrap().iter().all(|e| !e["effect"].as_str().unwrap().starts_with("op.fixed.")));
+    // `detail` brings them back
+    let tl: Json = serde_json::from_str(&raw(&mut t, json!({"track": "V1", "limit": 1, "detail": true}))).unwrap();
+    assert!(tl["tracks"][0]["clips"][0]["effects"].as_array().unwrap().iter().any(|e| e["effect"] == "op.fixed.opacity"));
+
+    // pages
+    let page = |t: &mut op_mcp::Local, offset: u64| -> Json {
+        serde_json::from_str(&raw(t, json!({"track": "V1", "limit": 7, "offset": offset}))).unwrap()
+    };
+    let p1 = page(&mut t, 0);
+    assert_eq!((p1["returned"].clone(), p1["next_offset"].clone()), (json!(7), json!(7)));
+    let p2 = page(&mut t, 7);
+    assert_eq!(p2["tracks"][0]["clips"][0]["start"], 7.0);
+    let last = page(&mut t, 56);
+    assert_eq!((last["returned"].clone(), last["next_offset"].clone()), (json!(4), Json::Null));
+}

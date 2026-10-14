@@ -1,6 +1,6 @@
-//! The bridge to the open program. OpenPremier, when the user allows it, listens on a local port
+//! The bridge to the open program. We edit, when the user allows it, listens on a local port
 //! (127.0.0.1 only) and writes the port and a random key to `assistant.json` in its settings
-//! folder, readable only by the user's programs; `OpenPremier --mcp` finds it there and hands
+//! folder, readable only by the user's programs; `We edit --mcp` finds it there and hands
 //! every tool call to the open window, which runs it between two frames.
 
 use std::collections::hash_map::RandomState;
@@ -126,7 +126,7 @@ fn serve(stream: TcpStream, token: &str, tx: &mpsc::Sender<Request>, wake: &dyn 
     }
 }
 
-/// The calling side, in `OpenPremier --mcp`.
+/// The calling side, in `We edit --mcp`.
 pub struct Remote {
     stream: TcpStream,
     reader: BufReader<TcpStream>,
@@ -154,8 +154,49 @@ impl Remote {
     }
 }
 
-impl Target for Remote {
-    fn call(&mut self, name: &str, args: &Json) -> Result<Vec<Content>, String> {
+/// How often a waiting call asks the open program again.
+const POLL_EVERY: Duration = Duration::from_millis(1000);
+
+/// Tools whose answer starts with `state: running` while a job works wait for it (here, in the
+/// assistant's own process, so the window is not held up): how many seconds by default.
+fn wait_default(name: &str) -> f64 {
+    match name {
+        "get_sentences" => 25.0,
+        _ => 0.0,
+    }
+}
+
+fn says_running(out: &[Content]) -> bool {
+    let first = |c: &Content| match c {
+        Content::Text(t) => t.starts_with("state: running"),
+        Content::Block(b) => b["text"].as_str().is_some_and(|t| t.starts_with("state: running")),
+        _ => false,
+    };
+    out.first().is_some_and(first)
+}
+
+impl Remote {
+    /// One call to the open program. `wait_seconds` in the arguments (or the tool's default) keeps
+    /// asking, once a second, while the answer says the job is still running, and returns the
+    /// first answer that does not, or the last one when the time is up. An assistant that is told
+    /// "running" asks again at once; this way it asks once per wait instead of every second.
+    fn call_waiting(&mut self, name: &str, args: &Json) -> Result<Vec<Content>, String> {
+        let wait = args
+            .get("wait_seconds")
+            .and_then(Json::as_f64)
+            .unwrap_or_else(|| wait_default(name))
+            .clamp(0.0, 50.0);
+        let until = std::time::Instant::now() + Duration::from_secs_f64(wait);
+        loop {
+            let out = self.call_once(name, args)?;
+            if !says_running(&out) || std::time::Instant::now() + POLL_EVERY > until {
+                return Ok(out);
+            }
+            std::thread::sleep(POLL_EVERY);
+        }
+    }
+
+    fn call_once(&mut self, name: &str, args: &Json) -> Result<Vec<Content>, String> {
         let msg = json!({"key": self.key, "name": name, "arguments": args});
         writeln!(self.stream, "{msg}").map_err(|_| "We edit was closed".to_string())?;
         let mut line = String::new();
@@ -175,6 +216,12 @@ impl Target for Remote {
         } else {
             Err(reply["error"].as_str().unwrap_or("failed").to_string())
         }
+    }
+}
+
+impl Target for Remote {
+    fn call(&mut self, name: &str, args: &Json) -> Result<Vec<Content>, String> {
+        self.call_waiting(name, args)
     }
 
     fn describe(&self) -> String {

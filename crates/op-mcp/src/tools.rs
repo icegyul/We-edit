@@ -89,8 +89,16 @@ pub fn list() -> Json {
         ),
         tool(
             "get_timeline",
-            "The active sequence: tracks with their clips (id, name, start and end in seconds, effects with their parameters), transitions, markers and the playhead.",
-            json!({"detail": json!({"type": "boolean", "description": "Include every effect parameter (default false)"})}),
+            "The active sequence: tracks with their clips (id, name, start and end in seconds, effects with their parameters), transitions, markers and the playhead. A big sequence (more than `limit` clips) answers with a summary per track (clip count, first start, last end, the sources used) instead of every clip; ask for clips with `track` (like V1), `from`/`to` (seconds) and `offset` (up to `limit` clips come back, `next_offset` says where to go on).",
+            json!({
+                "detail": json!({"type": "boolean", "description": "Include every effect parameter, also the fixed Motion and Opacity (default false)"}),
+                "track": s("Only this track, like V1 or A2"),
+                "from": num("Only clips ending after this sequence time (seconds)"),
+                "to": num("Only clips starting before this sequence time (seconds)"),
+                "limit": int("Clips per answer, 1 to 200 (default 40)"),
+                "offset": int("Clips to skip, for the next page (default 0)"),
+                "summary": json!({"type": "boolean", "description": "Force the per-track summary (default: on for a big sequence when no track or time range is given)"})
+            }),
             &[]
         ),
         tool(
@@ -307,14 +315,14 @@ pub fn list() -> Json {
         ),
         tool(
             "transcribe_sentences",
-            "Writes down what the active sequence says, sentence by sentence, with times (Whisper large-v3 on the graphics card, much more exact than transcribe_captions). With the program open it only starts: call get_sentences until its state is ready. Sentence times are sequence seconds and match the timeline. Needed before delete_sentences.",
+            "Writes down what the active sequence says, sentence by sentence, with times (Whisper large-v3 on the graphics card, much more exact than transcribe_captions). With the program open it only starts: call get_sentences, which waits for it. Sentence times are sequence seconds and match the timeline. Needed before delete_sentences.",
             json!({"language": s("Spoken language like ko or en; empty to detect")}),
             &[]
         ),
         tool(
             "get_sentences",
-            "The sentences of the latest transcript: id, start-end in sequence seconds and the words, or the progress of a running transcription. A transcript is stale (and delete_sentences refuses it) once the sequence was edited by anything else.",
-            json!({}),
+            "The sentences of the latest transcript: id, start-end in sequence seconds and the words, or the progress of a running transcription. While the transcription runs this call WAITS (up to wait_seconds) and answers when it is done, so call it once and again only if it still says running. A transcript is stale (and delete_sentences refuses it) once the sequence was edited by anything else.",
+            json!({"wait_seconds": num("How long to wait for a running transcription, 0 to 50 (default 25)")}),
             &[]
         ),
         tool(
@@ -795,7 +803,7 @@ fn sentences_text(ed: &Editor) -> R {
         let p = job.progress();
         return Ok(vec![Content::Text(format!(
             "state: running ({:?}, {:.0}%)
-call get_sentences again in a few seconds",
+call get_sentences again (it waits for you)",
             p.stage,
             p.fraction * 100.0
         ))]);
@@ -1120,7 +1128,7 @@ fn live(ed: &mut Editor, name: &str, a: &Json) -> R {
         }
         "transcribe_sentences" => {
             ed.transcribe_sentences(str_arg(a, "language").unwrap_or(""))?;
-            text(json!({"started": true, "note": "this takes a while: call get_sentences until its state is ready"}))
+            text(json!({"started": true, "note": "this takes a while: call get_sentences, which waits until it is ready"}))
         }
         "detect_silence" | "remove_silence" => silence_tool(ed, name, a, true),
         "remix_music" => remix_tool(ed, a, true),
@@ -1576,87 +1584,142 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
         "get_timeline" => {
             let sid = active(ed)?;
             let detail = a.get("detail").and_then(Json::as_bool).unwrap_or(false);
+            let only = match str_arg(a, "track") {
+                Some(t) => Some(parse_track(t)?),
+                None => None,
+            };
+            let (from, to) = (f64_arg(a, "from"), f64_arg(a, "to"));
+            let limit = a.get("limit").and_then(Json::as_u64).unwrap_or(40).clamp(1, 200) as usize;
+            let offset = a.get("offset").and_then(Json::as_u64).unwrap_or(0) as usize;
             let s = ed.project.sequence(sid).ok_or("no sequence")?;
-            let track = |r: TrackRef, t: &Track| {
-                let clips: Vec<Json> = t
-                    .clips
+            let all_clips: usize = s.video.iter().chain(s.audio.iter()).map(|t| t.clips.len()).sum();
+            let big = all_clips > limit;
+            let filtered = only.is_some() || from.is_some() || to.is_some();
+            // a big sequence is summarised unless a track or a time range was asked for: one answer
+            // with every clip of a 400-clip project is too large for an assistant to read
+            let summary = a.get("summary").and_then(Json::as_bool).unwrap_or(big && !filtered);
+            // ... and without the fixed Motion and Opacity of every clip, unless `detail` asks
+            let compact = big && !detail;
+            let in_range = |c: &Clip| {
+                from.is_none_or(|f| c.end().seconds() > f) && to.is_none_or(|t| c.start.seconds() < t)
+            };
+            let clip_json = |c: &Clip| {
+                let effects: Vec<Json> = c
+                    .components
                     .iter()
-                    .map(|c| {
-                        let effects: Vec<Json> = c
-                            .components
-                            .iter()
-                            .enumerate()
-                            .map(|(i, x)| {
-                                let mut e = json!({
-                                    "index": i,
-                                    "effect": x.effect,
-                                    "name": x.def().map(|d| d.name).unwrap_or(""),
-                                    "enabled": x.enabled,
-                                });
-                                let show = detail
-                                    || x.effect == catalog::TEXT
-                                    || x.effect == catalog::CAPTION;
-                                if show {
-                                    e["params"] = x
-                                        .params
+                    .enumerate()
+                    .filter(|(_, x)| !(compact && x.effect.starts_with("op.fixed.")))
+                    .map(|(i, x)| {
+                        let mut e = json!({
+                            "index": i,
+                            "effect": x.effect,
+                            "name": x.def().map(|d| d.name).unwrap_or(""),
+                            "enabled": x.enabled,
+                        });
+                        let show = detail || x.effect == catalog::TEXT || x.effect == catalog::CAPTION;
+                        if show {
+                            e["params"] = x
+                                .params
+                                .iter()
+                                .filter(|p| !p.key.starts_with('_'))
+                                .map(|p| (p.key.clone(), value_json(&p.value)))
+                                .collect::<serde_json::Map<_, _>>()
+                                .into();
+                            // animated parameters: their keyframes, in sequence seconds
+                            let animated: serde_json::Map<String, Json> = x
+                                .params
+                                .iter()
+                                .filter(|p| p.is_animated())
+                                .map(|p| {
+                                    let keys: Vec<Json> = p
+                                        .keys
                                         .iter()
-                                        .filter(|p| !p.key.starts_with('_'))
-                                        .map(|p| (p.key.clone(), value_json(&p.value)))
-                                        .collect::<serde_json::Map<_, _>>()
-                                        .into();
-                                    // animated parameters: their keyframes, in sequence seconds
-                                    let animated: serde_json::Map<String, Json> = x
-                                        .params
-                                        .iter()
-                                        .filter(|p| p.is_animated())
-                                        .map(|p| {
-                                            let keys: Vec<Json> = p
-                                                .keys
-                                                .iter()
-                                                .map(|k| {
-                                                    let at = c.to_sequence(k.time).seconds();
-                                                    json!({"at": (at * 1000.0).round() / 1000.0, "value": value_json(&k.value)})
-                                                })
-                                                .collect();
-                                            (p.key.clone(), Json::from(keys))
+                                        .map(|k| {
+                                            let at = c.to_sequence(k.time).seconds();
+                                            json!({"at": (at * 1000.0).round() / 1000.0, "value": value_json(&k.value)})
                                         })
                                         .collect();
-                                    if !animated.is_empty() {
-                                        e["keyframes"] = animated.into();
-                                    }
-                                }
-                                e
-                            })
-                            .collect();
-                        json!({
-                            "clip_id": c.id.0,
-                            "name": c.name,
-                            "start": secs(c.start),
-                            "end": secs(c.end()),
-                            "source_in": (c.source_in.seconds() * 1000.0).round() / 1000.0,
-                            "speed_percent": c.speed.as_f64() * 100.0,
-                            "reverse": c.reverse,
-                            "enabled": c.enabled,
-                            "linked": c.link.is_some(),
-                            "effects": effects,
-                        })
+                                    (p.key.clone(), Json::from(keys))
+                                })
+                                .collect();
+                            if !animated.is_empty() {
+                                e["keyframes"] = animated.into();
+                            }
+                        }
+                        e
                     })
                     .collect();
-                json!({"track": track_name(r), "name": t.name, "locked": t.locked, "clips": clips})
+                json!({
+                    "clip_id": c.id.0,
+                    "name": c.name,
+                    "start": secs(c.start),
+                    "end": secs(c.end()),
+                    "source_in": (c.source_in.seconds() * 1000.0).round() / 1000.0,
+                    "speed_percent": c.speed.as_f64() * 100.0,
+                    "reverse": c.reverse,
+                    "enabled": c.enabled,
+                    "linked": c.link.is_some(),
+                    "effects": effects,
+                })
             };
-            let mut tracks = Vec::new();
+            let mut all_tracks: Vec<(TrackRef, &Track)> = Vec::new();
             for (i, t) in s.video.iter().enumerate().rev() {
-                tracks.push(track(TrackRef::video(i), t));
+                all_tracks.push((TrackRef::video(i), t));
             }
             for (i, t) in s.audio.iter().enumerate() {
-                tracks.push(track(TrackRef::audio(i), t));
+                all_tracks.push((TrackRef::audio(i), t));
+            }
+            let (mut total, mut returned) = (0usize, 0usize);
+            let mut tracks = Vec::new();
+            for (r, t) in all_tracks.iter().filter(|(r, _)| only.is_none_or(|o| o == *r)) {
+                if summary {
+                    // what the track holds: how many clips, from when to when, and from which sources
+                    let mut sources: Vec<(String, usize, f64, f64)> = Vec::new();
+                    for c in t.clips.iter().filter(|c| in_range(c)) {
+                        let (start, end) = (c.start.seconds(), c.end().seconds());
+                        match sources.iter_mut().find(|x| x.0 == c.name) {
+                            Some(x) => {
+                                x.1 += 1;
+                                x.2 = x.2.min(start);
+                                x.3 = x.3.max(end);
+                            }
+                            None => sources.push((c.name.clone(), 1, start, end)),
+                        }
+                    }
+                    sources.sort_by(|a, b| b.1.cmp(&a.1));
+                    let count: usize = sources.iter().map(|x| x.1).sum();
+                    let first = sources.iter().map(|x| x.2).fold(f64::INFINITY, f64::min);
+                    let last = sources.iter().map(|x| x.3).fold(0.0, f64::max);
+                    total += count;
+                    tracks.push(json!({
+                        "track": track_name(*r), "name": t.name, "locked": t.locked,
+                        "clip_count": count,
+                        "first_start": if count > 0 { (first * 1000.0).round() / 1000.0 } else { 0.0 },
+                        "last_end": (last * 1000.0).round() / 1000.0,
+                        "sources": sources.iter().take(8).map(|x| json!({
+                            "name": x.0, "clips": x.1,
+                            "first_start": (x.2 * 1000.0).round() / 1000.0,
+                            "last_end": (x.3 * 1000.0).round() / 1000.0,
+                        })).collect::<Vec<_>>(),
+                    }));
+                } else {
+                    let mut clips = Vec::new();
+                    for c in t.clips.iter().filter(|c| in_range(c)) {
+                        total += 1;
+                        if total > offset && returned + clips.len() < limit {
+                            clips.push(clip_json(c));
+                        }
+                    }
+                    returned += clips.len();
+                    tracks.push(json!({"track": track_name(*r), "name": t.name, "locked": t.locked, "clips": clips}));
+                }
             }
             let markers: Vec<Json> = s
                 .markers
                 .iter()
                 .map(|m| json!({"at": secs(m.start), "name": m.name}))
                 .collect();
-            text(json!({
+            let mut out = json!({
                 "sequence_id": sid.0,
                 "name": s.name,
                 "width": s.settings.width, "height": s.settings.height,
@@ -1666,7 +1729,26 @@ fn run(ed: &mut Editor, name: &str, a: &Json) -> R {
                 "selected_clips": ed.selection.clips.iter().map(|c| c.0).collect::<Vec<_>>(),
                 "tracks": tracks,
                 "markers": markers,
-            }))
+            });
+            if big || filtered {
+                out["clips_total"] = json!(total);
+                if summary {
+                    out["mode"] = json!("summary");
+                    out["note"] = json!(format!(
+                        "{all_clips} clips in this sequence: a summary per track. List clips with track (like V1), from/to (seconds) and offset; up to {limit} come back per call"
+                    ));
+                } else {
+                    out["mode"] = json!("list");
+                    out["offset"] = json!(offset);
+                    out["returned"] = json!(returned);
+                    out["next_offset"] = if offset + returned < total { json!(offset + returned) } else { Json::Null };
+                }
+            }
+            if big {
+                // compact: no indentation, the answer is for an assistant
+                return Ok(vec![Content::Text(serde_json::to_string(&out).unwrap_or_default())]);
+            }
+            text(out)
         }
         "add_clip" => {
             let sid = active(ed)?;
